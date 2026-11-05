@@ -1,0 +1,54 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-apk
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Compilar APK
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --stacktrace
+
+      - name: Renomear APK
+        run: |
+          mkdir -p saida
+          cp app/build/outputs/apk/debug/app-debug.apk "saida/PWExpress-motoboy-build${GITHUB_RUN_NUMBER}.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PWExpress-motoboy-build${{ github.run_number }}
+          path: saida/*.apk
+
+      # Cria uma "Release" com o APK anexado: fácil de baixar direto no celular.
+      - name: Publicar release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: "Motoboy · build ${{ github.run_number }}"
+          prerelease: true
+          files: saida/*.apk
+          body: |
+            APK de teste do app do motoboy (piloto do GPS).
+            Commit: ${{ github.sha }}

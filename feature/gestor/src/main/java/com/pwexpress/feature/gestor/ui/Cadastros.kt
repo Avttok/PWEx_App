@@ -310,7 +310,7 @@ fun EquipeG(onAbrir: (String) -> Unit) {
                 }
             }
         }
-        PwBotaoFlutuante(PwIcones.UserPlus, "Nova conta", { criando = true }, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 108.dp))
+        if (modulo("criar_contas")) PwBotaoFlutuante(PwIcones.UserPlus, "Nova conta", { criando = true }, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 108.dp))
     }
     if (criando) NovaContaG(dados.config.numero("repasse_motoboy_pct", 70.0), onFechar = { criando = false }, onCriada = { criando = false; it?.let(onAbrir) })
 }
@@ -321,7 +321,8 @@ fun EquipeG(onAbrir: (String) -> Unit) {
 private fun Selos(m: com.pwexpress.feature.gestor.data.MembroG, status: String?) {
     val c = Pw.cores
     androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        if (m.gestor) PwSelo("Gestor", c.ouro, icone = PwIcones.ShieldCheck)
+        if (m.dev) PwSelo("Dev", c.dev, icone = PwIcones.CodeXml)
+        if (m.gestor && !m.dev) PwSelo("Gestor", c.ouro, icone = PwIcones.ShieldCheck)
         if (m.motoboy) PwSelo(rotuloMotoboy[status] ?: "Offline", corMotoboy(status, c), icone = PwIcones.Bike)
         if (m.modoTeste) PwSelo("Teste", c.violeta, icone = PwIcones.FlaskConical)
         if (m.bloqueado) PwSelo("Bloqueado", c.vermelho, icone = PwIcones.Lock)
@@ -405,7 +406,10 @@ fun MembroG(id: String, meuId: String?, onVoltar: () -> Unit) {
             }
         }
         PwSegmentado(listOf("Registro" to PwIcones.History, "Editar" to PwIcones.Pencil), aba, { aba = it })
-        if (aba == 0) RegistroG(m.id) else EditarMembroG(m, eu = m.id == meuId, onExcluida = onVoltar)
+        val souDev = com.pwexpress.core.perfil.Perfis.perfil.collectAsState().value?.dev == true
+        if (aba == 0) RegistroG(m.id)
+        else if (m.dev && !souDev) TextoDica("Conta Dev: só o Dev altera esta conta.")
+        else EditarMembroG(m, eu = m.id == meuId, onExcluida = onVoltar, souDev = souDev)
     }
 }
 
@@ -442,7 +446,7 @@ private fun RegistroG(id: String) {
         "oferta_enviada" to 4, "oferta_recusada" to 4, "oferta_expirada" to 4, "aceita" to 4, "redespachada" to 4, "reservada" to 4, "reserva_cancelada" to 4, "planejada_atrasada" to 4,
         "excluida" to 5,
     )
-    PwFiltros(listOf("Tudo" to 0, "Criadas" to 0, "Concluídas" to 0, "Canceladas" to 0, "Ofertas" to 0, "Apagadas" to 0), filtro, { filtro = it })
+    PwFiltros(listOf("Tudo" to 0, "Criadas" to 0, "Concluídas" to 0, "Canceladas" to 0, "Recebidas" to 0, "Apagadas" to 0), filtro, { filtro = it })
     val itens = d.second.filter { (teste || !it.teste) && (filtro == 0 || grupos[it.tipo] == filtro) }
     if (itens.isEmpty()) PwVazio("Nada por aqui ainda.", icone = PwIcones.History)
     var diaAnterior = ""
@@ -501,7 +505,7 @@ private fun extraRegistro(i: ItemRegistro): String? {
 }
 
 @Composable
-private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Boolean, onExcluida: () -> Unit) {
+private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Boolean, onExcluida: () -> Unit, souDev: Boolean = false) {
     val c = Pw.cores
     val ctx = LocalContext.current
     val escopo = rememberCoroutineScope()
@@ -509,6 +513,7 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
     var nome by remember(m.id) { mutableStateOf(m.nome) }
     var gestor by remember(m.id) { mutableStateOf(m.gestor) }
     var motoboy by remember(m.id) { mutableStateOf(m.motoboy) }
+    var devPapel by remember(m.id) { mutableStateOf(m.dev) }
     var repasse by remember(m.id) { mutableStateOf(m.repassePct?.toString().orEmpty()) }
     var msg by remember { mutableStateOf<String?>(null) }
     var erro by remember { mutableStateOf<String?>(null) }
@@ -520,6 +525,7 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
         PwCampo(nome, { nome = it }, "Nome de exibição")
         Espaco(8)
         PwRotulo("Papéis")
+        if (souDev) PwInterruptor("Dev", devPapel, { devPapel = it }, descricao = "Administra o sistema inteiro", icone = PwIcones.CodeXml, cor = c.dev)
         PwInterruptor("Gestor", gestor, { gestor = it }, descricao = "Acessa o painel (site e app)", icone = PwIcones.ShieldCheck)
         PwInterruptor("Motoboy", motoboy, { motoboy = it }, descricao = "Usa o app e recebe corridas", icone = PwIcones.Bike)
         if (motoboy) PwCampo(repasse, { repasse = it }, "Repasse individual (%)", dica = "padrão: ${dados.config.numero("repasse_motoboy_pct", 70.0).toInt()}%", teclado = KeyboardType.Decimal)
@@ -530,8 +536,8 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
             PwBotaoVidro("Nova senha", onClick = { senhaNova = gerarSenha(); senhaFeita = false }, icone = PwIcones.KeyRound, modifier = Modifier.weight(1f))
             PwBotaoOuro("Salvar", icone = PwIcones.Check, modifier = Modifier.weight(1f), onClick = {
                 escopo.launch {
-                    Gestao.editarMembro(m.id, nome, listOfNotNull("gestor".takeIf { gestor }, "motoboy".takeIf { motoboy }), repasse.replace(',', '.').toDoubleOrNull())
-                        .onSuccess { msg = "Salvo."; erro = null; Gestao.atualizar() }.onFailure { erro = it.message; msg = null }
+                    Gestao.editarMembro(m.id, nome, listOfNotNull("dev".takeIf { devPapel }, "gestor".takeIf { gestor }, "motoboy".takeIf { motoboy }), repasse.replace(',', '.').toDoubleOrNull())
+                        .onSuccess { msg = null; erro = null; com.pwexpress.core.designsystem.PwToast.mostrar("${nome.ifBlank { m.email }} atualizado.", titulo = "Salvo"); Gestao.atualizar() }.onFailure { erro = it.message; msg = null }
                 }
             })
         }
@@ -612,8 +618,8 @@ fun FinanceiroG(onVoltar: (() -> Unit)?) {
         linhas = Gestao.concluidas(cal.timeInMillis, teste)
     }
     PwPagina {
-        val sub = if (teste) "Ganhos das corridas de teste" else "Corridas concluídas (sem testes)"
-        if (onVoltar != null) Cabecalho("Financeiro", onVoltar, subtitulo = sub) else TituloTela("Financeiro", sub, PwIcones.Wallet)
+        val sub = if (teste) "Ganhos das corridas de teste" else "Corridas concluídas"
+        if (onVoltar != null) Cabecalho("Carteira", onVoltar, subtitulo = sub) else TituloTela("Carteira", sub, PwIcones.Wallet)
         PwFiltros(listOf("Hoje" to 0, "7 dias" to 0, "Este mês" to 0, "30 dias" to 0), periodo, { periodo = it })
         val l = linhas ?: run { PwCarregando(); return@PwPagina }
         val total = l.sumOf { it.valor ?: 0.0 }; val moto = l.sumOf { it.valorMotoboy ?: 0.0 }; val gest = l.sumOf { it.valorGestao ?: 0.0 }

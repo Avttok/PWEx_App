@@ -16,6 +16,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +46,13 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 internal val BR: Locale = Locale.forLanguageTag("pt-BR")
+
+/** O módulo está ligado para esta conta? (o Dev liga/desliga no console; o Dev sempre vê) */
+@Composable
+internal fun modulo(chave: String): Boolean {
+    val p by com.pwexpress.core.perfil.Perfis.perfil.collectAsState()
+    return p?.modulo(chave) ?: true
+}
 
 internal fun corStatus(s: String, c: PwPaleta): Color = when (s) {
     Status.AGENDADA, Status.RESERVADA -> c.azul
@@ -140,7 +149,7 @@ internal fun CartaoCorridaG(corrida: CorridaG, dados: Gestao.Dados, onClick: () 
         }
         if (!corrida.planejada) {
             dados.nomeMotoboy(corrida)?.let { Detalhe(PwIcones.Bike, it) }
-            oferta?.let { Detalhe(PwIcones.BellRing, "Oferecida a ${dados.membro(it.motoboyId)?.nome ?: "motoboy"}") }
+            oferta?.let { Detalhe(PwIcones.BellRing, "Enviada para ${dados.membro(it.motoboyId)?.nome ?: "motoboy"}") }
         }
     }
 }

@@ -110,7 +110,7 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
             dados.ofertas.firstOrNull { it.corridaId == corrida.id }?.let { o ->
                 var resta by remember(o.id) { mutableStateOf(0L) }
                 LaunchedEffect(o.id) { while (true) { resta = ((o.expiraEm - System.currentTimeMillis()) / 1000).coerceAtLeast(0); delay(1000) } }
-                TextoDica("Oferecida a ${dados.membro(o.motoboyId)?.nome ?: "motoboy"} (${km(o.distanciaM)} da coleta) · responde em ${resta}s")
+                TextoDica("Enviada para ${dados.membro(o.motoboyId)?.nome ?: "motoboy"} (${km(o.distanciaM)} da coleta) · responde em ${resta}s")
             }
             dados.nomeMotoboy(corrida)?.let { n ->
                 Espaco(6)
@@ -207,7 +207,8 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
             PwBotaoPerigo("Cancelar corrida", onClick = { cancelarPergunta = true }, icone = PwIcones.CircleX, habilitado = !ocupado, modifier = Modifier.fillMaxWidth())
         }
         val podeApagar = corrida.status !in setOf(Status.ACEITA, Status.EM_ANDAMENTO, Status.RESERVADA)
-        if (podeApagar) PwBotaoVidro("Apagar corrida", onClick = { excluir = true }, icone = PwIcones.Trash2, modifier = Modifier.fillMaxWidth())
+        if (!modulo("excluir_corridas")) Unit
+        else if (podeApagar) PwBotaoVidro("Apagar corrida", onClick = { excluir = true }, icone = PwIcones.Trash2, modifier = Modifier.fillMaxWidth())
         else TextoDica("Para apagar esta corrida, cancele-a primeiro.")
     }
 

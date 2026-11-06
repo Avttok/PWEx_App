@@ -119,7 +119,7 @@ fun LoginScreen(modifier: Modifier = Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Spacer(Modifier.height(24.dp))
-            PwLogo(tamanho = 170, soSelo = true)
+            com.pwexpress.core.designsystem.PwLogoGrande(190.dp)
             Spacer(Modifier.height(28.dp))
 
             if (!PwConfig.configurado) {

@@ -129,7 +129,7 @@ fun PrimeiraConfiguracao(onPronto: () -> Unit, modifier: Modifier = Modifier) {
         Passo(4, PwIcones.BatteryLow, "Sem restrição de bateria", "Para o Android não pausar o app.", estado.bateria) {
             Permissoes.pedirSemRestricaoBateria(ctx)
         }
-        Passo(5, PwIcones.Maximize2, "Ofertas em tela cheia", "Para a corrida aparecer mesmo com o celular bloqueado.", estado.telaCheia) {
+        Passo(5, PwIcones.Maximize2, "Corridas em tela cheia", "Para a corrida aparecer mesmo com o celular bloqueado.", estado.telaCheia) {
             abrirTelaCheia(ctx)
         }
 

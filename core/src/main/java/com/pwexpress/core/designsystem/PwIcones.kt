@@ -123,4 +123,9 @@ object PwIcones {
     val ListChecks: ImageVector by lazy { icone("list-checks", "M13 5h8", "M13 12h8", "M13 19h8", "m3 17 2 2 4-4", "m3 7 2 2 4-4") }
     val SunMoon: ImageVector by lazy { icone("sun-moon", "M12 2v2", "M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715", "M16 12a4 4 0 0 0-4-4", "m19 5-1.256 1.256", "M20 12h2") }
     val SignalZero: ImageVector by lazy { icone("signal-zero", "M2 20h.01") }
+    val CodeXml: ImageVector by lazy { icone("code-xml", "m18 16 4-4-4-4", "m6 8-4 4 4 4", "m14.5 4-5 16") }
+    val ToggleRight: ImageVector by lazy { icone("toggle-right", "M12 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0", "M9 5h6a7 7 0 0 1 7 7v0a7 7 0 0 1 -7 7h-6a7 7 0 0 1 -7 -7v0a7 7 0 0 1 7 -7Z") }
+    val Smartphone: ImageVector by lazy { icone("smartphone", "M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2v-16a2 2 0 0 1 2 -2Z", "M12 18h.01") }
+    val Palette: ImageVector by lazy { icone("palette", "M12 22a1 1 0 0 1 0-20 10 9 0 0 1 10 9 5 5 0 0 1-5 5h-2.25a1.75 1.75 0 0 0-1.4 2.8l.3.4a1.75 1.75 0 0 1-1.4 2.8z", "M13 6.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0", "M17 10.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0", "M6 12.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0", "M8 7.5a0.5 0.5 0 1 0 1 0a0.5 0.5 0 1 0 -1 0") }
+    val Heart: ImageVector by lazy { icone("heart", "M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5") }
 }

@@ -228,10 +228,10 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
         Cabecalho("Nova corrida", onVoltar, subtitulo = if (teste) "Será uma corrida de teste" else "Paradas, preço e despacho")
 
         // ------------------------------------------------ quando
-        PwCartao(cor = if (planejar) c.azul.copy(alpha = 0.6f) else null) {
+        if (modulo("corridas_planejadas")) PwCartao(cor = if (planejar) c.azul.copy(alpha = 0.6f) else null) {
             PwRotulo("Quando")
             Espaco(8)
-            PwSegmentado(listOf("Agora" to PwIcones.Zap, "Planejar" to PwIcones.CalendarClock), if (planejar) 1 else 0, { planejar = it == 1 })
+            PwSegmentado(listOf("Express" to PwIcones.Zap, "Planejar" to PwIcones.CalendarClock), if (planejar) 1 else 0, { planejar = it == 1 })
             if (planejar) {
                 Espaco(10)
                 PwBotaoVidro("Começa ${quando(inicio)}", onClick = { escolhendoHora = true }, icone = PwIcones.CalendarClock, modifier = Modifier.fillMaxWidth())
@@ -336,7 +336,7 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
                     descricao = if (cobrarAcrescimo) "Cobra a mais em percursos longos e para motoboys longe da coleta." else "Esta corrida fica com o valor acima, sem acréscimo.")
                 if (acrescimoLigado) TextoDica(
                     (if (fe > 0) "Percurso longo: +${numeroBr(fe)}× → ${moedaBr(valorComAcrescimo)}. " else "Sem acréscimo de percurso. ") +
-                        "Se o motoboy estiver a mais de ${cfg.numero("acrescimo_coleta_cada_km", 100.0).toInt()} km da coleta, soma +${numeroBr(cfg.numero("acrescimo_coleta_fator", 0.5))}× a cada ${cfg.numero("acrescimo_coleta_cada_km", 100.0).toInt()} km na oferta dele.",
+                        "Se o motoboy estiver a mais de ${cfg.numero("acrescimo_coleta_cada_km", 100.0).toInt()} km da coleta, soma +${numeroBr(cfg.numero("acrescimo_coleta_fator", 0.5))}× a cada ${cfg.numero("acrescimo_coleta_cada_km", 100.0).toInt()} km no valor que ele recebe.",
                 )
             }
         }
@@ -365,7 +365,7 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
                 planejar && !direto -> "O primeiro motoboy que reservar no app fica com ela."
                 planejar -> "Já fica reservada para o motoboy escolhido."
                 !direto -> "Vai para o mais próximo da coleta" + if (favoritos.isNotEmpty() && cfg.logico("favoritos_primeiro", true)) ", favoritos do cliente primeiro." else "."
-                else -> "Só esse motoboy recebe a oferta."
+                else -> "Só esse motoboy recebe a corrida."
             })
             if (direto) {
                 Espaco(8)
@@ -424,6 +424,7 @@ private fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) -
         sugestoes = Geo.buscarEnderecos(p.endereco)
     }
     val forma = RoundedCornerShape(16.dp)
+    val comRefs = modulo("pontos_referencia")
     Column(
         Modifier.fillMaxWidth().clip(forma).background(c.vidroSutil).border(1.dp, if (p.coleta) c.ouro.copy(alpha = 0.5f) else c.borda, forma).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -457,8 +458,8 @@ private fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) -
             PwCampo(p.contato, { p.contato = it }, "Nome do contato")
             PwCampo(p.telefone, { p.telefone = it }, "Telefone", teclado = KeyboardType.Phone)
             PwCampo(p.instrucoes, { p.instrucoes = it }, "Instruções (portaria, bloco…)")
-            PwRotulo("Pontos de referência ${p.refs.size}/3")
-            p.refs.toList().forEach { r ->
+            if (comRefs) PwRotulo("Pontos de referência ${p.refs.size}/3")
+            if (comRefs) p.refs.toList().forEach { r ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(PwIcones.Landmark, null, tint = c.ouro, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
@@ -466,7 +467,7 @@ private fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) -
                     PwBotaoIcone(PwIcones.X, "Remover", { p.refs.remove(r) }, tamanho = 32.dp)
                 }
             }
-            if (p.refs.size < 3) {
+            if (comRefs && p.refs.size < 3) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     PwCampo(novaRef, { novaRef = it }, "Nova referência", dica = "Ex.: em frente ao posto", modifier = Modifier.weight(1f))
                     PwBotaoIcone(PwIcones.Plus, "Adicionar", { if (novaRef.isNotBlank()) { p.refs.add(RefG(novaRef.trim(), null, null)); novaRef = "" } }, ativo = novaRef.isNotBlank())

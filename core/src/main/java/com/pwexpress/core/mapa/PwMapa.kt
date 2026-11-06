@@ -108,6 +108,8 @@ fun PwMapa(
     val ctx = LocalContext.current
     val escuro = Pw.cores.escuro
     val ouro = Pw.cores.ouro.hex()
+    // nomes dos estabelecimentos seguem o tema (dourado, violeta no teste, vermelho do Dev)
+    val ouroTexto = (if (escuro) Pw.cores.ouroClaro else Pw.cores.ouroEscuro).hex()
     val toque by rememberUpdatedState(onToque)
     val toqueMarcador by rememberUpdatedState(onMarcador)
     val centro by rememberUpdatedState(onCentro)
@@ -181,7 +183,7 @@ fun PwMapa(
                 m.addOnCameraIdleListener { centro?.let { cb -> m.cameraPosition.target?.let { t -> cb(t.latitude, t.longitude) } } }
             }
             m.setStyle(Style.Builder().fromUri(if (escuro) ESTILO_ESCURO else ESTILO_CLARO)) { s ->
-                criarCamadas(s, escuro, ouro)
+                criarCamadas(s, escuro, ouro, ouroTexto)
                 estilo = s
             }
         }
@@ -293,8 +295,8 @@ fun PwMapa(
     AndroidView(factory = { mapView }, modifier = modifier)
 }
 
-private fun criarCamadas(s: Style, escuro: Boolean, ouro: String) {
-    adicionarEstabelecimentos(s, escuro)
+private fun criarCamadas(s: Style, escuro: Boolean, ouro: String, ouroTexto: String) {
+    adicionarEstabelecimentos(s, escuro, ouro, ouroTexto)
     s.addSource(GeoJsonSource("marcadores"))
     s.addSource(GeoJsonSource("trilhas"))
     s.addSource(GeoJsonSource("rota"))
@@ -391,7 +393,7 @@ private fun criarCamadas(s: Style, escuro: Boolean, ouro: String) {
  * Nomes de estabelecimentos (comércio, restaurantes, postos…), a partir do zoom de bairro.
  * Os estilos limpos não mostram, mas os dados estão nos mesmos mapas (camada "poi").
  */
-private fun adicionarEstabelecimentos(s: Style, escuro: Boolean) {
+private fun adicionarEstabelecimentos(s: Style, escuro: Boolean, ouro: String, ouroTexto: String) {
     if (s.getSource("openmaptiles") == null) return
     s.addLayer(
         CircleLayer("pwex-poi-ponto", "openmaptiles").apply {
@@ -400,7 +402,7 @@ private fun adicionarEstabelecimentos(s: Style, escuro: Boolean) {
             setFilter(Expression.has("name"))
             setProperties(
                 PropertyFactory.circleRadius(3f),
-                PropertyFactory.circleColor(if (escuro) "#D4AF37" else "#B8901F"),
+                PropertyFactory.circleColor(ouro),
                 PropertyFactory.circleStrokeColor(if (escuro) "#0B0B0D" else "#FFFFFF"),
                 PropertyFactory.circleStrokeWidth(1.2f),
             )
@@ -419,7 +421,7 @@ private fun adicionarEstabelecimentos(s: Style, escuro: Boolean) {
                 PropertyFactory.textOffset(arrayOf(0f, 0.5f)),
                 PropertyFactory.textMaxWidth(9f),
                 PropertyFactory.textOptional(true),
-                PropertyFactory.textColor(if (escuro) "#E9C766" else "#6B5410"),
+                PropertyFactory.textColor(ouroTexto),
                 PropertyFactory.textHaloColor(if (escuro) "#0B0B0D" else "#FFFFFF"),
                 PropertyFactory.textHaloWidth(1.4f),
             )

@@ -68,6 +68,7 @@ data class MembroG(
 ) {
     val gestor get() = "gestor" in papeis
     val motoboy get() = "motoboy" in papeis
+    val dev get() = "dev" in papeis
 }
 
 data class PosicaoG(val id: String, val status: String, val lat: Double?, val lng: Double?, val posicaoEm: Long?, val modoTeste: Boolean, val bateria: Int?, val precisaoM: Double?, val economia: Boolean = false)

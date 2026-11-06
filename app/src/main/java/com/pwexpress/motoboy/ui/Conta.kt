@@ -47,6 +47,10 @@ import com.pwexpress.core.designsystem.Archivo
 import com.pwexpress.core.designsystem.PreferenciaTema
 import com.pwexpress.core.designsystem.Pw
 import com.pwexpress.core.designsystem.PwAvatarConta
+import com.pwexpress.core.designsystem.PwSelosCargo
+import com.pwexpress.core.designsystem.PwToast
+import com.pwexpress.core.designsystem.TipoAviso
+import androidx.compose.ui.draw.scale
 import com.pwexpress.core.designsystem.PwErro
 import com.pwexpress.core.designsystem.PwIcones
 import com.pwexpress.core.designsystem.TemaApp
@@ -71,11 +75,11 @@ fun RowScope.AcoesTopo(painel: Painel, podeTrocar: Boolean, onTrocar: (Painel) -
                 Box(
                     Modifier.clip(forma).then(if (ativo) Modifier.background(c.gradOuro) else Modifier).clickable { onTrocar(p) }.padding(horizontal = 11.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center,
-                ) { Icon(i, if (p == Painel.MOTOBOY) "Lado do motoboy" else "Painel do gestor", tint = if (ativo) c.sobreOuro else c.texto3, modifier = Modifier.size(17.dp)) }
+                ) { Icon(i, if (p == Painel.MOTOBOY) "MotoApp" else "Painel do gestor", tint = if (ativo) c.sobreOuro else c.texto3, modifier = Modifier.size(17.dp)) }
             }
         }
     }
-    PwAvatarConta(perfil?.nome ?: "", perfil?.fotoUrl, teste, tamanho = 42.dp, onClick = onConta)
+    PwAvatarConta(perfil?.nome ?: "", perfil?.fotoUrl, teste, tamanho = 42.dp, onClick = onConta, dev = perfil?.dev == true)
 }
 
 /**
@@ -92,6 +96,7 @@ fun JanelaConta(
     onConfiguracoes: () -> Unit,
     onTrocar: (Painel) -> Unit,
     onSair: () -> Unit,
+    onDev: () -> Unit = {},
 ) {
     val c = Pw.cores
     val perfil by Perfis.perfil.collectAsState()
@@ -117,11 +122,13 @@ fun JanelaConta(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onPerfil).padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    PwAvatarConta(perfil?.nome ?: email, perfil?.fotoUrl, teste, tamanho = 48.dp)
+                    PwAvatarConta(perfil?.nome ?: email, perfil?.fotoUrl, teste, tamanho = 48.dp, dev = perfil?.dev == true)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(perfil?.nome ?: email.substringBefore("@"), color = c.texto, fontWeight = FontWeight.Bold, fontFamily = Archivo, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(email, color = c.texto3, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(4.dp))
+                        PwSelosCargo(perfil?.dev == true, perfil?.gestor == true && perfil?.dev != true, perfil?.motoboy == true)
                     }
                 }
                 Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(c.borda))
@@ -132,11 +139,26 @@ fun JanelaConta(
                     onClick = { TemaApp.definir(if (escuro) PreferenciaTema.CLARO else PreferenciaTema.ESCURO) }) {
                     Interruptor(escuro) { TemaApp.definir(if (it) PreferenciaTema.ESCURO else PreferenciaTema.CLARO) }
                 }
-                if (perfil?.gestor == true) {
+                if (perfil?.dev == true) {
+                    val vermelho by TemaApp.vermelho.collectAsState()
+                    ItemMenu(PwIcones.Palette, "Tema vermelho", subtitulo = if (vermelho) "A cor do Dev" else "Dourado, como todos", cor = c.dev, onClick = {}) {
+                        Interruptor(vermelho, c.dev) { lig ->
+                            TemaApp.definirVermelho(lig)
+                            escopo.launch { Perfis.definirCorTema(if (lig) "vermelho" else "ouro").onFailure { TemaApp.definirVermelho(!lig); PwToast.mostrar(it.message ?: "Erro", TipoAviso.ERRO) } }
+                        }
+                    }
+                }
+                if (perfil?.gestor == true && perfil?.modulo("modo_teste") != false) {
                     fun alternarTeste(lig: Boolean) {
                         if (trocandoTeste) return
                         trocandoTeste = true
-                        escopo.launch { Perfis.definirModoTeste(lig).onFailure { erro = it.message }.onSuccess { erro = null }; trocandoTeste = false }
+                        escopo.launch {
+                            Perfis.definirModoTeste(lig).onFailure { erro = it.message }.onSuccess {
+                                erro = null
+                                PwToast.mostrar(if (lig) "Tudo violeta: só corridas e ganhos de teste." else "De volta ao normal: tudo vale de verdade.", TipoAviso.INFO, if (lig) "Modo teste ligado" else "Modo teste desligado")
+                            }
+                            trocandoTeste = false
+                        }
                     }
                     ItemMenu(PwIcones.FlaskConical, "Modo teste", subtitulo = if (teste) "Só corridas e ganhos de teste" else null, cor = c.violeta, onClick = { alternarTeste(!teste) }) {
                         Interruptor(teste, c.violeta) { alternarTeste(it) }
@@ -144,13 +166,20 @@ fun JanelaConta(
                 }
                 PwErro(erro)
                 if (painel == Painel.GESTOR) ItemMenu(PwIcones.Settings2, "Configurações", onClick = onConfiguracoes)
+                if (perfil?.dev == true) ItemMenu(PwIcones.CodeXml, "Console Dev", cor = c.dev, onClick = onDev)
                 if (podeTrocar) {
                     if (painel == Painel.MOTOBOY) ItemMenu(PwIcones.ShieldCheck, "Painel do gestor", onClick = { onTrocar(Painel.GESTOR) })
-                    else ItemMenu(PwIcones.Bike, "Lado do motoboy", onClick = { onTrocar(Painel.MOTOBOY) })
+                    else ItemMenu(PwIcones.Bike, "MotoApp", onClick = { onTrocar(Painel.MOTOBOY) })
                 }
-                ItemMenu(PwIcones.Download, "Verificar atualização", onClick = { onFechar(); Atualizador.abrirJanela(); Atualizador.verificar(automatico = false) })
+                if (perfil?.modulo("atualizacao_app") != false) ItemMenu(PwIcones.Download, "Verificar atualização", onClick = { onFechar(); Atualizador.abrirJanela(); Atualizador.verificar(automatico = false) })
                 Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(c.borda))
                 ItemMenu(PwIcones.LogOut, "Sair da conta", cor = c.vermelho, corTexto = c.vermelho, onClick = onSair)
+                // easter egg, igual ao rodapé do site
+                Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 2.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    Text("Um projeto de irmão para irmão!", color = c.texto3, fontSize = 11.5.sp, fontFamily = Archivo)
+                    Spacer(Modifier.width(5.dp))
+                    CoracaoBatendo()
+                }
             }
         }
     }
@@ -188,4 +217,15 @@ private fun Interruptor(ligado: Boolean, cor: Color? = null, onMudar: (Boolean) 
         checked = ligado, onCheckedChange = onMudar,
         colors = SwitchDefaults.colors(checkedThumbColor = c.sobreOuro, checkedTrackColor = cor ?: c.ouro, uncheckedTrackColor = c.bordaForte, uncheckedBorderColor = Color.Transparent),
     )
+}
+
+@Composable
+private fun CoracaoBatendo() {
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "coracao")
+    val escala by t.animateFloat(
+        1f, 1.18f,
+        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(800), androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "batida",
+    )
+    Icon(PwIcones.Heart, "com amor", tint = Pw.cores.ouro, modifier = Modifier.size(12.dp).scale(escala))
 }

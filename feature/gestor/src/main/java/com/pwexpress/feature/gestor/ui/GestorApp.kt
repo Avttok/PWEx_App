@@ -34,12 +34,14 @@ sealed interface TelaG {
     data class Membro(val id: String) : TelaG
     data object Financeiro : TelaG
     data object Configuracoes : TelaG
+    data object Dev : TelaG
 }
 
 /** Pedidos de navegação vindos de fora do painel (ex.: "Configurações" no menu da foto). */
 object GestorNav {
     internal val pedido = kotlinx.coroutines.flow.MutableStateFlow<TelaG?>(null)
     fun abrirConfiguracoes() { pedido.value = TelaG.Configuracoes }
+    fun abrirDev() { pedido.value = TelaG.Dev }
 }
 
 /**
@@ -71,6 +73,7 @@ fun GestorApp(
     fun voltar() { if (pilha.isNotEmpty()) pilha.removeAt(pilha.lastIndex) }
     BackHandler(enabled = pilha.isNotEmpty()) { voltar() }
 
+    val comCarteira = modulo("carteira")
     val planejadas = dados.corridas.count { it.teste == teste && it.status in Status.PLANEJADAS }
     val semMotoboy = dados.corridas.count { it.teste == teste && it.status == Status.SEM_MOTOBOY }
 
@@ -86,6 +89,7 @@ fun GestorApp(
                     is TelaG.Membro -> MembroG(atual.id, meuId = meuId, onVoltar = ::voltar)
                     TelaG.Financeiro -> FinanceiroG(onVoltar = ::voltar)
                     TelaG.Configuracoes -> ConfiguracoesG(onVoltar = ::voltar)
+                    TelaG.Dev -> DevG(onVoltar = ::voltar)
                     null -> when (aba) {
                         "mapa" -> MapaG(onCorrida = { abrir(TelaG.Corrida(it)) })
                         "corridas" -> CorridasG(onAbrir = { abrir(TelaG.Corrida(it)) }, onNova = { abrir(TelaG.NovaCorrida) })
@@ -103,8 +107,7 @@ fun GestorApp(
                     PwAba("corridas", "Corridas", PwIcones.Route, planejadas + semMotoboy),
                     PwAba("empresas", "Empresas", PwIcones.Building2),
                     PwAba("equipe", "Equipe", PwIcones.Users),
-                    PwAba("financeiro", "Financeiro", PwIcones.Wallet),
-                ),
+                ) + (if (comCarteira) listOf(PwAba("financeiro", "Carteira", PwIcones.Wallet)) else emptyList()),
                 aba, { aba = it },
                 Modifier.align(Alignment.BottomCenter),
             )

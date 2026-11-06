@@ -60,6 +60,8 @@ class PwApp : Application() {
                 // modo teste: o app inteiro fica violeta
                 TemaApp.definirModoTeste(p?.modoTeste == true)
                 if (p == null) return@collect
+                // Dev com tema vermelho
+                TemaApp.definirVermelho(p.dev && p.corTema == "vermelho")
                 // "Logar com": mantém nome e foto atualizados na conta salva
                 PwCore.auth.sessao.value?.email?.let { PwCore.auth.contas.atualizarPerfil(it, p.nome, p.fotoUrl) }
                 Tracking.aplicarConfiguracoes(
@@ -80,6 +82,7 @@ class PwApp : Application() {
                     Corridas.limpar()
                     Perfis.limpar()
                     Gestao.limpar()
+                    TemaApp.definirVermelho(false)
                 }
             }
         }

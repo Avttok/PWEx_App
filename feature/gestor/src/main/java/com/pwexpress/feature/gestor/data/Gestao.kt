@@ -241,6 +241,26 @@ object Gestao {
         Unit
     }
 
+    // ------------------------------------------------------------------ Dev
+
+    data class ModuloDev(val chave: String, val nome: String, val descricao: String?, val grupo: String, val ligado: Boolean, val papeis: List<String>)
+
+    suspend fun modulos(): Result<List<ModuloDev>> = acao {
+        PwCore.rpc.rest("GET", "/rest/v1/modulos?select=*&order=ordem").exigirOk(::traduzir).lista().map {
+            ModuloDev(it.str("chave")!!, it.str("nome").orEmpty(), it.str("descricao"), it.str("grupo") ?: "geral", it.bool("ligado"), it.strs("papeis"))
+        }
+    }
+
+    suspend fun definirModulo(chave: String, ligado: Boolean, papeis: List<String>) = acao {
+        PwCore.rpc.chamar("definir_modulo", buildJsonObject {
+            put("p_chave", chave); put("p_ligado", ligado)
+            put("p_papeis", if (papeis.isEmpty()) JsonNull else buildJsonArray { papeis.forEach { add(JsonPrimitive(it)) } })
+        }).exigirOk(::traduzir); Unit
+    }
+
+    /** O sistema "nu": contagens, aparelhos e o registro de exclusões. */
+    suspend fun painelDev(): Result<JsonObject> = acao { PwCore.rpc.chamar("painel_dev", JsonObject(emptyMap())).exigirOk(::traduzir).objeto() ?: JsonObject(emptyMap()) }
+
     // ------------------------------------------------------------------ util
 
     private suspend fun <T> acao(bloco: suspend () -> T): Result<T> = runCatching { bloco() }.recoverCatching { throw Exception(mensagem(it)) }
@@ -275,7 +295,10 @@ object Gestao {
         "nao_exclua_a_si_mesmo" to "Você não pode excluir a sua própria conta.",
         "nao_bloqueie_a_si_mesmo" to "Você não pode bloquear a sua própria conta.",
         "nao_remova_seu_proprio_acesso" to "Você não pode tirar seu próprio acesso de gestor.",
-        "membro_em_corrida" to "Essa pessoa está com corrida ou oferta em andamento. Espere terminar antes.",
+        "conta_protegida" to "Contas Dev só o Dev altera.",
+        "apenas_dev" to "Só o Dev pode fazer isso.",
+        "modulo_desligado" to "Essa função está desligada pelo Dev.",
+        "membro_em_corrida" to "Essa pessoa está com uma corrida em andamento. Espere terminar antes.",
         "usuario_nao_encontrado" to "Conta não encontrada.",
         "nao_encontrado" to "CNPJ não encontrado na Receita.",
     )

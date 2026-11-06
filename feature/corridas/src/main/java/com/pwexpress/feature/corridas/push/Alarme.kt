@@ -36,7 +36,7 @@ object Alarme {
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
             .build()
         nm.createNotificationChannel(
-            NotificationChannel(CANAL_OFERTA, "Ofertas de corrida", NotificationManager.IMPORTANCE_HIGH).apply {
+            NotificationChannel(CANAL_OFERTA, "Corridas novas", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Toca alto e abre em tela cheia quando chega uma corrida"
                 group = PwNotificacoes.GRUPO_CORRIDAS
                 setSound(som, audio)

@@ -56,6 +56,10 @@ data class PwPaleta(
     val azul: Color = Color(0xFF60A5FA),
     val brilho1: Color,
     val brilho2: Color,
+    /** Qual logo usar: o tema troca só cores, nunca tamanhos. */
+    val marca: Marca = Marca.OURO,
+    /** Cor do cargo Dev (selo </>). */
+    val dev: Color = Color(0xFFF87171),
 ) {
     /** Degradê principal (botões, selos): claro → ouro → escuro, 135°. */
     val gradOuro: Brush get() = Brush.linearGradient(listOf(ouroClaro, ouro, ouroEscuro))
@@ -112,11 +116,22 @@ object PwCores {
 
 enum class PreferenciaTema { SISTEMA, CLARO, ESCURO }
 
+/** Cor principal: dourado (todos), vermelho (Dev) ou violeta (modo teste, sempre vence). */
+enum class Marca { OURO, VERMELHO, VIOLETA }
+
 /** Guarda a escolha do usuário (sistema / claro / noturno). */
 object TemaApp {
     private var ctx: Context? = null
     private val _pref = MutableStateFlow(PreferenciaTema.SISTEMA)
     val preferencia: StateFlow<PreferenciaTema> = _pref.asStateFlow()
+
+    /** Dev com o tema vermelho: troca o dourado por vermelho (o modo teste ainda vence). */
+    private val _vermelho = MutableStateFlow(false)
+    val vermelho: StateFlow<Boolean> = _vermelho.asStateFlow()
+    fun definirVermelho(ligado: Boolean) {
+        _vermelho.value = ligado
+        ctx?.getSharedPreferences("pwex_tema", Context.MODE_PRIVATE)?.edit { putBoolean("vermelho", ligado) }
+    }
 
     /** Com o modo teste ligado, o app inteiro troca o dourado por violeta (fica claro que é teste). */
     private val _modoTeste = MutableStateFlow(false)
@@ -127,6 +142,7 @@ object TemaApp {
         ctx = context.applicationContext
         val salvo = ctx!!.getSharedPreferences("pwex_tema", Context.MODE_PRIVATE).getString("tema", null)
         _pref.value = PreferenciaTema.entries.firstOrNull { it.name == salvo } ?: PreferenciaTema.SISTEMA
+        _vermelho.value = ctx!!.getSharedPreferences("pwex_tema", Context.MODE_PRIVATE).getBoolean("vermelho", false)
     }
 
     fun definir(p: PreferenciaTema) {
@@ -181,15 +197,30 @@ fun PwTheme(content: @Composable () -> Unit) {
         PreferenciaTema.ESCURO -> true
     }
     val teste by TemaApp.modoTeste.collectAsState()
-    val base = if (escuro) Noturno else Claro
-    val p = if (!teste) base else base.copy(
-        ouro = if (escuro) Color(0xFFA78BFA) else Color(0xFF7C3AED),
-        ouroClaro = if (escuro) Color(0xFFD4C6FF) else Color(0xFFA78BFA),
-        ouroEscuro = if (escuro) Color(0xFF6D28D9) else Color(0xFF5B21B6),
-        sobreOuro = Color(0xFFFFFFFF),
-        brilho1 = Color(if (escuro) 0x33A78BFA else 0x407C3AED),
-        brilho2 = Color(if (escuro) 0x14A78BFA else 0x1F7C3AED),
-    )
+    val vermelho by TemaApp.vermelho.collectAsState()
+    val base = (if (escuro) Noturno else Claro).copy(dev = if (escuro) Color(0xFFF87171) else Color(0xFFDC2626))
+    // mesmas cores do site; só os tons mudam, tamanhos e espaços ficam iguais em todos os temas
+    val p = when {
+        teste -> base.copy(
+            ouro = if (escuro) Color(0xFFA78BFA) else Color(0xFF7C3AED),
+            ouroClaro = if (escuro) Color(0xFFD4C6FF) else Color(0xFFA78BFA),
+            ouroEscuro = if (escuro) Color(0xFF6D28D9) else Color(0xFF5B21B6),
+            sobreOuro = Color(0xFFFFFFFF),
+            brilho1 = Color(if (escuro) 0x33A78BFA else 0x407C3AED),
+            brilho2 = Color(if (escuro) 0x14A78BFA else 0x1F7C3AED),
+            marca = Marca.VIOLETA,
+        )
+        vermelho -> base.copy(
+            ouro = if (escuro) Color(0xFFEF4444) else Color(0xFFDC2626),
+            ouroClaro = if (escuro) Color(0xFFFCA5A5) else Color(0xFFF87171),
+            ouroEscuro = Color(0xFF991B1B),
+            sobreOuro = Color(0xFFFFFFFF),
+            brilho1 = Color(if (escuro) 0x2EEF4444 else 0x38DC2626),
+            brilho2 = Color(if (escuro) 0x12EF4444 else 0x1ADC2626),
+            marca = Marca.VERMELHO,
+        )
+        else -> base
+    }
     val esquema = if (escuro) {
         darkColorScheme(
             primary = p.ouro, onPrimary = p.sobreOuro, secondary = p.ouroClaro, onSecondary = p.sobreOuro,

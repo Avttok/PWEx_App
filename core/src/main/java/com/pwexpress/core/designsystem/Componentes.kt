@@ -199,30 +199,15 @@ fun BotaoTema(modifier: Modifier = Modifier) {
 
 // ------------------------------------------------------------------ marca e detalhes
 
-/** Matriz do filtro "hue-rotate" do CSS: gira as cores da logo (dourado → violeta no modo teste). */
-private fun girarMatiz(graus: Float): ColorMatrix {
-    val r = Math.toRadians(graus.toDouble())
-    val cos = kotlin.math.cos(r).toFloat()
-    val sin = kotlin.math.sin(r).toFloat()
-    return ColorMatrix(floatArrayOf(
-        0.213f + cos * 0.787f - sin * 0.213f, 0.715f - cos * 0.715f - sin * 0.715f, 0.072f - cos * 0.072f + sin * 0.928f, 0f, 0f,
-        0.213f - cos * 0.213f + sin * 0.143f, 0.715f + cos * 0.285f + sin * 0.140f, 0.072f - cos * 0.072f - sin * 0.283f, 0f, 0f,
-        0.213f - cos * 0.213f - sin * 0.787f, 0.715f - cos * 0.715f + sin * 0.715f, 0.072f + cos * 0.928f + sin * 0.072f, 0f, 0f,
-        0f, 0f, 0f, 1f, 0f,
-    ))
-}
-
-/** Logo oficial; no modo teste fica violeta, como no site. */
+/** Logo (PW + entregador). A cor segue o tema: dourado, violeta no teste, vermelho do Dev. */
 @Composable
-fun PwSeloLogo(tamanho: Dp, modifier: Modifier = Modifier, descricao: String? = "PW Express · Agilidade e segurança") {
-    val teste by TemaApp.modoTeste.collectAsState()
-    Image(
-        painterResource(R.drawable.pwex_logo), descricao, modifier.size(tamanho),
-        colorFilter = if (teste) ColorFilter.colorMatrix(girarMatiz(215f)) else null,
-    )
+fun PwSeloLogo(tamanho: Dp, modifier: Modifier = Modifier, descricao: String? = "PW Express") {
+    val marca = Pw.cores.marca
+    val res = when (marca) { Marca.VIOLETA -> R.drawable.pwex_marca_violeta; Marca.VERMELHO -> R.drawable.pwex_marca_vermelho; else -> R.drawable.pwex_marca_ouro }
+    Image(painterResource(res), descricao, modifier.size(tamanho), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
 }
 
-/** Logo oficial (selo) + "PW Express". Com `soSelo`, mostra só a imagem (ela já traz o nome). */
+/** Logo + "Express" (o PW já está no desenho). Com `soSelo`, só o desenho. */
 @Composable
 fun PwLogo(modifier: Modifier = Modifier, tamanho: Int = 26, soSelo: Boolean = false) {
     val c = Pw.cores
@@ -231,16 +216,28 @@ fun PwLogo(modifier: Modifier = Modifier, tamanho: Int = 26, soSelo: Boolean = f
         return
     }
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        PwSeloLogo((tamanho * 1.6f).dp, descricao = null)
-        Spacer(Modifier.width((tamanho * 0.4f).dp))
-        Text("PW", style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = tamanho.sp))
+        PwSeloLogo((tamanho * 2.3f).dp, descricao = "PW Express")
+        Spacer(Modifier.width((tamanho * 0.25f).dp))
         Text(
-            " Express",
+            "Express",
             color = c.texto,
             fontFamily = Archivo,
             fontWeight = FontWeight.Medium,
-            fontSize = (tamanho * 0.78f).sp,
-            letterSpacing = (tamanho * 0.02f).sp,
+            fontSize = (tamanho * 0.82f).sp,
+            letterSpacing = (tamanho * 0.03f).sp,
+            maxLines = 1,
+        )
+    }
+}
+
+/** Logo grande das telas de entrada: desenho + "EXPRESS" espaçado embaixo. */
+@Composable
+fun PwLogoGrande(tamanho: Dp, modifier: Modifier = Modifier) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+        PwSeloLogo(tamanho)
+        Text(
+            "EXPRESS", color = Pw.cores.texto2, fontFamily = Archivo, fontWeight = FontWeight.Light,
+            fontSize = (tamanho.value * 0.09f).coerceAtLeast(12f).sp, letterSpacing = (tamanho.value * 0.055f).sp, maxLines = 1,
         )
     }
 }

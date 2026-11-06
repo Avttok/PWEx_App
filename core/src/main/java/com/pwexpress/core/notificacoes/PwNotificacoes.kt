@@ -72,17 +72,23 @@ object PwNotificacoes {
         ))
     }
 
-    private var logo: Bitmap? = null
+    private val logos = mutableMapOf<Boolean, Bitmap>()
 
-    /** Logo oficial recortada em círculo (ícone grande das notificações). */
+    /** Logo (PW + entregador) num círculo escuro: ícone grande das notificações. Violeta no modo teste. */
     fun logoRedonda(ctx: Context): Bitmap? {
-        logo?.let { return it }
-        val fonte = runCatching { BitmapFactory.decodeResource(ctx.resources, R.drawable.pwex_logo) }.getOrNull() ?: return null
+        val teste = modoTeste
+        logos[teste]?.let { return it }
+        val res = if (teste) R.drawable.pwex_marca_violeta else R.drawable.pwex_marca_ouro
+        val fonte = runCatching { BitmapFactory.decodeResource(ctx.resources, res) }.getOrNull() ?: return null
         val lado = 192
-        val escalada = Bitmap.createScaledBitmap(fonte, lado, lado, true)
         val saida = Bitmap.createBitmap(lado, lado, Bitmap.Config.ARGB_8888)
-        Canvas(saida).drawCircle(lado / 2f, lado / 2f, lado / 2f, Paint(Paint.ANTI_ALIAS_FLAG).apply { shader = BitmapShader(escalada, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP) })
-        logo = saida
+        val tela = Canvas(saida)
+        tela.drawCircle(lado / 2f, lado / 2f, lado / 2f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0B0B0D.toInt() })
+        val larg = lado * 0.74f
+        val alt = larg * fonte.height / fonte.width
+        val destino = android.graphics.RectF((lado - larg) / 2f, (lado - alt) / 2f, (lado + larg) / 2f, (lado + alt) / 2f)
+        tela.drawBitmap(fonte, null, destino, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
+        logos[teste] = saida
         return saida
     }
 

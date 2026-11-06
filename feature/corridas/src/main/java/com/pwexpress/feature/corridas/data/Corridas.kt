@@ -124,7 +124,7 @@ object Corridas {
     // ------------------------------------------------------------------ oferta
 
     suspend fun responder(aceitar: Boolean): Result<Unit> {
-        val oferta = _oferta.value ?: return Result.failure(Exception("Oferta não encontrada."))
+        val oferta = _oferta.value ?: return Result.failure(Exception("Essa corrida não está mais disponível."))
         return runCatching {
             val r = PwCore.rpc.chamar("responder_oferta", buildJsonObject {
                 put("p_oferta", oferta.id)

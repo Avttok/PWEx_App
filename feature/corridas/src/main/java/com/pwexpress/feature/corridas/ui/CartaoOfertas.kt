@@ -42,7 +42,7 @@ fun CartaoOfertas() {
     }
 
     PwCartao(destaque = !telaCheia) {
-        PwRotulo("Ofertas de corrida")
+        PwRotulo("Corridas novas")
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             PwPonto(if (telaCheia) Pw.cores.verde else Pw.cores.vermelho, 10.dp)

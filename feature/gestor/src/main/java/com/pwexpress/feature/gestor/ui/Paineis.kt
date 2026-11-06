@@ -84,7 +84,10 @@ private fun TelaComMapa(
     val c = Pw.cores
     var mostrando by rememberSaveable { mutableStateOf(true) }
     var enquadrar by remember { mutableIntStateOf(0) }
-    val locais by Estabelecimentos.visiveis.collectAsState()
+    val locaisPref by Estabelecimentos.visiveis.collectAsState()
+    val comLocais = modulo("estabelecimentos")
+    val locais = locaisPref && comLocais
+    LaunchedEffect(comLocais) { if (!comLocais) Estabelecimentos.definir(false) }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val alturaGaveta = maxHeight * 0.55f
         val margem = (if (mostrando) alturaGaveta + BARRA else BARRA + 64.dp).value.toInt()
@@ -92,7 +95,7 @@ private fun TelaComMapa(
 
         // controles do mapa (canto superior direito)
         Column(Modifier.align(Alignment.TopEnd).padding(top = 10.dp, end = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            PwBotaoIcone(PwIcones.Store, if (locais) "Ocultar estabelecimentos" else "Mostrar estabelecimentos", { Estabelecimentos.definir(!locais) }, ativo = locais, tamanho = 44.dp)
+            if (comLocais) PwBotaoIcone(PwIcones.Store, if (locais) "Ocultar estabelecimentos" else "Mostrar estabelecimentos", { Estabelecimentos.definir(!locais) }, ativo = locais, tamanho = 44.dp)
             PwBotaoIcone(PwIcones.Maximize2, "Enquadrar tudo", { enquadrar++ }, tamanho = 44.dp)
         }
 
@@ -152,6 +155,7 @@ fun MapaG(onCorrida: (String) -> Unit) {
     var agora by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { agora = System.currentTimeMillis(); delay(1000) } }
     var seguindo by rememberSaveable { mutableStateOf<String?>(null) }
+    val comTrilhas = modulo("trilhas_mapa")
 
     val ordem = mapOf("em_corrida" to 0, "disponivel" to 1)
     val motoboys = dados.equipe.filter { it.motoboy }
@@ -171,7 +175,7 @@ fun MapaG(onCorrida: (String) -> Unit) {
             PwMapa(
                 paradas = emptyList(), rota = null, minhaPosicao = null, marcadores = marcadores, modifier = Modifier.fillMaxSize(),
                 enquadrar = enquadrar, onMarcador = ::alternar, seguir = seguindo,
-                trilhas = trilhasDe(dados, motoboys.map { it.id }.toSet()), margemBaixo = margem,
+                trilhas = if (comTrilhas) trilhasDe(dados, motoboys.map { it.id }.toSet()) else emptyList(), margemBaixo = margem,
             )
         },
     ) {
@@ -203,7 +207,7 @@ fun MapaG(onCorrida: (String) -> Unit) {
                     Detalhe(PwIcones.Timer, haQuanto(p?.posicaoEm, agora))
                     p?.precisaoM?.let { Detalhe(PwIcones.Crosshair, "± ${it.toInt()} m") }
                     p?.bateria?.let { Detalhe(PwIcones.BatteryMedium, "$it%") }
-                    if (pontos > 0) Detalhe(PwIcones.Route, "$pontos pts")
+                    if (pontos > 0 && comTrilhas) Detalhe(PwIcones.Route, "$pontos pts")
                 }
                 corrida?.let { Detalhe(PwIcones.Package, "Corrida ${it.numeroExibicao} · ${Status.rotulo[it.status]}") }
                 if (semSinal(p, agora)) Detalhe(PwIcones.Alerta, "Sem sinal recente", c.vermelho)
@@ -227,6 +231,7 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
     var selecionando by remember { mutableStateOf(false) }
     val marcadas = remember { mutableStateListOf<String>() }
     var excluindo by remember { mutableStateOf(false) }
+    val podeApagar = modulo("excluir_corridas")
 
     val todas = dados.corridas.filter { it.teste == teste }
     val planejadas = todas.filter { it.planejada }.sortedBy { it.agendadaPara ?: Long.MAX_VALUE }
@@ -252,7 +257,7 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
                 PwBotaoIcone(PwIcones.Trash2, "Apagar selecionadas", { if (marcadas.isNotEmpty()) excluindo = true }, tamanho = 38.dp, habilitado = marcadas.isNotEmpty(), cor = c.vermelho)
                 PwBotaoIcone(PwIcones.X, "Cancelar seleção", { selecionando = false; marcadas.clear() }, tamanho = 38.dp)
             } else {
-                PwBotaoIcone(PwIcones.ListChecks, "Selecionar para apagar", { selecionando = true; marcadas.clear() }, tamanho = 38.dp)
+                if (podeApagar) PwBotaoIcone(PwIcones.ListChecks, "Selecionar para apagar", { selecionando = true; marcadas.clear() }, tamanho = 38.dp)
                 PwBotaoIcone(PwIcones.Plus, "Nova corrida", onNova, ativo = true, tamanho = 38.dp)
             }
         },

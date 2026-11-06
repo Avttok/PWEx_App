@@ -41,6 +41,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -499,23 +500,39 @@ fun TextoAjustado(texto: String, estilo: TextStyle, maximo: Int, modifier: Modif
     )
 }
 
-/** Foto da conta (topo e menu): no modo teste ganha o anel brilhante e o selo de frasco, como no site. */
+/**
+ * Foto da conta (topo e menu). O espaço do anel existe sempre, então trocar de tema ou ligar o
+ * modo teste não muda nenhum tamanho. No teste: anel + frasco; Dev: selo </>.
+ */
 @Composable
-fun PwAvatarConta(nome: String, foto: String?, teste: Boolean, modifier: Modifier = Modifier, tamanho: Dp = 42.dp, onClick: (() -> Unit)? = null) {
+fun PwAvatarConta(nome: String, foto: String?, teste: Boolean, modifier: Modifier = Modifier, tamanho: Dp = 42.dp, onClick: (() -> Unit)? = null, dev: Boolean = false) {
     val c = Pw.cores
-    Box(modifier) {
+    Box(modifier.size(tamanho)) {
         PwAvatar(
             nome, foto,
-            if (teste) Modifier.border(2.dp, c.ouro, CircleShape).padding(3.dp) else Modifier,
+            Modifier.border(2.dp, if (teste) c.ouro else Color.Transparent, CircleShape).padding(3.dp),
             tamanho = tamanho, onClick = onClick,
         )
-        if (teste) {
+        val selo = when { teste -> PwIcones.FlaskConical; dev -> PwIcones.CodeXml; else -> null }
+        if (selo != null) {
             Box(
                 Modifier.align(Alignment.BottomEnd).size((tamanho.value * 0.42f).coerceAtLeast(16f).dp).clip(CircleShape).background(c.fundo)
                     .padding(2.dp).clip(CircleShape).background(c.gradOuro),
                 contentAlignment = Alignment.Center,
-            ) { Icon(PwIcones.FlaskConical, "Modo teste", tint = c.sobreOuro, modifier = Modifier.size((tamanho.value * 0.22f).coerceAtLeast(9f).dp)) }
+            ) { Icon(selo, if (teste) "Modo teste" else "Dev", tint = c.sobreOuro, modifier = Modifier.size((tamanho.value * 0.22f).coerceAtLeast(9f).dp)) }
         }
+    }
+}
+
+/** Ícone e cor de cada cargo (iguais ao site): Dev </>, Gestor escudo, Motoboy moto. */
+@Composable
+fun PwSelosCargo(dev: Boolean, gestor: Boolean, motoboy: Boolean, teste: Boolean = false, modifier: Modifier = Modifier) {
+    val c = Pw.cores
+    Row(modifier, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        if (dev) PwSelo("Dev", c.dev, icone = PwIcones.CodeXml)
+        if (gestor) PwSelo("Gestor", c.ouro, icone = PwIcones.ShieldCheck)
+        if (motoboy) PwSelo("Motoboy", c.texto2, icone = PwIcones.Bike)
+        if (teste) PwSelo("Teste", c.violeta, icone = PwIcones.FlaskConical)
     }
 }
 
@@ -549,6 +566,51 @@ fun PwPilula(texto: String, icone: ImageVector, onClick: () -> Unit, modifier: M
         if (texto.isNotEmpty()) {
             Spacer(Modifier.width(7.dp))
             Text(texto, color = if (ligada) c.sobreOuro else c.texto, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, fontFamily = Archivo, maxLines = 1, softWrap = false)
+        }
+    }
+}
+
+// ------------------------------------------------------------------ avisos rápidos (toasts)
+
+enum class TipoAviso { OK, ERRO, INFO, AVISO }
+data class Aviso(val id: Long, val texto: String, val tipo: TipoAviso, val titulo: String?, val duracaoMs: Long)
+
+/** Avisos rápidos no rodapé (mesmo sistema do site). Pode chamar de qualquer lugar: PwToast.mostrar("Salvo"). */
+object PwToast {
+    private var seq = 0L
+    private val _avisos = kotlinx.coroutines.flow.MutableStateFlow<List<Aviso>>(emptyList())
+    val avisos: kotlinx.coroutines.flow.StateFlow<List<Aviso>> = _avisos
+    fun mostrar(texto: String, tipo: TipoAviso = TipoAviso.OK, titulo: String? = null) {
+        val a = Aviso(++seq, texto, tipo, titulo, if (tipo == TipoAviso.ERRO || tipo == TipoAviso.AVISO) 6000 else 3500)
+        _avisos.value = (_avisos.value + a).takeLast(3)
+    }
+    fun fechar(id: Long) { _avisos.value = _avisos.value.filterNot { it.id == id } }
+}
+
+/** Onde os avisos aparecem (uma vez, por cima de tudo). */
+@Composable
+fun PwToasts(modifier: Modifier = Modifier) {
+    val c = Pw.cores
+    val avisos by PwToast.avisos.collectAsState()
+    Column(modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 14.dp, vertical = 100.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        avisos.forEach { a ->
+            androidx.compose.runtime.key(a.id) {
+                androidx.compose.runtime.LaunchedEffect(a.id) { kotlinx.coroutines.delay(a.duracaoMs); PwToast.fechar(a.id) }
+                val forma = RoundedCornerShape(18.dp)
+                val cor = when (a.tipo) { TipoAviso.OK -> c.verde; TipoAviso.ERRO, TipoAviso.AVISO -> c.vermelho; TipoAviso.INFO -> c.ouro }
+                Row(
+                    Modifier.fillMaxWidth().clip(forma).background(c.fundo2).border(1.dp, if (a.tipo == TipoAviso.ERRO) c.vermelho.copy(alpha = 0.5f) else c.bordaForte, forma)
+                        .clickable { PwToast.fechar(a.id) }.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(if (a.tipo == TipoAviso.OK) PwIcones.CircleCheck else if (a.tipo == TipoAviso.INFO) PwIcones.Info else PwIcones.Alerta, null, tint = cor, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        a.titulo?.let { Text(it, color = c.texto, fontWeight = FontWeight.Bold, fontFamily = Archivo, fontSize = 14.sp) }
+                        Text(a.texto, color = if (a.titulo != null) c.texto2 else c.texto, fontSize = 13.5.sp, lineHeight = 18.sp)
+                    }
+                }
+            }
         }
     }
 }

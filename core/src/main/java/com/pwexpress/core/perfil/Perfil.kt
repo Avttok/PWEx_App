@@ -28,7 +28,16 @@ data class Perfil(
     val motoboy: Boolean,
     val modoTeste: Boolean,
     val configuracoes: Map<String, JsonElement>,
+    /** Dev: administra o sistema inteiro (acima do gestor). */
+    val dev: Boolean = false,
+    /** "ouro" ou "vermelho" (vermelho só para o Dev). */
+    val corTema: String = "ouro",
+    /** Módulos ligados para esta conta (o Dev liga/desliga no console). */
+    val modulos: Map<String, Boolean> = emptyMap(),
 ) {
+    /** O módulo está valendo para esta conta? (sem registro = ligado; o Dev sempre vê) */
+    fun modulo(chave: String): Boolean = dev || modulos[chave] != false
+
     /** Conta gestor + motoboy: tem as ferramentas de administrador no app. */
     val admin: Boolean get() = gestor && motoboy
 
@@ -94,11 +103,20 @@ object Perfis {
         val r = PwCore.rpc.chamar("definir_modo_teste", buildJsonObject { put("p_ligado", ligado) })
         if (!r.ok) error(
             when {
-                r.corpo.contains("conclua_a_corrida_antes") -> "Conclua a corrida (ou a oferta) antes de trocar o modo."
+                r.corpo.contains("conclua_a_corrida_antes") -> "Conclua a corrida em andamento antes de trocar o modo."
                 r.corpo.contains("apenas_gestor") -> "Só gestores podem usar o modo teste."
+                r.corpo.contains("modulo_desligado") -> "O modo teste está desligado pelo Dev."
                 else -> "Erro (${r.codigo})."
             },
         )
+        carregar()
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
+    /** Dev: troca entre o tema dourado e o vermelho (vale no site também). */
+    suspend fun definirCorTema(cor: String): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar("definir_cor_tema", buildJsonObject { put("p_cor", cor) })
+        if (!r.ok) error(if (r.corpo.contains("apenas_dev")) "Só o Dev pode usar o tema vermelho." else "Erro (${r.codigo}).")
+        _perfil.value = _perfil.value?.copy(corTema = cor)
         carregar()
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
@@ -121,6 +139,9 @@ object Perfis {
             motoboy = bool("motoboy") || (o["papeis"]?.jsonArray?.any { it.jsonPrimitive.content == "motoboy" } ?: false),
             modoTeste = bool("modo_teste"),
             configuracoes = (o["configuracoes"] as? JsonObject)?.toMap() ?: emptyMap(),
+            dev = bool("dev"),
+            corTema = txt("cor_tema") ?: "ouro",
+            modulos = (o["modulos"] as? JsonObject)?.mapValues { (it.value as? JsonPrimitive)?.booleanOrNull ?: true } ?: emptyMap(),
         )
     }
 }

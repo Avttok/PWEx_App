@@ -140,7 +140,7 @@ class MainActivity : ComponentActivity() {
                         s == null -> LoginScreen(conteudo)
                         p == null && !esperouPerfil -> Box(conteudo.fillMaxSize(), contentAlignment = Alignment.Center) {
                             androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                com.pwexpress.core.designsystem.PwSeloLogo(140.dp)
+                                com.pwexpress.core.designsystem.PwLogoGrande(170.dp)
                                 com.pwexpress.core.designsystem.PwCarregando(texto = "Carregando sua conta…")
                             }
                         }
@@ -164,7 +164,8 @@ class MainActivity : ComponentActivity() {
                         !preparado -> PrimeiraConfiguracao(onPronto = { preparado = true }, modifier = conteudo)
                         a != null -> CorridaScreen(a, admin = p?.admin == true, modifier = conteudo)
                         else -> Box(conteudo.fillMaxSize()) {
-                            val abaMotoboy = if (aba == "corridas") "corridas" else "inicio"
+                            val comPlanejadas = p?.modulo("corridas_planejadas") != false
+                            val abaMotoboy = if (aba == "corridas" && comPlanejadas) "corridas" else "inicio"
                             androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
                                 PwTopo { AcoesTopo(efetivo, podeTrocar, ::trocar) { conta = true } }
                                 Box(Modifier.weight(1f).padding(bottom = 86.dp)) {
@@ -182,7 +183,7 @@ class MainActivity : ComponentActivity() {
                             }
                             val reservas = planejadas.count { it.minha }
                             val livres = planejadas.count { !it.minha && it.status == "agendada" }
-                            PwBarraAbas(
+                            if (comPlanejadas) PwBarraAbas(
                                 listOf(
                                     PwAba("inicio", "Início", PwIcones.House),
                                     PwAba("corridas", "Corridas", PwIcones.CalendarClock, livres + reservas),
@@ -200,9 +201,11 @@ class MainActivity : ComponentActivity() {
                             onPerfil = { conta = false; noPerfil = true },
                             onConfiguracoes = { conta = false; GestorNav.abrirConfiguracoes() },
                             onTrocar = ::trocar, onSair = ::sair,
+                            onDev = { conta = false; if (efetivo != Painel.GESTOR) trocar(Painel.GESTOR); GestorNav.abrirDev() },
                         )
                     }
                     JanelaAtualizacao()
+                    com.pwexpress.core.designsystem.PwToasts(Modifier.align(Alignment.BottomCenter))
                 }
             }
         }
@@ -222,7 +225,7 @@ class MainActivity : ComponentActivity() {
         // procura versão nova uma vez por abertura do app (só abre a janela se for nova)
         if (!verificouAtualizacao) {
             verificouAtualizacao = true
-            Atualizador.verificar(automatico = true)
+            if (Perfis.perfil.value?.modulo("atualizacao_app") != false) Atualizador.verificar(automatico = true)
         }
     }
 

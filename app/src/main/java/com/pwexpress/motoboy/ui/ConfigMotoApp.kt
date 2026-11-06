@@ -58,6 +58,7 @@ fun ConfigMotoApp(onVoltar: () -> Unit, modifier: Modifier = Modifier) {
     PwPagina(modifier, padding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp)) {
         PwCabecalho("Configurações", onVoltar, subtitulo = "Raio, aparelho e GPS")
         CartaoRaio()
+        CartaoPix()
         PainelAparelho()
         CartaoOfertas()
         PainelEnvio()
@@ -104,7 +105,7 @@ private fun CartaoRaio() {
         Box(Modifier.fillMaxWidth().height(220.dp).clip(forma).border(1.dp, c.borda, forma)) {
             PwMapa(
                 paradas = emptyList(), rota = null, minhaPosicao = eu, modifier = Modifier.fillMaxWidth().height(220.dp),
-                marcadores = listOfNotNull(if (fixo) ponto?.let { MarcadorMapa("base", it.first, it.second, "#FFFFFF", "Base") } else null),
+                marcadores = listOfNotNull(if (fixo) ponto?.let { MarcadorMapa("base", it.first, it.second, "#FFFFFF", "Base", pino = false) } else null),
                 circulo = centro?.takeIf { km >= 1f }?.let { it to km * 1000.0 },
                 enquadrar = "${centro?.first},${centro?.second},${km.toInt()}",
             )
@@ -136,6 +137,52 @@ private fun CartaoRaio() {
             escolhendo = false
             ponto = la to lo
         }
+    }
+}
+
+private val TIPOS_PIX = listOf("cpf" to "CPF", "cnpj" to "CNPJ", "telefone" to "Celular", "email" to "E-mail", "aleatoria" to "Aleatória")
+
+/** Chave PIX para onde os ganhos das corridas são repassados. */
+@Composable
+private fun CartaoPix() {
+    val c = Pw.cores
+    val escopo = rememberCoroutineScope()
+    var carregada by remember { mutableStateOf<com.pwexpress.core.perfil.ChavePix?>(null) }
+    var tipo by remember { mutableStateOf("cpf") }
+    var chave by remember { mutableStateOf("") }
+    var titular by remember { mutableStateOf("") }
+    var salvando by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        Perfis.minhaChavePix()?.let { carregada = it; tipo = it.tipo; chave = it.chave; titular = it.titular }
+        if (titular.isBlank()) titular = Perfis.perfil.value?.nome.orEmpty()
+    }
+    val mudou = carregada?.let { it.tipo != tipo || it.chave != chave.trim() || it.titular != titular.trim() } ?: chave.isNotBlank()
+    PwCartao {
+        PwRotulo("Chave PIX para receber")
+        Spacer(Modifier.height(4.dp))
+        Text(
+            if (carregada == null) "Cadastre a chave para onde seus ganhos vão ser repassados quando a corrida terminar." else "Seus ganhos são repassados para esta chave.",
+            color = c.texto2, fontSize = 13.sp, fontFamily = Archivo,
+        )
+        Spacer(Modifier.height(10.dp))
+        com.pwexpress.core.designsystem.PwFiltros(TIPOS_PIX.map { it.second to 0 }, TIPOS_PIX.indexOfFirst { it.first == tipo }.coerceAtLeast(0), { tipo = TIPOS_PIX[it].first })
+        Spacer(Modifier.height(10.dp))
+        com.pwexpress.core.designsystem.PwCampo(chave, { chave = it }, "Chave", Modifier.fillMaxWidth())
+        Spacer(Modifier.height(8.dp))
+        com.pwexpress.core.designsystem.PwCampo(titular, { titular = it }, "Nome do titular", Modifier.fillMaxWidth())
+        Spacer(Modifier.height(10.dp))
+        PwBotaoOuro(
+            if (salvando) "Salvando…" else "Salvar chave PIX", icone = PwIcones.Check, altura = 52.dp, habilitado = mudou && !salvando && chave.isNotBlank(),
+            onClick = {
+                salvando = true
+                escopo.launch {
+                    Perfis.definirChavePix(tipo, chave.trim(), titular.trim())
+                        .onSuccess { carregada = com.pwexpress.core.perfil.ChavePix(tipo, chave.trim(), titular.trim()); PwToast.mostrar("Seus repasses vão para esta chave.", titulo = "Chave PIX salva") }
+                        .onFailure { PwToast.mostrar(it.message ?: "Erro", TipoAviso.ERRO) }
+                    salvando = false
+                }
+            },
+        )
     }
 }
 

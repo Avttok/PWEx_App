@@ -47,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -162,64 +163,84 @@ fun TrackingScreen(
     if (confirmarOffline) {
         PwJanela("Ficar offline?", onFechar = { confirmarOffline = false }) {
             Text("Você para de receber corridas até ficar disponível de novo.", color = c.texto2)
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PwBotaoVidro("Continuar", onClick = { confirmarOffline = false }, modifier = Modifier.weight(1f))
-                PwBotaoPerigo("Ficar offline", onClick = { confirmarOffline = false; escolher(Modo.OFFLINE) }, icone = PwIcones.Power, cheio = true, modifier = Modifier.weight(1f))
-            }
+            PwBotaoPerigo("Ficar offline", onClick = { confirmarOffline = false; escolher(Modo.OFFLINE) }, icone = PwIcones.Power, cheio = true, modifier = Modifier.fillMaxWidth())
+            PwBotaoVidro("Continuar disponível", onClick = { confirmarOffline = false }, icone = PwIcones.Radio, modifier = Modifier.fillMaxWidth())
         }
     }
 }
 
-/** Botão grande e redondo: cinza (offline), verde pulsando (disponível) ou na cor da marca (em corrida). */
+/**
+ * O botão de status: um disco de vidro com anel em degradê girando, halo de luz e o ícone num
+ * medalhão. Offline convida (na cor da marca), disponível pulsa em verde, em corrida fica na cor da marca.
+ */
 @Composable
 private fun BotaoStatus(modo: Modo, semLeituraMs: Long, economia: Boolean, onClick: () -> Unit) {
     val c = Pw.cores
-    val cor by animateColorAsState(
-        when (modo) { Modo.OFFLINE -> c.texto3; Modo.DISPONIVEL -> c.verde; Modo.EM_CORRIDA -> c.ouro }, label = "cor-status",
-    )
-    val pulso = rememberInfiniteTransition(label = "pulso")
-    val onda by pulso.animateFloat(0f, 1f, infiniteRepeatable(tween(2200), RepeatMode.Restart), label = "onda")
+    val ligado = modo != Modo.OFFLINE
+    val cor by animateColorAsState(if (modo == Modo.DISPONIVEL) c.verde else c.ouro, label = "cor-status")
+    val claro by animateColorAsState(if (modo == Modo.DISPONIVEL) Color(0xFFA7F3D0) else c.ouroClaro, label = "claro-status")
+    val escuroCor by animateColorAsState(if (modo == Modo.DISPONIVEL) Color(0xFF047857) else c.ouroEscuro, label = "escuro-status")
+    val anim = rememberInfiniteTransition(label = "status")
+    val giro by anim.animateFloat(0f, 360f, infiniteRepeatable(tween(if (ligado) 6000 else 14000, easing = androidx.compose.animation.core.LinearEasing)), label = "giro")
+    val onda by anim.animateFloat(0f, 1f, infiniteRepeatable(tween(2400), RepeatMode.Restart), label = "onda")
+    val respiro by anim.animateFloat(0.55f, 1f, infiniteRepeatable(tween(1800), RepeatMode.Reverse), label = "respiro")
     val toque = remember { MutableInteractionSource() }
     val apertado by toque.collectIsPressedAsState()
-    val tamanho = 212.dp
-    Box(Modifier.size(tamanho + 56.dp), contentAlignment = Alignment.Center) {
-        // ondas enquanto está ligado
-        if (modo != Modo.OFFLINE) {
-            Box(Modifier.size(tamanho + 56.dp).drawBehind {
-                listOf(onda, (onda + 0.5f) % 1f).forEach { t ->
-                    drawCircle(cor.copy(alpha = (1f - t) * 0.35f), radius = size.minDimension / 2f * (0.78f + 0.22f * t), style = Stroke(width = 3.dp.toPx()))
-                }
-            })
-        }
+    val disco = 200.dp
+    Box(Modifier.size(disco + 72.dp), contentAlignment = Alignment.Center) {
+        // halo de luz + ondas
+        Box(Modifier.size(disco + 72.dp).drawBehind {
+            val r = size.minDimension / 2f
+            drawCircle(Brush.radialGradient(listOf(cor.copy(alpha = if (ligado) 0.30f * respiro else 0.16f), Color.Transparent), center, r), r)
+            if (ligado) listOf(onda, (onda + 0.5f) % 1f).forEach { t ->
+                drawCircle(cor.copy(alpha = (1f - t) * 0.45f), radius = r * (0.74f + 0.26f * t), style = Stroke(width = 2.dp.toPx()))
+            }
+        })
         Box(
-            Modifier.size(tamanho).scale(if (apertado) 0.96f else 1f).clip(CircleShape)
-                .background(
-                    if (modo == Modo.OFFLINE) Brush.radialGradient(listOf(c.vidroForte, c.fundo2))
-                    else Brush.radialGradient(listOf(cor.copy(alpha = 0.42f), cor.copy(alpha = 0.10f))),
-                )
-                .border(3.dp, if (modo == Modo.OFFLINE) c.bordaForte else cor, CircleShape)
+            Modifier.size(disco).scale(if (apertado) 0.95f else 1f)
+                .drawBehind {
+                    // anel em degradê girando
+                    val anel = 7.dp.toPx()
+                    rotate(giro) {
+                        drawCircle(Brush.sweepGradient(listOf(claro, cor, escuroCor, cor.copy(alpha = 0.25f), claro)), radius = size.minDimension / 2f - anel / 2f, style = Stroke(width = anel))
+                    }
+                }
+                .padding(11.dp)
+                .clip(CircleShape)
+                .background(Brush.verticalGradient(listOf(c.vidroForte, c.fundo2, c.fundo)))
+                .drawBehind {
+                    // brilho de vidro no alto
+                    drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (c.escuro) 0.08f else 0.5f), Color.Transparent), 0f, size.height * 0.55f), radius = size.minDimension / 2f)
+                    drawCircle(cor.copy(alpha = 0.10f), radius = size.minDimension / 2f)
+                }
                 .clickable(interactionSource = toque, indication = null, onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    when (modo) { Modo.OFFLINE -> PwIcones.Power; Modo.DISPONIVEL -> PwIcones.Radio; Modo.EM_CORRIDA -> PwIcones.Route },
-                    null, tint = if (modo == Modo.OFFLINE) c.texto2 else cor, modifier = Modifier.size(46.dp),
-                )
-                Spacer(Modifier.height(10.dp))
+                // medalhão do ícone
+                Box(
+                    Modifier.size(70.dp).clip(CircleShape).background(Brush.linearGradient(listOf(claro, cor, escuroCor))),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        when (modo) { Modo.OFFLINE -> PwIcones.Power; Modo.DISPONIVEL -> PwIcones.Radio; Modo.EM_CORRIDA -> PwIcones.Route },
+                        null, tint = if (modo == Modo.DISPONIVEL) Color(0xFF052E1B) else c.sobreOuro, modifier = Modifier.size(34.dp),
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
                 Text(
                     when (modo) { Modo.OFFLINE -> "OFFLINE"; Modo.DISPONIVEL -> "DISPONÍVEL"; Modo.EM_CORRIDA -> "EM CORRIDA" },
-                    style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 22.sp, letterSpacing = 1.sp),
+                    style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 19.sp, letterSpacing = 1.2.sp),
                     color = c.texto, maxLines = 1,
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(3.dp))
                 Text(
                     when (modo) {
                         Modo.OFFLINE -> "Toque para ficar disponível"
-                        Modo.DISPONIVEL -> if (semLeituraMs > 5 * 60_000) "Sem GPS há ${semLeituraMs / 60_000} min" else "Toque para ficar offline"
-                        Modo.EM_CORRIDA -> "Ao vivo a cada ${Intervalos.corridaMs(economia) / 1000} s"
+                        Modo.DISPONIVEL -> if (semLeituraMs > 5 * 60_000) "Sem GPS há ${semLeituraMs / 60_000} min" else "Toque para sair"
+                        Modo.EM_CORRIDA -> "GPS a cada ${Intervalos.corridaMs(economia) / 1000} s"
                     },
-                    color = c.texto2, fontSize = 12.5.sp, fontFamily = Archivo, maxLines = 1,
+                    color = c.texto2, fontSize = 12.sp, fontFamily = Archivo, maxLines = 1,
                 )
             }
         }

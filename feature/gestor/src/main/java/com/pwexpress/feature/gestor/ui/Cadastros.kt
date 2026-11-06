@@ -75,7 +75,10 @@ import com.pwexpress.core.designsystem.TemaApp
 import com.pwexpress.core.designsystem.moedaBr
 import com.pwexpress.core.json.dbl
 import com.pwexpress.core.json.int
+import com.pwexpress.core.mapa.MarcadorMapa
 import com.pwexpress.core.mapa.PinoMapa
+import com.pwexpress.core.mapa.coordenadaValida
+import androidx.compose.ui.graphics.toArgb
 import com.pwexpress.core.mapa.PwMapa
 import com.pwexpress.feature.gestor.data.CorridaG
 import com.pwexpress.feature.gestor.data.GRUPOS_CONFIG
@@ -103,7 +106,7 @@ fun EmpresasG(onAbrir: (String?) -> Unit) {
     val dados by Gestao.dados.collectAsState()
     Box(Modifier.fillMaxSize()) {
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 190.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            item { TituloTela("Empresas", if (dados.empresas.size == 1) "1 cliente cadastrado" else "${dados.empresas.size} clientes cadastrados", PwIcones.Building2) }
+            item { TituloTela("Clientes", if (dados.empresas.size == 1) "1 cliente cadastrado" else "${dados.empresas.size} clientes cadastrados", PwIcones.Building2) }
             if (dados.carregado && dados.empresas.isEmpty()) item { PwVazio("Nenhum cliente cadastrado ainda.", icone = PwIcones.Building2) }
             items(dados.empresas, key = { it.id }) { e ->
                 PwCartao(padding = PaddingValues(6.dp)) {
@@ -111,15 +114,25 @@ fun EmpresasG(onAbrir: (String?) -> Unit) {
                         e.nome,
                         subtitulo = listOfNotNull(
                             when (e.modalidade) { "por_km" -> "${moedaBr(e.valorKm)}/km"; "fixo" -> moedaBr(e.valorFixo); else -> "Por zona" },
-                            e.cnpj?.let { formatarCnpj(it) }, e.endereco?.let { "coleta padrão" },
+                            e.documento?.let { if (e.tipo == "pf") formatarCpf(it) else formatarCnpj(it) }, if (e.podeExpress) "Express" else "só agendados",
                         ).joinToString(" · "),
-                        icone = PwIcones.Building2, onClick = { onAbrir(e.id) },
+                        icone = if (e.tipo == "pf") PwIcones.User else PwIcones.Building2, onClick = { onAbrir(e.id) },
                     )
                 }
             }
         }
-        PwBotaoFlutuante(PwIcones.Plus, "Nova empresa", { onAbrir(null) }, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 108.dp))
+        PwBotaoFlutuante(PwIcones.Plus, "Novo cliente", { onAbrir(null) }, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 108.dp))
     }
+}
+
+private fun formatarCpf(s: String) = s.filter { it.isDigit() }.let { d -> if (d.length == 11) "${d.substring(0, 3)}.${d.substring(3, 6)}.${d.substring(6, 9)}-${d.substring(9)}" else s }
+
+/** Dígitos verificadores do CPF. */
+private fun cpfValido(s: String): Boolean {
+    val d = s.filter { it.isDigit() }.map { it - '0' }
+    if (d.size != 11 || d.distinct().size == 1) return false
+    fun dv(n: Int): Int { val soma = (0 until n).sumOf { d[it] * (n + 1 - it) }; val r = soma * 10 % 11; return if (r == 10) 0 else r }
+    return dv(9) == d[9] && dv(10) == d[10]
 }
 
 private fun formatarCnpj(s: String) = s.filter { it.isDigit() }.let { d -> if (d.length == 14) "${d.substring(0, 2)}.${d.substring(2, 5)}.${d.substring(5, 8)}/${d.substring(8, 12)}-${d.substring(12)}" else s }
@@ -146,6 +159,13 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
     var valorFixo by remember { mutableStateOf(e?.valorFixo?.toString()?.replace('.', ',').orEmpty()) }
     var aoVivo by remember { mutableStateOf(e?.clienteVeAoVivo ?: false) }
     var observacoes by remember { mutableStateOf(e?.observacoes.orEmpty()) }
+    var tipo by remember { mutableStateOf(e?.tipo ?: "pj") }
+    var cpf by remember { mutableStateOf(e?.cpf?.let(::formatarCpf).orEmpty()) }
+    var podeExpress by remember { mutableStateOf(e?.podeExpress ?: false) }
+    val metodos = remember { mutableStateListOf<String>().apply { addAll(e?.pagamentoMetodos ?: listOf("pix", "cartao")) } }
+    var repasse by remember { mutableStateOf(e?.repassePct?.let { numeroBr(it) }.orEmpty()) }
+    var devPct by remember { mutableStateOf(e?.devPct?.let { numeroBr(it) }.orEmpty()) }
+    var criandoAcesso by remember { mutableStateOf(false) }
     val favoritos = remember { mutableStateListOf<String>().apply { addAll(dados.favoritos[id].orEmpty()) } }
     var msg by remember { mutableStateOf<String?>(null) }
     var erro by remember { mutableStateOf<String?>(null) }
@@ -160,8 +180,15 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
     }
 
     PwPagina {
-        Cabecalho(if (e == null) "Nova empresa" else e.nome, onVoltar, subtitulo = "Dados, preço e coleta padrão")
-        PwCartao {
+        Cabecalho(if (e == null) "Novo cliente" else e.nome, onVoltar, subtitulo = "Dados, preço, pagamento e coleta padrão")
+        PwSegmentado(listOf("Empresa (CNPJ)" to PwIcones.Building2, "Pessoa (CPF)" to PwIcones.User), if (tipo == "pf") 1 else 0, { tipo = if (it == 1) "pf" else "pj" })
+        if (tipo == "pf") PwCartao {
+            PwRotulo("Pessoa física")
+            Espaco(8)
+            PwCampo(cpf, { cpf = it }, "CPF", teclado = KeyboardType.Number)
+            if (cpf.count { it.isDigit() } == 11 && !cpfValido(cpf)) { Espaco(4); PwErro("CPF inválido — confira os números.") }
+        }
+        if (tipo == "pj") PwCartao {
             PwRotulo("Receita Federal")
             Espaco(8)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -203,6 +230,21 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
             }
         }
         PwCartao {
+            PwRotulo("Pedidos e pagamento")
+            PwInterruptor("Pode pedir Express", podeExpress, { podeExpress = it }, descricao = if (podeExpress) "Pede corridas na hora, além das agendadas." else "Cliente novo: só pedidos agendados até você liberar.", icone = PwIcones.Zap)
+            Espaco(4)
+            TextoDica("Formas de pagamento aceitas (o pedido só sai depois de pago):")
+            PwInterruptor("PIX", "pix" in metodos, { if (it) metodos.add("pix") else if (metodos.size > 1) metodos.remove("pix") })
+            PwInterruptor("Cartão", "cartao" in metodos, { if (it) metodos.add("cartao") else if (metodos.size > 1) metodos.remove("cartao") })
+            Espaco(6)
+            TextoDica("Divisão própria deste cliente (em branco = padrão das configurações):")
+            Espaco(6)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PwCampo(repasse, { repasse = it }, "Motoboy %", Modifier.weight(1f), dica = numeroBr(dados.config.numero("repasse_motoboy_pct", 67.5)), teclado = KeyboardType.Decimal)
+                PwCampo(devPct, { devPct = it }, "Dev %", Modifier.weight(1f), dica = numeroBr(dados.config.numero("dev_pct", 5.0)), teclado = KeyboardType.Decimal)
+            }
+        }
+        PwCartao {
             PwRotulo("Coleta padrão")
             Espaco(8)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -231,16 +273,23 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
                 PwInterruptor(m.nome + (if (m.id in favoritos) "  · ${favoritos.indexOf(m.id) + 1}º" else ""), m.id in favoritos, { lig -> if (lig) favoritos.add(m.id) else favoritos.remove(m.id) })
             }
             Espaco(6)
-            PwInterruptor("Cliente vê a corrida ao vivo", aoVivo, { aoVivo = it }, descricao = "Para o painel do cliente (em breve).")
+            PwInterruptor("Cliente vê a corrida ao vivo", aoVivo, { aoVivo = it }, descricao = "No painel do cliente, mostra o motoboy no mapa durante a corrida.")
             PwCampo(observacoes, { observacoes = it }, "Observações internas", linhas = 2)
         }
         PwErro(erro)
         msg?.let { Text(it, color = c.verde, fontWeight = FontWeight.SemiBold) }
         PwBotaoOuro(if (ocupado) "Salvando…" else "Salvar", habilitado = !ocupado, icone = PwIcones.Check, onClick = {
             if (nome.isBlank()) { erro = "Informe o nome."; return@PwBotaoOuro }
-            val d = cnpj.filter { it.isDigit() }
+            val d = if (tipo == "pj") cnpj.filter { it.isDigit() } else ""
+            val dCpf = if (tipo == "pf") cpf.filter { it.isDigit() } else ""
             if (d.isNotEmpty() && d.length != 14) { erro = "CNPJ deve ter 14 dígitos."; return@PwBotaoOuro }
+            if (dCpf.isNotEmpty() && !cpfValido(dCpf)) { erro = "CPF inválido."; return@PwBotaoOuro }
+            val pr = num(repasse); val pd = num(devPct)
+            if ((pr ?: 0.0) + (pd ?: 0.0) > 100 || (pr ?: 0.0) < 0 || (pd ?: 0.0) < 0) { erro = "A soma de motoboy + Dev não pode passar de 100%."; return@PwBotaoOuro }
             val linha = buildJsonObject {
+                put("tipo", tipo); put("cpf", dCpf.ifEmpty { null }); put("pode_express", podeExpress)
+                put("pagamento_metodos", kotlinx.serialization.json.buildJsonArray { metodos.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
+                put("repasse_pct", pr); put("dev_pct", pd)
                 put("nome", nome.trim()); put("cnpj", d.ifEmpty { null }); put("razao_social", razao.ifBlank { null }); put("nome_fantasia", fantasia.ifBlank { null })
                 put("situacao", situacao.ifBlank { null }); put("telefone", telefone.ifBlank { null }); put("email", email.ifBlank { null })
                 put("endereco", endereco.ifBlank { null }); put("lat", lat); put("lng", lng); put("instrucoes_coleta", instrucoes.ifBlank { null })
@@ -253,8 +302,19 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
                 ocupado = false
             }
         })
-        if (e != null) PwBotaoPerigo("Excluir empresa", onClick = { excluir = true }, modifier = Modifier.fillMaxWidth())
+        if (e != null) {
+            PwCartao {
+                PwRotulo("Acesso do cliente")
+                val acessos = dados.acessosCliente[e.id].orEmpty()
+                TextoDica(if (acessos.isEmpty()) "Crie um login para o cliente pedir, pagar e acompanhar pelo site." else "Logins que pedem pelo site em nome deste cliente:")
+                acessos.forEach { a -> Detalhe(PwIcones.User, "${a.nome} · ${a.email}") }
+                Espaco(8)
+                PwBotaoVidro("Criar acesso do cliente", onClick = { criandoAcesso = true }, icone = PwIcones.UserPlus, modifier = Modifier.fillMaxWidth())
+            }
+            PwBotaoPerigo("Excluir cliente", onClick = { excluir = true }, modifier = Modifier.fillMaxWidth())
+        }
     }
+    if (criandoAcesso && e != null) NovaContaG(0.0, onFechar = { criandoAcesso = false }, onCriada = { criandoAcesso = false }, cliente = e)
     if (marcarMapa) {
         com.pwexpress.core.mapa.PwSeletorMapa(lat?.let { la -> lng?.let { lo -> la to lo } }, onFechar = { marcarMapa = false }, titulo = "Coleta padrão") { la, lo ->
             marcarMapa = false
@@ -312,7 +372,7 @@ fun EquipeG(onAbrir: (String) -> Unit) {
         }
         if (modulo("criar_contas")) PwBotaoFlutuante(PwIcones.UserPlus, "Nova conta", { criando = true }, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 108.dp))
     }
-    if (criando) NovaContaG(dados.config.numero("repasse_motoboy_pct", 70.0), onFechar = { criando = false }, onCriada = { criando = false; it?.let(onAbrir) })
+    if (criando) NovaContaG(dados.config.numero("repasse_motoboy_pct", 67.5), onFechar = { criando = false }, onCriada = { criando = false; it?.let(onAbrir) })
 }
 
 /** Papéis e situação da pessoa, em fichas que quebram de linha sem cortar o texto. */
@@ -340,12 +400,12 @@ private fun copiar(ctx: Context, texto: String) {
 }
 
 @Composable
-private fun NovaContaG(repassePadrao: Double, onFechar: () -> Unit, onCriada: (String?) -> Unit) {
+private fun NovaContaG(repassePadrao: Double, onFechar: () -> Unit, onCriada: (String?) -> Unit, cliente: com.pwexpress.feature.gestor.data.EmpresaG? = null) {
     val c = Pw.cores
     val ctx = LocalContext.current
     val escopo = rememberCoroutineScope()
-    var nome by remember { mutableStateOf("") }
-    var email by remember { mutableStateOf("") }
+    var nome by remember { mutableStateOf(cliente?.nome.orEmpty()) }
+    var email by remember { mutableStateOf(cliente?.email.orEmpty()) }
     var senha by remember { mutableStateOf(gerarSenha()) }
     var motoboy by remember { mutableStateOf(true) }
     var gestor by remember { mutableStateOf(false) }
@@ -365,22 +425,26 @@ private fun NovaContaG(repassePadrao: Double, onFechar: () -> Unit, onCriada: (S
         }
         return
     }
-    PwJanela("Nova conta", onFechar = onFechar, fecharFora = !enviando) {
-        TextoDica("A conta já nasce confirmada e pode entrar no app ou no painel na hora.")
+    PwJanela(if (cliente != null) "Acesso de ${cliente.nome}" else "Nova conta", onFechar = onFechar, fecharFora = !enviando) {
+        TextoDica(if (cliente != null) "O cliente entra no site da PW Express para pedir, pagar e acompanhar." else "A conta já nasce confirmada e pode entrar no app ou no painel na hora.")
         PwCampo(nome, { nome = it }, "Nome")
         PwCampo(email, { email = it }, "E-mail", teclado = KeyboardType.Email)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             PwCampo(senha, { senha = it }, "Senha inicial", modifier = Modifier.weight(1f))
             PwBotaoIcone(PwIcones.RefreshCw, "Gerar outra", { senha = gerarSenha() })
         }
-        PwInterruptor("Motoboy", motoboy, { motoboy = it }, descricao = "Usa o app e recebe corridas", icone = PwIcones.Bike)
-        PwInterruptor("Gestor", gestor, { gestor = it }, descricao = "Acessa o painel", icone = PwIcones.ShieldCheck)
-        if (motoboy) PwCampo(repasse, { repasse = it }, "Repasse individual (%)", dica = "padrão: ${repassePadrao.toInt()}%", teclado = KeyboardType.Decimal)
+        if (cliente == null) PwInterruptor("Motoboy", motoboy, { motoboy = it }, descricao = "Usa o app e recebe corridas", icone = PwIcones.Bike)
+        if (cliente == null) PwInterruptor("Gestor", gestor, { gestor = it }, descricao = "Acessa o painel", icone = PwIcones.ShieldCheck)
+        if (motoboy && cliente == null) PwCampo(repasse, { repasse = it }, "Repasse individual (%)", dica = "padrão: ${repassePadrao.toInt()}%", teclado = KeyboardType.Decimal)
         PwErro(erro)
         PwBotaoOuro(if (enviando) "Criando…" else "Criar conta", icone = PwIcones.UserPlus, habilitado = !enviando, onClick = {
             enviando = true
             escopo.launch {
-                Gestao.criarConta(nome.trim(), email.trim(), senha, listOfNotNull("motoboy".takeIf { motoboy }, "gestor".takeIf { gestor }), repasse.replace(',', '.').toDoubleOrNull())
+                Gestao.criarConta(
+                    nome.trim(), email.trim(), senha,
+                    if (cliente != null) listOf("cliente") else listOfNotNull("motoboy".takeIf { motoboy }, "gestor".takeIf { gestor }),
+                    repasse.replace(',', '.').toDoubleOrNull().takeIf { cliente == null }, cliente?.id,
+                )
                     .onSuccess { criada = it; Gestao.atualizar() }.onFailure { erro = it.message }
                 enviando = false
             }
@@ -405,12 +469,45 @@ fun MembroG(id: String, meuId: String?, onVoltar: () -> Unit) {
                 m.ultimoAcesso?.let { TextoDica("Último acesso: ${dataHora(it)}") }
             }
         }
-        PwSegmentado(listOf("Registro" to PwIcones.History, "Editar" to PwIcones.Pencil), aba, { aba = it })
+        val comPercursos = m.motoboy && modulo("trilhas_mapa")
+        PwSegmentado(listOfNotNull("Registro" to PwIcones.History, ("Percursos" to PwIcones.Route).takeIf { comPercursos }, "Editar" to PwIcones.Pencil), aba, { aba = it })
         val souDev = com.pwexpress.core.perfil.Perfis.perfil.collectAsState().value?.dev == true
+        val abaEditar = if (comPercursos) 2 else 1
         if (aba == 0) RegistroG(m.id)
+        else if (aba == 1 && comPercursos) PercursosMembroG(m.id, m.modoTeste)
+        else if (aba != abaEditar) Unit
         else if (m.dev && !souDev) TextoDica("Conta Dev: só o Dev altera esta conta.")
         else EditarMembroG(m, eu = m.id == meuId, onExcluida = onVoltar, souDev = souDev)
     }
+}
+
+/** Percursos das últimas 12 h do motoboy, separados em registros (procurando / corrida). */
+@Composable
+private fun PercursosMembroG(id: String, teste: Boolean) {
+    val c = Pw.cores
+    val dados by Gestao.dados.collectAsState()
+    val regs = registrosDe(dados, id)
+    var destaque by remember { mutableStateOf<Int?>(null) }
+    var chave by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(id) { chave = Gestao.chavesPix()[id] }
+    val forma = RoundedCornerShape(20.dp)
+    Box(Modifier.fillMaxWidth().height(300.dp).clip(forma).border(1.dp, c.borda, forma)) {
+        PwMapa(
+            paradas = emptyList(), rota = null, minhaPosicao = null, modifier = Modifier.fillMaxWidth().height(300.dp),
+            percursos = regs.mapIndexed { i, r -> com.pwexpress.core.mapa.PercursoMapa(r.pontos.map { it.lat to it.lng }, destaque = destaque == i, apagado = destaque != null && destaque != i) },
+            percursoTeste = teste, enquadrar = "$id-${regs.size}-$destaque",
+            marcadores = dados.posicao(id)?.takeIf { coordenadaValida(it.lat, it.lng) }?.let { p -> listOf(MarcadorMapa(id, p.lat!!, p.lng!!, String.format("#%06X", 0xFFFFFF and corMotoboy(p.status, c).toArgb()), dados.membro(id)?.nome?.substringBefore(" ").orEmpty(), foto = dados.membro(id)?.foto)) }.orEmpty(),
+        )
+    }
+    LegendaPercurso(teste)
+    PwCartao {
+        PwRotulo("Registros · últimas 12 h")
+        Espaco(6)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { ListaRegistros(regs, destaque, { destaque = if (destaque == it) null else it }, dados) }
+        Espaco(8)
+        TextoDica("Total: ${String.format(java.util.Locale("pt", "BR"), "%.1f km", regs.sumOf { it.metros } / 1000)} · ${regs.count { it.corrida }} em corrida · ${regs.count { !it.corrida }} procurando")
+    }
+    PwCartao { PwRotulo("Chave PIX"); Espaco(4); TextoDica(chave ?: "Ainda não cadastrou a chave PIX no MotoApp.") }
 }
 
 @Composable
@@ -596,7 +693,7 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
 }
 
 // =====================================================================
-// Financeiro
+// Carteira
 // =====================================================================
 
 @Composable
@@ -622,12 +719,16 @@ fun FinanceiroG(onVoltar: (() -> Unit)?) {
         if (onVoltar != null) Cabecalho("Carteira", onVoltar, subtitulo = sub) else TituloTela("Carteira", sub, PwIcones.Wallet)
         PwFiltros(listOf("Hoje" to 0, "7 dias" to 0, "Este mês" to 0, "30 dias" to 0), periodo, { periodo = it })
         val l = linhas ?: run { PwCarregando(); return@PwPagina }
-        val total = l.sumOf { it.valor ?: 0.0 }; val moto = l.sumOf { it.valorMotoboy ?: 0.0 }; val gest = l.sumOf { it.valorGestao ?: 0.0 }
+        val total = l.sumOf { it.valor ?: 0.0 }; val moto = l.sumOf { it.valorMotoboy ?: 0.0 }; val gest = l.sumOf { it.valorGestao ?: 0.0 }; val dev = l.sumOf { it.valorDev ?: 0.0 }
+        var chaves by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
+        LaunchedEffect(Unit) { chaves = Gestao.chavesPix() }
+        val ctxC = LocalContext.current
         PwNumero("Faturado · ${l.size} corrida${if (l.size == 1) "" else "s"}", moedaBr(total), Modifier.fillMaxWidth(), icone = PwIcones.TrendingUp, destaque = true)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PwNumero("Gestão", moedaBr(gest), Modifier.weight(1f), icone = PwIcones.Landmark)
             PwNumero("Motoboys", moedaBr(moto), Modifier.weight(1f), icone = PwIcones.Bike)
         }
+        PwNumero("Dev", moedaBr(dev), Modifier.fillMaxWidth(), icone = PwIcones.CodeXml)
         if (l.isEmpty()) { PwVazio("Nenhuma corrida concluída neste período.", icone = PwIcones.Wallet); return@PwPagina }
         PwCartao {
             PwRotulo("Por motoboy")
@@ -636,10 +737,15 @@ fun FinanceiroG(onVoltar: (() -> Unit)?) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(dados.membro(mid)?.nome ?: cs.first().motoboyNomeArquivado ?: "—", color = c.texto, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        TextoDica("${cs.size} corrida${if (cs.size == 1) "" else "s"} · repasse ${moedaBr(cs.sumOf { it.valorMotoboy ?: 0.0 })} · gestão ${moedaBr(cs.sumOf { it.valorGestao ?: 0.0 })}")
+                        TextoDica("${cs.size} corrida${if (cs.size == 1) "" else "s"} · faturou ${moedaBr(cs.sumOf { it.valor ?: 0.0 })} · gestão ${moedaBr(cs.sumOf { it.valorGestao ?: 0.0 })}")
+                        TextoDica(chaves[mid]?.let { "PIX: $it" } ?: "Sem chave PIX cadastrada")
                     }
                     Spacer(Modifier.width(8.dp))
-                    Text(moedaBr(cs.sumOf { it.valor ?: 0.0 }), color = c.texto, fontWeight = FontWeight.Bold)
+                    Column(horizontalAlignment = Alignment.End) {
+                        Text(moedaBr(cs.sumOf { it.valorMotoboy ?: 0.0 }), color = c.texto, fontWeight = FontWeight.Bold)
+                        TextoDica("a repassar")
+                    }
+                    chaves[mid]?.let { ch -> PwBotaoIcone(PwIcones.Copy, "Copiar chave PIX", { copiar(ctxC, ch.substringBefore(" ·")); com.pwexpress.core.designsystem.PwToast.mostrar("Chave PIX copiada.") }, tamanho = 38.dp) }
                 }
             }
         }
@@ -649,11 +755,27 @@ fun FinanceiroG(onVoltar: (() -> Unit)?) {
                 Espaco(8)
                 val nome = when { k == "—" -> "Avulso (sem nome)"; k.startsWith("avulso:") -> "${k.removePrefix("avulso:")} (avulso)"; else -> dados.empresa(k)?.nome ?: "—" }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) { Text(nome, color = c.texto, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis); TextoDica("${cs.size} corrida${if (cs.size == 1) "" else "s"}") }
+                    Column(Modifier.weight(1f)) { Text(nome, color = c.texto, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis); TextoDica("${cs.size} corrida${if (cs.size == 1) "" else "s"} · gestão ${moedaBr(cs.sumOf { it.valorGestao ?: 0.0 })} · Dev ${moedaBr(cs.sumOf { it.valorDev ?: 0.0 })}") }
                     Spacer(Modifier.width(8.dp))
                     Text(moedaBr(cs.sumOf { it.valor ?: 0.0 }), color = c.texto, fontWeight = FontWeight.Bold)
                 }
             }
+        }
+        PwCartao {
+            PwRotulo("Extrato")
+            l.take(150).forEach { k ->
+                Espaco(8)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("${k.numeroExibicao} · ${dados.cliente(k)}", color = c.texto, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        TextoDica("${k.concluidaEm?.let { dataHora(it) } ?: ""} · ${dados.nomeMotoboy(k) ?: "—"}")
+                        TextoDica("Motoboy ${moedaBr(k.valorMotoboy)} · gestão ${moedaBr(k.valorGestao)} · Dev ${moedaBr(k.valorDev)}")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(moedaBr(k.valor), color = c.texto, fontWeight = FontWeight.Bold)
+                }
+            }
+            if (l.size > 150) { Espaco(6); TextoDica("Mostrando as 150 mais recentes. O extrato completo (com planilha) está no site.") }
         }
     }
 }

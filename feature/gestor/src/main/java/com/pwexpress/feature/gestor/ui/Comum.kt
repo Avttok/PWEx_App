@@ -57,6 +57,7 @@ internal fun modulo(chave: String): Boolean {
 internal fun corStatus(s: String, c: PwPaleta): Color = when (s) {
     Status.AGENDADA, Status.RESERVADA -> c.azul
     Status.AGUARDANDO -> c.ouroClaro
+    Status.AGUARDANDO_PAGAMENTO -> Color(0xFF38BDF8)
     Status.SEM_MOTOBOY -> c.vermelho
     Status.ACEITA, Status.EM_ANDAMENTO -> c.ouro
     Status.CONCLUIDA -> c.verde

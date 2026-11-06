@@ -69,13 +69,19 @@ object Geo {
     )
 
     suspend fun pontosProximos(lat: Double, lng: Double, raioM: Int = 250): List<RefG> = withContext(Dispatchers.IO) {
-        val q = "[out:json][timeout:10];(nwr(around:$raioM,$lat,$lng)[name][~\"^(amenity|shop|leisure|tourism)$\"~\".\"];);out center 40;"
+        val q = "[out:json][timeout:12];(nwr(around:$raioM,$lat,$lng)[name][~\"^(amenity|shop|leisure|tourism)$\"~\".\"];);out center 40;way(around:${minOf(raioM, 180)},$lat,$lng)[highway][name];out geom 40;"
         runCatching {
             val req = Request.Builder().url("https://overpass-api.de/api/interpreter").header("User-Agent", UA).post(FormBody.Builder().add("data", q).build()).build()
             val corpo = PwCore.http.client.newCall(req).execute().use { it.body?.string() } ?: return@runCatching emptyList()
             val vistos = mutableSetOf<String>()
-            (Json.parseToJsonElement(corpo).jsonObject["elements"] as JsonArray).mapNotNull { e ->
-                val o = e as? JsonObject ?: return@mapNotNull null
+            val elementos = (Json.parseToJsonElement(corpo).jsonObject["elements"] as JsonArray).mapNotNull { it as? JsonObject }
+            val xy = Plano(lat, lng)
+            val vias = elementos.filter { it.str("type") == "way" && it.obj("tags")?.str("highway") != null }.mapNotNull { w ->
+                val pts = (w["geometry"] as? JsonArray)?.mapNotNull { g -> (g as? JsonObject)?.let { gg -> val a = gg.dbl("lat"); val b = gg.dbl("lon"); if (a != null && b != null) xy(a, b) else null } }
+                if (pts.isNullOrEmpty()) null else Via(w.obj("tags")!!.str("name").orEmpty(), pts)
+            }
+            val destino = xy(lat, lng)
+            elementos.filterNot { it.str("type") == "way" && it.obj("tags")?.str("highway") != null }.mapNotNull { o ->
                 val tags = o.obj("tags") ?: return@mapNotNull null
                 val nome = tags.str("name") ?: return@mapNotNull null
                 val c = o.obj("center")
@@ -83,7 +89,9 @@ object Geo {
                 val plng = o.dbl("lon") ?: c?.dbl("lon") ?: return@mapNotNull null
                 if (!vistos.add(nome.lowercase())) return@mapNotNull null
                 val t = tags.str("amenity") ?: tags.str("shop") ?: tags.str("leisure") ?: tags.str("tourism")
-                RefG(nome, metros(lat, lng, plat, plng), tipos[t], plat, plng)
+                val rel = runCatching { relacaoNaRua(destino, xy(plat, plng), vias) }.getOrNull()
+                val frase = when (rel) { null -> null; "frente" -> "Fica do outro lado da rua de $nome"; else -> "Fica à $rel de $nome (olhando da rua)" }
+                RefG(nome, metros(lat, lng, plat, plng), tipos[t], plat, plng, frase)
             }.sortedBy { it.distanciaM ?: 0 }.take(8)
         }.getOrDefault(emptyList())
     }
@@ -95,4 +103,47 @@ object Geo {
         return (2 * r * Math.asin(Math.sqrt(h))).toInt()
     }
 
+    // ------------------------------------------------------------- referências inteligentes (igual ao site)
+
+    private data class Xy(val x: Double, val y: Double)
+    private data class Via(val nome: String, val pontos: List<Xy>)
+    private class Plano(lat0: Double, private val lng0: Double) {
+        private val lat0 = lat0
+        private val kx = Math.cos(Math.toRadians(lat0)) * 111_320.0
+        operator fun invoke(lat: Double, lng: Double) = Xy((lng - lng0) * kx, (lat - lat0) * 110_540.0)
+    }
+    private data class Proj(val dist: Double, val aoLongo: Double, val dir: Xy, val pe: Xy)
+
+    private fun projetar(p: Xy, via: Via): Proj? {
+        var melhor: Proj? = null
+        var acumulado = 0.0
+        for (i in 0 until via.pontos.size - 1) {
+            val a = via.pontos[i]; val b = via.pontos[i + 1]
+            val dx = b.x - a.x; val dy = b.y - a.y; val l2 = dx * dx + dy * dy; val l = Math.sqrt(l2)
+            if (l < 0.5) continue
+            val t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / l2).coerceIn(0.0, 1.0)
+            val pe = Xy(a.x + t * dx, a.y + t * dy)
+            val d = Math.hypot(p.x - pe.x, p.y - pe.y)
+            if (melhor == null || d < melhor.dist) melhor = Proj(d, acumulado + t * l, Xy(dx / l, dy / l), pe)
+            acumulado += l
+        }
+        return melhor
+    }
+
+    /** "frente" (outro lado da rua), "esquerda"/"direita" (olhando da rua para o destino) ou null sem confiança. */
+    private fun relacaoNaRua(destino: Xy, ref: Xy, vias: List<Via>): String? {
+        val rua = vias.mapNotNull { v -> projetar(destino, v)?.let { v to it } }.minByOrNull { it.second.dist } ?: return null
+        if (rua.second.dist !in 4.0..45.0) return null
+        val daRef = vias.mapNotNull { v -> projetar(ref, v)?.let { v to it } }.minByOrNull { it.second.dist } ?: return null
+        if (daRef.first.nome != rua.first.nome || daRef.second.dist !in 4.0..45.0) return null
+        val pRef = projetar(ref, rua.first) ?: return null
+        fun lado(p: Xy, pr: Proj) = Math.signum(pr.dir.x * (p.y - pr.pe.y) - pr.dir.y * (p.x - pr.pe.x))
+        val sep = Math.abs(pRef.aoLongo - rua.second.aoLongo)
+        if (sep > 120) return null
+        if (lado(destino, rua.second) != lado(ref, pRef)) return if (sep <= 30) "frente" else null
+        if (sep < 10) return null
+        val fx = destino.x - rua.second.pe.x; val fy = destino.y - rua.second.pe.y
+        val vx = pRef.pe.x - rua.second.pe.x; val vy = pRef.pe.y - rua.second.pe.y
+        return if (vx * fy + vy * -fx > 0) "esquerda" else "direita"
+    }
 }

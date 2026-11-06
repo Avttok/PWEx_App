@@ -45,6 +45,8 @@ object Gestao {
         val config: Map<String, JsonElement> = emptyMap(),
         /** Trilhas das últimas 12 h por motoboy (como no mapa do site). */
         val trilhas: Map<String, List<PontoTrilha>> = emptyMap(),
+        /** Logins de cliente por cadastro (empresa_id → contas). */
+        val acessosCliente: Map<String, List<MembroG>> = emptyMap(),
         val carregado: Boolean = false,
     ) {
         fun membro(id: String?) = equipe.firstOrNull { it.id == id }
@@ -79,18 +81,22 @@ object Gestao {
                 val trilha = if (voltas++ % 5 == 0 || !_dados.value.carregado) async {
                     val desde12h = Instant.now().minusSeconds(12L * 3600).toString()
                     runCatching {
-                        rpc.rest("GET", "/rest/v1/localizacoes?select=motoboy_id,sessao_id,status,lat,lng&registrado_em=gte.${enc(desde12h)}&order=registrado_em.asc&limit=5000").exigirOk().lista()
-                            .mapNotNull { o -> val la = o.dbl("lat"); val lo = o.dbl("lng"); if (la == null || lo == null) null else o.str("motoboy_id")!! to PontoTrilha(o.str("sessao_id"), o.str("status") ?: "", la, lo) }
+                        rpc.rest("GET", "/rest/v1/localizacoes?select=motoboy_id,sessao_id,status,lat,lng,registrado_em,corrida_id&registrado_em=gte.${enc(desde12h)}&order=registrado_em.asc&limit=8000").exigirOk().lista()
+                            .mapNotNull { o -> val la = o.dbl("lat"); val lo = o.dbl("lng"); if (la == null || lo == null) null else o.str("motoboy_id")!! to PontoTrilha(o.str("sessao_id"), o.str("status") ?: "", la, lo, iso(o.str("registrado_em")) ?: 0, o.str("corrida_id")) }
                             .groupBy({ it.first }, { it.second })
                     }.getOrNull()
                 } else null
                 val empresas = async { rpc.rest("GET", "/rest/v1/empresas?select=*&order=nome").exigirOk().lista() }
                 val fav = async { rpc.rest("GET", "/rest/v1/empresa_favoritos?select=empresa_id,motoboy_id,ordem&order=ordem").exigirOk().lista() }
                 val cfg = async { rpc.rest("GET", "/rest/v1/configuracoes?select=chave,valor").exigirOk().lista() }
+                val vinculos = async { runCatching { rpc.rest("GET", "/rest/v1/perfis?select=id,empresa_id&empresa_id=not.is.null").exigirOk().lista().associate { it.str("id")!! to it.str("empresa_id")!! } }.getOrDefault(emptyMap()) }
+                val todos = equipe.await().map { it.paraMembroG() }
+                val vinc = vinculos.await()
                 _dados.value = Dados(
                     corridas = corridas.await().map { it.paraCorridaG() },
                     ofertas = ofertas.await().map { it.paraOfertaG() },
-                    equipe = equipe.await().map { it.paraMembroG() },
+                    equipe = todos.filterNot { it.soCliente },
+                    acessosCliente = todos.filter { it.soCliente }.groupBy { vinc[it.id] ?: "" },
                     posicoes = pos.await().map { it.paraPosicaoG() },
                     empresas = empresas.await().map { it.paraEmpresaG() },
                     favoritos = fav.await().groupBy({ it.str("empresa_id")!! }, { it.str("motoboy_id")!! }),
@@ -125,6 +131,17 @@ object Gestao {
     }
 
     suspend fun cancelar(id: String) = acao { PwCore.rpc.chamar("cancelar_corrida", buildJsonObject { put("p_corrida", id); put("p_motivo", "Cancelada pelo gestor") }).exigirOk(::traduzir); Unit }
+    /** Pagamento recebido por fora (PIX/cartão conferido pelo gestor): libera a corrida para o despacho. */
+    suspend fun confirmarPagamento(id: String, metodo: String) = acao {
+        PwCore.rpc.chamar("confirmar_pagamento", buildJsonObject { put("p_corrida", id); put("p_metodo", metodo) }).exigirOk(::traduzir); Unit
+    }
+
+    /** Chaves PIX cadastradas (usuário → "chave · titular"). */
+    suspend fun chavesPix(): Map<String, String> = runCatching {
+        PwCore.rpc.rest("GET", "/rest/v1/dados_recebimento?select=usuario_id,chave,titular").exigirOk().lista()
+            .associate { it.str("usuario_id")!! to "${it.str("chave")} · ${it.str("titular")}" }
+    }.getOrDefault(emptyMap())
+
     suspend fun redespachar(id: String, motoboy: String?) = acao {
         PwCore.rpc.chamar("redespachar", buildJsonObject { put("p_corrida", id); put("p_motoboy", motoboy?.let { JsonPrimitive(it) } ?: JsonNull) }).exigirOk(::traduzir); Unit
     }
@@ -211,9 +228,10 @@ object Gestao {
         }).exigirOk(::traduzir); Unit
     }
 
-    suspend fun criarConta(nome: String, email: String, senha: String, papeis: List<String>, repasse: Double?): Result<String> = acao {
+    suspend fun criarConta(nome: String, email: String, senha: String, papeis: List<String>, repasse: Double?, empresaId: String? = null): Result<String> = acao {
         PwCore.rpc.site("/api/equipe/criar", buildJsonObject {
             put("nome", nome); put("email", email); put("senha", senha)
+            empresaId?.let { put("empresa_id", it) }
             put("papeis", buildJsonArray { papeis.forEach { add(JsonPrimitive(it)) } })
             put("repasse", repasse?.let { JsonPrimitive(it) } ?: JsonNull)
         }).exigirOk(::traduzir).objeto()?.str("id") ?: ""

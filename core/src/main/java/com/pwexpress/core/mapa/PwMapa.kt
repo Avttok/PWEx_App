@@ -46,7 +46,13 @@ import org.maplibre.geojson.Point
 data class PinoMapa(val lat: Double, val lng: Double, val coleta: Boolean, val atual: Boolean, val concluida: Boolean)
 
 /** Marcador livre (ex.: motoboy no mapa do gestor): cor em hex e rótulo curto. */
-data class MarcadorMapa(val id: String, val lat: Double, val lng: Double, val cor: String, val rotulo: String)
+data class MarcadorMapa(
+    val id: String, val lat: Double, val lng: Double, val cor: String, val rotulo: String,
+    /** Foto do motoboy (vira um pino com a foto); null = pino com a inicial. */
+    val foto: String? = null,
+    /** false = marcador simples (ponto), sem pino. */
+    val pino: Boolean = true,
+)
 
 /** Linha de trajeto (trilha real do motoboy). */
 data class TrilhaMapa(val pontos: List<Pair<Double, Double>>)
@@ -63,17 +69,24 @@ val CENTRO_PADRAO = -27.2 to -49.5
 fun coordenadaValida(lat: Double?, lng: Double?): Boolean =
     lat != null && lng != null && lat in -85.0..85.0 && lng in -180.0..180.0 && !(kotlin.math.abs(lat) < 0.001 && kotlin.math.abs(lng) < 0.001)
 
-/** Mostrar/ocultar nomes de estabelecimentos em todos os mapas (lembrado no aparelho, como no site). */
+/** Como os nomes de rua aparecem: na própria rua, em placas, ou escondidos. */
+enum class ModoRuas(val rotulo: String) { RUA("Na rua"), PLACA("Placas"), OCULTA("Ocultos") }
+
+/** Mostrar/ocultar estabelecimentos e o modo dos nomes de rua em todos os mapas (lembrado no aparelho, como no site). */
 object Estabelecimentos {
     private val _visiveis = MutableStateFlow(true)
     val visiveis: StateFlow<Boolean> = _visiveis.asStateFlow()
+    private val _ruas = MutableStateFlow(ModoRuas.RUA)
+    val ruas: StateFlow<ModoRuas> = _ruas.asStateFlow()
     private var prefs: android.content.SharedPreferences? = null
     fun init(ctx: Context) {
         if (prefs != null) return
         prefs = ctx.applicationContext.getSharedPreferences("pwex_mapa", Context.MODE_PRIVATE)
         _visiveis.value = prefs!!.getBoolean("estabelecimentos", true)
+        _ruas.value = runCatching { ModoRuas.valueOf(prefs!!.getString("ruas", "RUA")!!) }.getOrDefault(ModoRuas.RUA)
     }
     fun definir(v: Boolean) { _visiveis.value = v; prefs?.edit()?.putBoolean("estabelecimentos", v)?.apply() }
+    fun definirRuas(m: ModoRuas) { _ruas.value = m; prefs?.edit()?.putString("ruas", m.name)?.apply() }
 }
 
 /**
@@ -106,6 +119,14 @@ fun PwMapa(
     irPara: Pair<Double, Double>? = null,
     /** Círculo (centro, raio em metros): o raio de disponibilidade do motoboy. */
     circulo: Pair<Pair<Double, Double>, Double>? = null,
+    /** Percursos (registros) em degradê, do início ao mais recente. */
+    percursos: List<PercursoMapa> = emptyList(),
+    /** Mostra os pings (pontos) dos percursos. */
+    comPings: Boolean = true,
+    /** Cores de teste (cinza → violeta) nos percursos. */
+    percursoTeste: Boolean = false,
+    /** Mapa de calor (null = desligado). */
+    calor: List<Pair<Double, Double>>? = null,
 ) {
     val ctx = LocalContext.current
     val escuro = Pw.cores.escuro
@@ -118,6 +139,10 @@ fun PwMapa(
     val ciclo = LocalLifecycleOwner.current
     remember { Estabelecimentos.init(ctx) }
     val comLocais by Estabelecimentos.visiveis.collectAsState()
+    val modoRuas by Estabelecimentos.ruas.collectAsState()
+    val corRua = if (escuro) "#E7E5E4" else "#44403C"
+    val fotos = remember { androidx.compose.runtime.mutableStateMapOf<String, android.graphics.Bitmap>() }
+    val carregador = remember { coil.ImageLoader(ctx.applicationContext) }
     val densidade = ctx.resources.displayMetrics.density
     val margemPx = margemBaixo * densidade
 
@@ -159,7 +184,7 @@ fun PwMapa(
     var ultimoEnquadrar by remember { mutableStateOf<Any?>(enquadrar) }
 
     // estilo (recarrega ao trocar o tema)
-    LaunchedEffect(escuro, ouro) {
+    LaunchedEffect(escuro, ouro, percursoTeste) {
         estilo = null
         enquadrou = false
         mapView.getMapAsync { m ->
@@ -177,7 +202,7 @@ fun PwMapa(
                     if (cb != null) {
                         val tela = m.projection.toScreenLocation(p)
                         val raio = 22 * densidade
-                        val achados = m.queryRenderedFeatures(android.graphics.RectF(tela.x - raio, tela.y - raio, tela.x + raio, tela.y + raio), "marcadores")
+                        val achados = m.queryRenderedFeatures(android.graphics.RectF(tela.x - raio, tela.y - raio, tela.x + raio, tela.y + raio), "marcadores", "marcadores-ponto")
                         achados.firstOrNull()?.getStringProperty("id")?.let { cb(it); return@addOnMapClickListener true }
                     }
                     toque?.let { it(p.latitude, p.longitude); true } ?: false
@@ -185,7 +210,7 @@ fun PwMapa(
                 m.addOnCameraIdleListener { centro?.let { cb -> m.cameraPosition.target?.let { t -> cb(t.latitude, t.longitude) } } }
             }
             m.setStyle(Style.Builder().fromUri(if (escuro) ESTILO_ESCURO else ESTILO_CLARO)) { s ->
-                criarCamadas(s, escuro, ouro, ouroTexto)
+                criarCamadas(ctx, s, escuro, ouro, ouroTexto, percursoTeste, Estabelecimentos.ruas.value)
                 estilo = s
             }
         }
@@ -203,6 +228,45 @@ fun PwMapa(
         val v = if (comLocais) Property.VISIBLE else Property.NONE
         listOf("pwex-poi-ponto", "pwex-poi").forEach { s.getLayer(it)?.setProperties(PropertyFactory.visibility(v)) }
     }
+    LaunchedEffect(estilo, modoRuas) { estilo?.let { runCatching { aplicarModoRuas(it, modoRuas, corRua) } } }
+
+    // fotos dos pinos (baixadas uma vez)
+    LaunchedEffect(marcadores.mapNotNull { it.foto }.toSet()) {
+        marcadores.mapNotNull { it.foto }.distinct().filter { it !in fotos }.forEach { url ->
+            val r = carregador.execute(coil.request.ImageRequest.Builder(ctx).data(url).size(160).allowHardware(false).build())
+            (r.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.let { fotos[url] = it }
+        }
+    }
+
+    LaunchedEffect(estilo, percursos, comPings, percursoTeste) {
+        val s = estilo ?: return@LaunchedEffect
+        val cores = coresPercurso(percursoTeste)
+        val validos = percursos.map { it.copy(pontos = it.pontos.filter { p -> coordenadaValida(p.first, p.second) }) }
+        (s.getSource("percursos") as? GeoJsonSource)?.setGeoJson(FeatureCollection.fromFeatures(
+            validos.filter { it.pontos.size >= 2 }.map { r ->
+                Feature.fromGeometry(LineString.fromLngLats(r.pontos.map { Point.fromLngLat(it.second, it.first) })).apply {
+                    addBooleanProperty("destaque", r.destaque); addBooleanProperty("apagado", r.apagado)
+                }
+            },
+        ))
+        (s.getSource("pings") as? GeoJsonSource)?.setGeoJson(FeatureCollection.fromFeatures(
+            if (!comPings) emptyList() else validos.flatMap { r ->
+                r.pontos.mapIndexed { k, p ->
+                    Feature.fromGeometry(Point.fromLngLat(p.second, p.first)).apply {
+                        addStringProperty("cor", misturarCor(cores, if (r.pontos.size < 2) 1.0 else k.toDouble() / (r.pontos.size - 1)))
+                        addBooleanProperty("ponta", k == 0 || k == r.pontos.size - 1)
+                        addBooleanProperty("apagado", r.apagado)
+                    }
+                }
+            },
+        ))
+    }
+    LaunchedEffect(estilo, calor) {
+        val s = estilo ?: return@LaunchedEffect
+        (s.getSource("calor") as? GeoJsonSource)?.setGeoJson(FeatureCollection.fromFeatures(
+            calor.orEmpty().filter { coordenadaValida(it.first, it.second) }.map { Feature.fromGeometry(Point.fromLngLat(it.second, it.first)) },
+        ))
+    }
 
     // dados
     LaunchedEffect(estilo, circulo) {
@@ -215,7 +279,7 @@ fun PwMapa(
         )
     }
 
-    LaunchedEffect(estilo, paradas, rota, minhaPosicao, marcadores, seguir, trilhas, enquadrar) {
+    LaunchedEffect(estilo, paradas, rota, minhaPosicao, marcadores, seguir, trilhas, enquadrar, fotos.size) {
         val s = estilo ?: return@LaunchedEffect
         val m = mapa ?: return@LaunchedEffect
         if (enquadrar != ultimoEnquadrar) { ultimoEnquadrar = enquadrar; enquadrou = false }
@@ -255,8 +319,16 @@ fun PwMapa(
         (s.getSource("marcadores") as? GeoJsonSource)?.setGeoJson(
             FeatureCollection.fromFeatures(
                 validos.map { mk ->
+                    val sel = mk.id == seguir
+                    val foto = mk.foto?.let { fotos[it] }
+                    val img = "pino-${mk.id}-${mk.cor}-$sel-${foto != null}-$escuro"
+                    if (mk.pino && s.getImage(img) == null) runCatching {
+                        s.addImage(img, desenharPino(ctx, foto, mk.rotulo.trim().take(1).uppercase(), android.graphics.Color.parseColor(mk.cor), sel, escuro))
+                    }
                     Feature.fromGeometry(Point.fromLngLat(mk.lng, mk.lat)).apply {
                         addStringProperty("id", mk.id)
+                        addStringProperty("icone", if (mk.pino) img else "")
+                        addBooleanProperty("pino", mk.pino)
                         addStringProperty("cor", mk.cor)
                         addStringProperty("rotulo", mk.rotulo)
                         addStringProperty("inicial", mk.rotulo.trim().take(1).uppercase())
@@ -320,8 +392,9 @@ fun pontosDoCirculo(lat: Double, lng: Double, metros: Double, n: Int = 64): List
     }
 }
 
-private fun criarCamadas(s: Style, escuro: Boolean, ouro: String, ouroTexto: String) {
-    adicionarEstabelecimentos(s, escuro, ouro, ouroTexto)
+private fun criarCamadas(ctx: Context, s: Style, escuro: Boolean, ouro: String, ouroTexto: String, teste: Boolean, ruas: ModoRuas) {
+    aplicarEstiloPw(ctx, s, escuro, ouroTexto, ruas)
+    criarCamadaCalor(s, ouro)
     s.addSource(GeoJsonSource("circulo"))
     s.addLayer(org.maplibre.android.style.layers.FillLayer("circulo-fundo", "circulo").withProperties(
         PropertyFactory.fillColor(ouro), PropertyFactory.fillOpacity(0.12f),
@@ -347,6 +420,7 @@ private fun criarCamadas(s: Style, escuro: Boolean, ouro: String, ouroTexto: Str
             PropertyFactory.lineCap(Property.LINE_CAP_ROUND), PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
         ),
     )
+    criarCamadasPercurso(s, teste)
     s.addLayer(
         LineLayer("rota-contorno", "rota").withProperties(
             PropertyFactory.lineColor("#0A0A0A"),
@@ -389,21 +463,19 @@ private fun criarCamadas(s: Style, escuro: Boolean, ouro: String, ouroTexto: Str
         ),
     )
     s.addLayer(
-        CircleLayer("marcadores", "marcadores").withProperties(
+        CircleLayer("marcadores-ponto", "marcadores").withProperties(
             PropertyFactory.circleRadius(Expression.get("raio")),
             PropertyFactory.circleColor(Expression.toColor(Expression.get("cor"))),
             PropertyFactory.circleStrokeColor(if (escuro) "#F5F2EA" else "#16130C"),
             PropertyFactory.circleStrokeWidth(Expression.get("borda")),
-        ),
+        ).apply { setFilter(Expression.not(Expression.get("pino"))) },
     )
     s.addLayer(
-        SymbolLayer("marcadores-inicial", "marcadores").withProperties(
-            PropertyFactory.textField(Expression.get("inicial")),
-            PropertyFactory.textFont(arrayOf("Noto Sans Bold")),
-            PropertyFactory.textSize(13f),
-            PropertyFactory.textColor("#0B0B0D"),
-            PropertyFactory.textAllowOverlap(true),
-            PropertyFactory.textIgnorePlacement(true),
+        SymbolLayer("marcadores", "marcadores").withProperties(
+            PropertyFactory.iconImage(Expression.get("icone")),
+            PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
+            PropertyFactory.iconAllowOverlap(true),
+            PropertyFactory.iconIgnorePlacement(true),
         ),
     )
     s.addLayer(
@@ -412,51 +484,11 @@ private fun criarCamadas(s: Style, escuro: Boolean, ouro: String, ouroTexto: Str
             PropertyFactory.textFont(arrayOf("Noto Sans Regular")),
             PropertyFactory.textSize(12f),
             PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
-            PropertyFactory.textOffset(arrayOf(0f, 1.6f)),
+            PropertyFactory.textOffset(arrayOf(0f, 0.5f)),
             PropertyFactory.textColor(if (escuro) "#F5F2EA" else "#16130C"),
             PropertyFactory.textHaloColor(if (escuro) "#0B0B0D" else "#FFFFFF"),
             PropertyFactory.textHaloWidth(1.6f),
             PropertyFactory.textAllowOverlap(true),
         ),
-    )
-}
-
-/**
- * Nomes de estabelecimentos (comércio, restaurantes, postos…), a partir do zoom de bairro.
- * Os estilos limpos não mostram, mas os dados estão nos mesmos mapas (camada "poi").
- */
-private fun adicionarEstabelecimentos(s: Style, escuro: Boolean, ouro: String, ouroTexto: String) {
-    if (s.getSource("openmaptiles") == null) return
-    s.addLayer(
-        CircleLayer("pwex-poi-ponto", "openmaptiles").apply {
-            sourceLayer = "poi"
-            minZoom = 15f
-            setFilter(Expression.has("name"))
-            setProperties(
-                PropertyFactory.circleRadius(3f),
-                PropertyFactory.circleColor(ouro),
-                PropertyFactory.circleStrokeColor(if (escuro) "#0B0B0D" else "#FFFFFF"),
-                PropertyFactory.circleStrokeWidth(1.2f),
-            )
-        },
-    )
-    s.addLayer(
-        SymbolLayer("pwex-poi", "openmaptiles").apply {
-            sourceLayer = "poi"
-            minZoom = 15f
-            setFilter(Expression.has("name"))
-            setProperties(
-                PropertyFactory.textField(Expression.coalesce(Expression.get("name:pt"), Expression.get("name"))),
-                PropertyFactory.textFont(arrayOf("Noto Sans Regular")),
-                PropertyFactory.textSize(11.5f),
-                PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
-                PropertyFactory.textOffset(arrayOf(0f, 0.5f)),
-                PropertyFactory.textMaxWidth(9f),
-                PropertyFactory.textOptional(true),
-                PropertyFactory.textColor(ouroTexto),
-                PropertyFactory.textHaloColor(if (escuro) "#0B0B0D" else "#FFFFFF"),
-                PropertyFactory.textHaloWidth(1.4f),
-            )
-        },
     )
 }

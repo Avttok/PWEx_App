@@ -147,6 +147,9 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
     var exCod by remember { mutableStateOf(cfg.logico("padrao_exige_codigo", false)) }
     var direto by remember { mutableStateOf(false) }
     var urgente by remember { mutableStateOf(false) }
+    var divisaoPropria by remember { mutableStateOf(false) }
+    var repasseCorrida by remember { mutableStateOf("") }
+    var devCorrida by remember { mutableStateOf("") }
     var motoboyId by remember { mutableStateOf<String?>(null) }
     var obs by remember { mutableStateOf("") }
     var erro by remember { mutableStateOf<String?>(null) }
@@ -205,6 +208,10 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
             put("teste", teste)
             put("modo_despacho", if (direto) "direto" else "cascata")
             put("urgente", !direto && !planejar && urgente)
+            if (divisaoPropria) {
+                repasseCorrida.replace(',', '.').toDoubleOrNull()?.let { put("repasse_pct", it) }
+                devCorrida.replace(',', '.').toDoubleOrNull()?.let { put("dev_pct", it) }
+            }
             put("motoboy_id", if (direto) JsonPrimitive(motoboyId) else JsonNull)
             put("exige_foto", exFoto); put("exige_assinatura", exAss); put("exige_nome", exNome); put("exige_codigo", exCod)
             put("exigir_no_local", noLocal); put("raio_chegada_m", raio.toInt())
@@ -215,7 +222,7 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
                 buildJsonObject {
                     put("tipo", if (p.coleta) "coleta" else "entrega"); put("endereco", p.endereco); put("lat", p.lat); put("lng", p.lng)
                     put("contato_nome", p.contato); put("contato_telefone", p.telefone); put("instrucoes", p.instrucoes)
-                    put("referencias", JsonArray(p.refs.map { r -> buildJsonObject { put("nome", r.nome); r.distanciaM?.let { put("distancia_m", it) }; r.tipo?.let { put("tipo", it) }; r.lat?.let { put("lat", it) }; r.lng?.let { put("lng", it) } } }))
+                    put("referencias", JsonArray(p.refs.map { r -> buildJsonObject { put("nome", r.nome); r.distanciaM?.let { put("distancia_m", it) }; r.tipo?.let { put("tipo", it) }; r.lat?.let { put("lat", it) }; r.lng?.let { put("lng", it) }; r.relacao?.let { put("relacao", it) } } }))
                 }
             }))
         }
@@ -378,6 +385,15 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
                 Espaco(8)
                 PwSelecao("Motoboy", compativeis.sortedByDescending { it.id in favoritos }.map { m -> m.id to ((if (m.id in favoritos) "★ " else "") + m.nome + " · " + (rotuloMotoboy[dados.posicao(m.id)?.status] ?: "Offline")) }, motoboyId, { motoboyId = it })
                 if (compativeis.isEmpty()) TextoDica(if (teste) "Nenhum motoboy com o modo teste ligado." else "Nenhum motoboy fora do modo teste.")
+            }
+            Espaco(8)
+            PwInterruptor("Divisão própria nesta corrida", divisaoPropria, { divisaoPropria = it }, icone = PwIcones.Percent,
+                descricao = if (divisaoPropria) "Vale só para esta corrida. Em branco = regra do cliente/padrão." else "Usa a divisão do cliente (ou o padrão das configurações).")
+            if (divisaoPropria) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PwCampo(repasseCorrida, { repasseCorrida = it }, "Motoboy %", Modifier.weight(1f), dica = numeroBr(empresa?.repassePct ?: cfg.numero("repasse_motoboy_pct", 67.5)), teclado = androidx.compose.ui.text.input.KeyboardType.Decimal)
+                    PwCampo(devCorrida, { devCorrida = it }, "Dev %", Modifier.weight(1f), dica = numeroBr(empresa?.devPct ?: cfg.numero("dev_pct", 5.0)), teclado = androidx.compose.ui.text.input.KeyboardType.Decimal)
+                }
             }
             Espaco(8)
             PwCampo(obs, { obs = it }, "Observações para o motoboy", linhas = 2)

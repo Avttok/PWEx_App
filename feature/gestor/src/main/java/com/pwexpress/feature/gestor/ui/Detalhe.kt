@@ -25,6 +25,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
@@ -134,8 +135,12 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
             if (corrida.valorMotoboy != null) {
                 Espaco(8)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PwNumero("Motoboy ${corrida.repassePct?.toInt() ?: "—"}%", moedaBr(corrida.valorMotoboy), Modifier.weight(1f), icone = PwIcones.Bike)
+                    PwNumero("Motoboy ${corrida.repassePct?.let { numeroBr(it) } ?: "—"}%", moedaBr(corrida.valorMotoboy), Modifier.weight(1f), icone = PwIcones.Bike)
                     PwNumero("Gestão", moedaBr(corrida.valorGestao), Modifier.weight(1f), icone = PwIcones.Landmark)
+                }
+                if ((corrida.valorDev ?: 0.0) > 0) {
+                    Espaco(8)
+                    PwNumero("Dev ${corrida.devPct?.let { numeroBr(it) } ?: "—"}%", moedaBr(corrida.valorDev), Modifier.fillMaxWidth(), icone = PwIcones.CodeXml)
                 }
             }
             Espaco(6)
@@ -147,6 +152,20 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
         }
 
         PwErro(erro)
+        if (corrida.status == Status.AGUARDANDO_PAGAMENTO) {
+            PwCartao(cor = Color(0xFF38BDF8).copy(alpha = 0.5f)) {
+                PwRotulo("Aguardando pagamento do cliente")
+                Espaco(4)
+                TextoDica("O pedido só vai para os motoboys depois de pago. Conferiu o PIX ou o cartão? Confirme aqui.")
+                Espaco(8)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PwBotaoOuro("PIX recebido", onClick = { acao { Gestao.confirmarPagamento(corrida.id, "pix") } }, icone = PwIcones.Check, habilitado = !ocupado, modifier = Modifier.weight(1f))
+                    PwBotaoVidro("Cartão", onClick = { acao { Gestao.confirmarPagamento(corrida.id, "cartao") } }, icone = PwIcones.Wallet, modifier = Modifier.weight(1f))
+                }
+            }
+        } else if (corrida.pagamentoStatus == "pago") {
+            TextoDica("Pago pelo cliente" + (corrida.pagamentoMetodo?.let { " · ${if (it == "pix") "PIX" else "Cartão"}" } ?: ""))
+        }
         if (corrida.planejada) BlocoPlanejadaG(corrida, ocupado) { bloco -> acao(bloco) }
         if (corrida.status == Status.SEM_MOTOBOY) {
             var moto by remember { mutableStateOf<String?>(null) }
@@ -173,7 +192,7 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
                         Text(p.endereco, color = c.texto2, fontSize = 13.5.sp)
                         listOfNotNull(p.contatoNome, p.contatoTelefone).joinToString(" ").takeIf { it.isNotBlank() }?.let { TextoDica(it) }
                         p.instrucoes?.let { TextoDica(it) }
-                        if (p.referencias.isNotEmpty()) TextoDica("Referências: " + p.referencias.joinToString(" · ") { r -> r.nome + (r.distanciaM?.let { " ($it m)" } ?: "") })
+                        if (p.referencias.isNotEmpty()) TextoDica("Referências: " + p.referencias.joinToString(" · ") { r -> r.relacao ?: (r.nome + (r.distanciaM?.let { " ($it m)" } ?: "")) })
                         p.concluidaEm?.let { TextoDica("Concluída às ${hora(it)}") }
                         p.distanciaChegadaM?.let { TextoDica("Marcado a ${km(it)} do endereço" + if (p.localIgnorado) " · localização ignorada (teste)" else "") }
                         p.recebedorNome?.let { Text("Recebido por $it", color = c.texto, fontSize = 13.sp) }

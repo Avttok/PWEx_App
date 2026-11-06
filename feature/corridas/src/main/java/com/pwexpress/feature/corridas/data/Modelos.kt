@@ -28,7 +28,7 @@ data class Parada(
     val referencias: List<Referencia> = emptyList(),
 )
 
-data class Referencia(val nome: String, val distanciaM: Int?, val tipo: String?)
+data class Referencia(val nome: String, val distanciaM: Int?, val tipo: String?, val relacao: String? = null)
 
 data class Corrida(
     val id: String,
@@ -125,7 +125,7 @@ private fun JsonElement.paraParada(): Parada {
         },
         referencias = (o["referencias"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { e ->
             val r = e as? JsonObject ?: return@mapNotNull null
-            Referencia(r.texto("nome") ?: return@mapNotNull null, r.inteiro("distancia_m"), r.texto("tipo"))
+            Referencia(r.texto("nome") ?: return@mapNotNull null, r.inteiro("distancia_m"), r.texto("tipo"), r.texto("relacao"))
         }.orEmpty(),
     )
 }

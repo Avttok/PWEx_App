@@ -146,6 +146,15 @@ class MainActivity : ComponentActivity() {
                                 com.pwexpress.core.designsystem.PwCarregando(texto = "Carregando sua conta…")
                             }
                         }
+                        p?.soCliente == true -> Box(conteudo.fillMaxSize().padding(28.dp), contentAlignment = Alignment.Center) {
+                            androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                com.pwexpress.core.designsystem.PwLogoGrande(150.dp)
+                                com.pwexpress.core.designsystem.PwVazio(
+                                    "Sua conta é de cliente. Pedidos, pagamentos e acompanhamento ficam no site da PW Express — o app é para motoboys e gestores.",
+                                )
+                                com.pwexpress.core.designsystem.PwBotaoVidro("Sair da conta", onClick = ::sair, icone = com.pwexpress.core.designsystem.PwIcones.LogOut)
+                            }
+                        }
                         noPerfil -> PerfilScreen(
                             email = s.email,
                             onVoltar = { noPerfil = false },

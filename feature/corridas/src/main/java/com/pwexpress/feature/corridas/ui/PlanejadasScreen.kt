@@ -132,6 +132,7 @@ fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {},
         )
         PwErro(erro)
         if (aba == 2) {
+            if (com.pwexpress.core.perfil.Perfis.perfil.value?.modulo("trilhas_mapa") != false) MeusPercursos()
             val h = historico
             when {
                 h == null -> PwCarregando(texto = "Buscando suas corridas…")

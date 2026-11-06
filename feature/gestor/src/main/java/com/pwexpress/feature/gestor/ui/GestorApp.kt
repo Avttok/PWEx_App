@@ -121,7 +121,7 @@ fun GestorApp(
                 listOf(
                     PwAba("mapa", "Mapa", PwIcones.Mapa),
                     PwAba("corridas", "Corridas", PwIcones.Route, planejadas + semMotoboy),
-                    PwAba("empresas", "Empresas", PwIcones.Building2),
+                    PwAba("empresas", "Clientes", PwIcones.Building2),
                     PwAba("equipe", "Equipe", PwIcones.Users),
                 ) + (if (comCarteira) listOf(PwAba("financeiro", "Carteira", PwIcones.Wallet)) else emptyList()),
                 aba, { aba = it },

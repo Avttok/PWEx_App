@@ -1,8 +1,9 @@
-• Início novo: botão grande e redondo para ficar disponível/offline
-• Carteira: seus ganhos por dia, semana e mês, gráfico e extrato de cada corrida
-• Corridas: aba Histórico com tudo o que você já fez
-• Configurações no menu da foto: raio, aparelho, corridas novas e envio de localização
-• Raio de disponibilidade: escolha até onde vai buscar corridas (de onde estiver ou de um ponto fixo), com o círculo no mapa
-• Economia de bateria agora é um botão no menu da foto
-• Sem posição por 30 min, você fica offline sozinho; ao voltar o sinal, volta a ficar disponível
-• Gestor: corrida urgente (ignora o raio) e aviso quando um motoboy em corrida fica 30 min sem sinal
+• Botão de disponibilidade redesenhado (anel girando, halo e ícone) e janela de "Ficar offline" sem quebrar o texto
+• Mapa: motoboys com foto e selo de moto, filtros (em corrida, disponíveis, offline, sem sinal, teste) e busca
+• Percursos em degradê com os pings: o motoboy escolhido mostra todos os registros do dia (toque para destacar); os outros, só o atual
+• Mapa de calor de pedidos ou pings, ícones por tipo de estabelecimento, nomes de cidade/bairro/rua em cores e ruas na rua, em placas ou ocultas
+• MotoApp: "Meus percursos" no Histórico e chave PIX para receber nas Configurações
+• Gestor: Empresas virou Clientes (CPF ou CNPJ, Express liberado ou só agendados, PIX/cartão, divisão própria e acesso do cliente ao site)
+• Gestor: divisão própria em cada corrida, confirmação de pagamento, parte do Dev e chaves PIX na Carteira, aba Percursos na Equipe
+• Referências inteligentes: "fica do outro lado da rua de…" e "à esquerda/direita de…" quando o mapa tem certeza
+• Contas só de cliente são encaminhadas para o site

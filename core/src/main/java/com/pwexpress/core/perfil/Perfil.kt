@@ -40,6 +40,8 @@ data class Perfil(
     val raioModo: String = "posicao",
     val raioLat: Double? = null,
     val raioLng: Double? = null,
+    /** Conta só de cliente (pede pelo site, não usa o app). */
+    val soCliente: Boolean = false,
 ) {
     /** O módulo está valendo para esta conta? (sem registro = ligado; o Dev sempre vê) */
     fun modulo(chave: String): Boolean = dev || modulos[chave] != false
@@ -53,6 +55,9 @@ data class Perfil(
     fun logico(chave: String, padrao: Boolean): Boolean =
         (configuracoes[chave] as? JsonPrimitive)?.booleanOrNull ?: padrao
 }
+
+/** Para onde o dinheiro das corridas é repassado. */
+data class ChavePix(val tipo: String, val chave: String, val titular: String)
 
 data class Ganhos(
     val hoje: Double, val semana: Double, val mes: Double, val corridasHoje: Int,
@@ -147,6 +152,28 @@ object Perfis {
         carregar()
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
+    /** A chave PIX cadastrada (null = nenhuma). */
+    suspend fun minhaChavePix(): ChavePix? = runCatching {
+        val id = _perfil.value?.id ?: return null
+        val r = PwCore.rpc.rest("GET", "/rest/v1/dados_recebimento?usuario_id=eq.$id&select=tipo_chave,chave,titular")
+        if (!r.ok) return null
+        r.json()?.jsonArray?.firstOrNull()?.jsonObject?.let { o ->
+            ChavePix(o["tipo_chave"]!!.jsonPrimitive.content, o["chave"]!!.jsonPrimitive.content, o["titular"]!!.jsonPrimitive.content)
+        }
+    }.getOrNull()
+
+    /** Salva (ou apaga, com chave vazia) a chave PIX para receber os repasses. */
+    suspend fun definirChavePix(tipo: String, chave: String, titular: String): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar("definir_minha_chave_pix", buildJsonObject { put("p_tipo", tipo); put("p_chave", chave); put("p_titular", titular) })
+        if (!r.ok) error(
+            when {
+                r.corpo.contains("titular_invalido") -> "Informe o nome do titular."
+                r.corpo.contains("tipo_invalido") -> "Tipo de chave inválido."
+                else -> "Erro (${r.codigo})."
+            },
+        )
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
     // ------------------------------------------------------------------ util
 
     private fun HttpResposta.json(): JsonElement? =
@@ -173,6 +200,7 @@ object Perfis {
             raioModo = (o["raio"] as? JsonObject)?.let { (it["modo"] as? JsonPrimitive)?.takeIf { p -> p !is JsonNull }?.content } ?: "posicao",
             raioLat = (o["raio"] as? JsonObject)?.let { (it["lat"] as? JsonPrimitive)?.doubleOrNull },
             raioLng = (o["raio"] as? JsonObject)?.let { (it["lng"] as? JsonPrimitive)?.doubleOrNull },
+            soCliente = (o["papeis"] as? kotlinx.serialization.json.JsonArray)?.map { it.jsonPrimitive.content }?.let { p -> "cliente" in p && p.none { it in listOf("gestor", "motoboy", "dev") } } ?: false,
         )
     }
 }

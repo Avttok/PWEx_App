@@ -4,6 +4,8 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -52,6 +54,7 @@ import com.pwexpress.core.designsystem.PwCarregando
 import com.pwexpress.core.designsystem.PwErro
 import com.pwexpress.core.designsystem.PwFiltros
 import com.pwexpress.core.designsystem.PwIcones
+import com.pwexpress.core.designsystem.PwPilula
 import com.pwexpress.core.designsystem.PwSelo
 import com.pwexpress.core.designsystem.PwVazio
 import com.pwexpress.core.designsystem.TemaApp
@@ -147,49 +150,97 @@ private fun semSinal(p: PosicaoG?, agora: Long): Boolean {
 // Mapa ao vivo
 // =====================================================================
 
+/** Registros (procurando / corrida) de um motoboy a partir dos pings das últimas 12 h. */
+internal fun registrosDe(dados: Gestao.Dados, id: String): List<com.pwexpress.core.mapa.RegistroPercurso> =
+    com.pwexpress.core.mapa.separarRegistros(dados.trilhas[id].orEmpty().map { com.pwexpress.core.mapa.PingMapa(it.lat, it.lng, it.status, it.corridaId, it.quando) })
+
+private enum class Calor(val rotulo: String) { DESLIGADO("Sem calor"), PEDIDOS("Pedidos"), PINGS("Pings") }
+
 @Composable
 fun MapaG(onCorrida: (String) -> Unit) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
     val erro by Gestao.erro.collectAsState()
+    val teste by TemaApp.modoTeste.collectAsState()
     var agora by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { agora = System.currentTimeMillis(); delay(1000) } }
     var seguindo by rememberSaveable { mutableStateOf<String?>(null) }
+    var filtro by rememberSaveable { mutableIntStateOf(0) }
+    var busca by rememberSaveable { mutableStateOf("") }
+    var calor by rememberSaveable { mutableStateOf(Calor.DESLIGADO) }
+    var comPings by rememberSaveable { mutableStateOf(true) }
+    var destaque by remember(seguindo) { mutableStateOf<Int?>(null) }
+    val modoRuas by com.pwexpress.core.mapa.Estabelecimentos.ruas.collectAsState()
     val comTrilhas = modulo("trilhas_mapa")
 
     val ordem = mapOf("em_corrida" to 0, "disponivel" to 1)
-    val motoboys = dados.equipe.filter { it.motoboy }
+    val todos = dados.equipe.filter { it.motoboy }
         .sortedWith(compareBy({ ordem[dados.posicao(it.id)?.status] ?: 2 }, { it.nome.lowercase() }))
-    val emServico = motoboys.count { dados.posicao(it.id)?.status?.let { s -> s != "offline" } == true }
+    fun st(id: String) = dados.posicao(id)?.status ?: "offline"
+    val filtros = listOf<Pair<String, (com.pwexpress.feature.gestor.data.MembroG) -> Boolean>>(
+        "Todos" to { _ -> true }, "Em corrida" to { m -> st(m.id) == "em_corrida" }, "Disponíveis" to { m -> st(m.id) == "disponivel" },
+        "Offline" to { m -> st(m.id) == "offline" }, "Sem sinal" to { m -> semSinal(dados.posicao(m.id), agora) }, "Teste" to { m -> m.modoTeste },
+    )
+    val termo = java.text.Normalizer.normalize(busca.trim(), java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase()
+    fun casa(m: com.pwexpress.feature.gestor.data.MembroG) = termo.isEmpty() ||
+        java.text.Normalizer.normalize("${m.nome} ${m.email}", java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase().contains(termo)
+    val motoboys = todos.filter { filtros[filtro].second(it) && casa(it) }
+    val emServico = todos.count { st(it.id) != "offline" }
     val marcadores = motoboys.mapNotNull { m ->
         val p = dados.posicao(m.id) ?: return@mapNotNull null
         if (!coordenadaValida(p.lat, p.lng)) return@mapNotNull null
-        MarcadorMapa(m.id, p.lat!!, p.lng!!, corHex(corMotoboy(p.status, c)), m.nome.substringBefore(" "))
+        MarcadorMapa(m.id, p.lat!!, p.lng!!, corHex(corMotoboy(p.status, c)), m.nome.substringBefore(" "), foto = m.foto)
+    }
+    // selecionado: todos os registros do dia; os outros: só o registro atual (se estiver em serviço)
+    val regSel = seguindo?.let { registrosDe(dados, it) }.orEmpty()
+    val percursos = if (!comTrilhas) emptyList() else motoboys.flatMap { m ->
+        if (m.id == seguindo) regSel.mapIndexed { i, r -> com.pwexpress.core.mapa.PercursoMapa(r.pontos.map { it.lat to it.lng }, destaque = destaque == i, apagado = destaque != null && destaque != i) }
+        else if (st(m.id) == "offline") emptyList()
+        else registrosDe(dados, m.id).lastOrNull()?.let { r -> listOf(com.pwexpress.core.mapa.PercursoMapa(r.pontos.map { it.lat to it.lng }, apagado = seguindo != null)) }.orEmpty()
+    }
+    val pontosCalor = when (calor) {
+        Calor.DESLIGADO -> null
+        Calor.PEDIDOS -> dados.corridas.filter { it.teste == teste }.flatMap { it.paradas }.map { it.lat to it.lng }
+        Calor.PINGS -> dados.trilhas.values.flatten().map { it.lat to it.lng }
     }
     fun alternar(id: String) { seguindo = if (seguindo == id) null else id }
 
     TelaComMapa(
         titulo = "Mapa",
-        subtitulo = "$emServico em serviço · ${motoboys.size} motoboy${if (motoboys.size == 1) "" else "s"}" + (seguindo?.let { id -> " · seguindo ${dados.membro(id)?.nome?.substringBefore(" ") ?: ""}" } ?: ""),
+        subtitulo = "$emServico em serviço · ${todos.size} motoboy${if (todos.size == 1) "" else "s"}" + (seguindo?.let { id -> " · seguindo ${dados.membro(id)?.nome?.substringBefore(" ") ?: ""}" } ?: ""),
         mapa = { margem, enquadrar ->
             PwMapa(
                 paradas = emptyList(), rota = null, minhaPosicao = null, marcadores = marcadores, modifier = Modifier.fillMaxSize(),
-                enquadrar = enquadrar, onMarcador = ::alternar, seguir = seguindo,
-                trilhas = if (comTrilhas) trilhasDe(dados, motoboys.map { it.id }.toSet()) else emptyList(), margemBaixo = margem,
+                enquadrar = enquadrar, onMarcador = ::alternar, seguir = seguindo.takeIf { destaque == null },
+                percursos = percursos, comPings = comPings, percursoTeste = teste, calor = pontosCalor, margemBaixo = margem,
             )
         },
     ) {
         item {
             PwErro(erro)
+            if (todos.size > 4) {
+                com.pwexpress.core.designsystem.PwCampo(busca, { busca = it }, "Buscar motoboy", Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+            }
+            PwFiltros(filtros.map { (r, f) -> r to (if (r == "Todos") 0 else todos.count(f)) }, filtro, { filtro = it })
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                PwPilula(calor.rotulo, PwIcones.Flame, { calor = Calor.entries[(calor.ordinal + 1) % Calor.entries.size] }, ligada = calor != Calor.DESLIGADO)
+                if (comTrilhas) PwPilula("Pings", PwIcones.Route, { comPings = !comPings }, ligada = comPings)
+                PwPilula("Ruas: ${modoRuas.rotulo}", PwIcones.MapPin, {
+                    com.pwexpress.core.mapa.Estabelecimentos.definirRuas(com.pwexpress.core.mapa.ModoRuas.entries[(modoRuas.ordinal + 1) % com.pwexpress.core.mapa.ModoRuas.entries.size])
+                })
+            }
+            if (comTrilhas) { Spacer(Modifier.height(8.dp)); LegendaPercurso(teste) }
             if (!dados.carregado) PwCarregando()
-            else if (motoboys.isEmpty()) PwVazio("Nenhum motoboy ainda. Crie uma conta em Equipe.", icone = PwIcones.Bike)
+            else if (todos.isEmpty()) PwVazio("Nenhum motoboy ainda. Crie uma conta em Equipe.", icone = PwIcones.Bike)
+            else if (motoboys.isEmpty()) PwVazio("Ninguém neste filtro.", icone = PwIcones.Search)
         }
         items(motoboys, key = { it.id }) { m ->
             val p = dados.posicao(m.id)
             val corrida = dados.corridas.firstOrNull { it.motoboyId == m.id && it.ativa }
             val sel = seguindo == m.id
             val forma = RoundedCornerShape(18.dp)
-            val pontos = dados.trilhas[m.id]?.size ?: 0
             Column(
                 Modifier.fillMaxWidth().clip(forma).background(if (sel) c.ouro.copy(alpha = 0.10f) else c.vidroSutil)
                     .border(1.dp, if (sel) c.ouro else c.borda, forma).clickable { alternar(m.id) }.padding(12.dp),
@@ -207,12 +258,50 @@ fun MapaG(onCorrida: (String) -> Unit) {
                     Detalhe(PwIcones.Timer, haQuanto(p?.posicaoEm, agora))
                     p?.precisaoM?.let { Detalhe(PwIcones.Crosshair, "± ${it.toInt()} m") }
                     p?.bateria?.let { Detalhe(PwIcones.BatteryMedium, "$it%") }
-                    if (pontos > 0 && comTrilhas) Detalhe(PwIcones.Route, "$pontos pts")
                 }
                 corrida?.let { Detalhe(PwIcones.Package, "Corrida ${it.numeroExibicao} · ${Status.rotulo[it.status]}") }
                 if (semSinal(p, agora)) Detalhe(PwIcones.Alerta, "Sem sinal recente", c.vermelho)
-                if (sel) Detalhe(PwIcones.LocateFixed, if (coordenadaValida(p?.lat, p?.lng)) "Seguindo no mapa · toque para soltar" else "Sem posição para seguir", c.ouro)
+                if (sel) {
+                    Detalhe(PwIcones.LocateFixed, if (coordenadaValida(p?.lat, p?.lng)) "Seguindo no mapa · toque para soltar" else "Sem posição para seguir", c.ouro)
+                    if (comTrilhas) ListaRegistros(regSel, destaque, { destaque = if (destaque == it) null else it }, dados)
+                }
             }
+        }
+    }
+}
+
+/** Degradê do percurso: do início (esquerda) ao mais recente (direita). */
+@Composable
+internal fun LegendaPercurso(teste: Boolean) {
+    val c = Pw.cores
+    val cores = com.pwexpress.core.mapa.coresPercurso(teste).map { androidx.compose.ui.graphics.Color(it) }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("Início", color = c.texto3, fontSize = 11.5.sp)
+        Box(Modifier.weight(1f).height(6.dp).clip(RoundedCornerShape(99.dp)).background(androidx.compose.ui.graphics.Brush.horizontalGradient(cores)))
+        Text("Agora", color = c.texto3, fontSize = 11.5.sp)
+    }
+}
+
+/** Registros do dia (procurando corrida / em corrida); tocar destaca no mapa. */
+@Composable
+internal fun ListaRegistros(regs: List<com.pwexpress.core.mapa.RegistroPercurso>, destaque: Int?, onEscolher: (Int) -> Unit, dados: Gestao.Dados) {
+    val c = Pw.cores
+    if (regs.isEmpty()) { TextoDica("Nenhum percurso nas últimas 12 h."); return }
+    val fmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+    fun h(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).format(fmt)
+    regs.withIndex().reversed().forEach { (i, r) ->
+        val forma = RoundedCornerShape(12.dp)
+        val sel = destaque == i
+        Row(
+            Modifier.fillMaxWidth().clip(forma).background(if (sel) c.ouro.copy(alpha = 0.16f) else c.vidro).border(1.dp, if (sel) c.ouro else c.borda, forma)
+                .clickable { onEscolher(i) }.padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(if (r.corrida) PwIcones.Package else PwIcones.Search, null, tint = if (r.corrida) c.ouro else c.texto2, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            val num = r.corridaId?.let { id -> dados.corridas.firstOrNull { it.id == id }?.numeroExibicao }
+            Text(if (r.corrida) "Corrida ${num ?: ""}".trim() else "Procurando corrida", color = c.texto, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f), maxLines = 1)
+            Text("${h(r.inicio)}–${h(r.fim)} · ${String.format(java.util.Locale("pt", "BR"), "%.1f km", r.metros / 1000)}", color = c.texto3, fontSize = 12.sp)
         }
     }
 }
@@ -243,7 +332,7 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
     val pinos = ativas.flatMap { cor -> cor.paradas.map { PinoMapa(it.lat, it.lng, it.coleta, false, it.status == "concluida") } }
     val online = dados.equipe.filter { it.motoboy && it.modoTeste == teste }.mapNotNull { m ->
         val p = dados.posicao(m.id)?.takeIf { it.status != "offline" && coordenadaValida(it.lat, it.lng) } ?: return@mapNotNull null
-        MarcadorMapa(m.id, p.lat!!, p.lng!!, corHex(corMotoboy(p.status, c)), m.nome.substringBefore(" "))
+        MarcadorMapa(m.id, p.lat!!, p.lng!!, corHex(corMotoboy(p.status, c)), m.nome.substringBefore(" "), foto = m.foto)
     }
 
     TelaComMapa(

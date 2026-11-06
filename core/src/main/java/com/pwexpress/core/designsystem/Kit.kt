@@ -375,7 +375,7 @@ fun PwBotaoPerigo(texto: String, onClick: () -> Unit, modifier: Modifier = Modif
     val forma = RoundedCornerShape(16.dp)
     Row(
         modifier.heightIn(min = 50.dp).clip(forma)
-            .background(if (cheio) c.vermelho else c.vermelho.copy(alpha = 0.08f))
+            .background(if (cheio) Color(0xFFDC2626) else c.vermelho.copy(alpha = 0.08f))
             .border(1.dp, c.vermelho.copy(alpha = if (cheio) 0f else 0.5f), forma)
             .clickable(enabled = habilitado, onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
@@ -383,7 +383,7 @@ fun PwBotaoPerigo(texto: String, onClick: () -> Unit, modifier: Modifier = Modif
     ) {
         val cor = if (cheio) Color.White else c.vermelho
         if (icone != null) { Icon(icone, null, tint = cor.copy(alpha = if (habilitado) 1f else 0.5f), modifier = Modifier.size(17.dp)); Spacer(Modifier.width(8.dp)) }
-        Text(texto, color = cor.copy(alpha = if (habilitado) 1f else 0.5f), fontWeight = FontWeight.Bold, fontFamily = Archivo)
+        Text(texto, color = cor.copy(alpha = if (habilitado) 1f else 0.5f), fontWeight = FontWeight.Bold, fontFamily = Archivo, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

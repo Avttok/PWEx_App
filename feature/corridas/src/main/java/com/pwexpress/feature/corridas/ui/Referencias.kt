@@ -30,9 +30,12 @@ fun ReferenciasParada(referencias: List<Referencia>, modifier: Modifier = Modifi
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(PwIcones.Landmark, null, tint = c.ouro, modifier = Modifier.size(13.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(r.nome, color = c.texto, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = Archivo)
-                val extra = listOfNotNull(r.tipo, r.distanciaM?.let { if (it < 1000) "$it m" else "${it / 1000} km" }).joinToString(" · ")
-                if (extra.isNotEmpty()) Text("  $extra", color = c.texto3, fontSize = 12.sp)
+                if (r.relacao != null) Text(r.relacao, color = c.texto, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = Archivo)
+                else {
+                    Text(r.nome, color = c.texto, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, fontFamily = Archivo)
+                    val extra = listOfNotNull(r.tipo, r.distanciaM?.let { if (it < 1000) "$it m" else "${it / 1000} km" }).joinToString(" · ")
+                    if (extra.isNotEmpty()) Text("  $extra", color = c.texto3, fontSize = 12.sp)
+                }
             }
         }
     }

@@ -24,7 +24,11 @@ data class Parada(
     val contatoTelefone: String?,
     val instrucoes: String?,
     val status: StatusParada,
+    /** Até 3 pontos de referência perto do endereço (definidos pelo gestor). */
+    val referencias: List<Referencia> = emptyList(),
 )
+
+data class Referencia(val nome: String, val distanciaM: Int?, val tipo: String?)
 
 data class Corrida(
     val id: String,
@@ -45,7 +49,16 @@ data class Corrida(
     val exigeCodigo: Boolean,
     val empresaNome: String?,
     val paradas: List<Parada>,
+    // corridas planejadas (hora marcada)
+    val agendadaPara: Long? = null,
+    val cancelarReservaAte: Long? = null,
+    val iniciarAPartirDe: Long? = null,
+    val minha: Boolean = false,
 ) {
+    /** Reais "#12", de teste "T12" (sequências separadas). */
+    val numeroExibicao: String get() = if (teste) "T$numero" else "#$numero"
+    val planejada: Boolean get() = status == "agendada" || status == "reservada"
+
     /** Parada em que o motoboy está agora (primeira não concluída). */
     val paradaAtual: Parada? get() = paradas.firstOrNull { it.status != StatusParada.CONCLUIDA }
 }
@@ -85,6 +98,10 @@ internal fun JsonElement.paraCorrida(): Corrida {
         exigeCodigo = o.logico("exige_codigo"),
         empresaNome = o.texto("empresa_nome"),
         paradas = o["paradas"]?.jsonArray?.map { it.paraParada() }.orEmpty().sortedBy { it.ordem },
+        agendadaPara = o.texto("agendada_para")?.let { instante(it) },
+        cancelarReservaAte = o.texto("cancelar_reserva_ate")?.let { instante(it) },
+        iniciarAPartirDe = o.texto("iniciar_a_partir_de")?.let { instante(it) },
+        minha = o.logico("minha"),
     )
 }
 
@@ -106,6 +123,10 @@ private fun JsonElement.paraParada(): Parada {
             "concluida" -> StatusParada.CONCLUIDA
             else -> StatusParada.PENDENTE
         },
+        referencias = (o["referencias"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { e ->
+            val r = e as? JsonObject ?: return@mapNotNull null
+            Referencia(r.texto("nome") ?: return@mapNotNull null, r.inteiro("distancia_m"), r.texto("tipo"))
+        }.orEmpty(),
     )
 }
 
@@ -119,3 +140,8 @@ internal fun JsonElement.paraOferta(): Oferta {
         corrida = o.getValue("corrida").paraCorrida(),
     )
 }
+
+/** Data/hora do servidor (ISO 8601, com fuso) em milissegundos. */
+internal fun instante(iso: String): Long? = runCatching { java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli() }
+    .recoverCatching { java.time.OffsetDateTime.parse(iso.replace(" ", "T")).toInstant().toEpochMilli() }
+    .getOrNull()

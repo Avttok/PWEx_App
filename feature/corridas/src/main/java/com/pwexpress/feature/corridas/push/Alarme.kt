@@ -10,6 +10,12 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.net.Uri
 import androidx.core.app.NotificationCompat
+import androidx.core.app.Person
+import androidx.core.graphics.drawable.IconCompat
+import com.pwexpress.core.notificacoes.PwNotificacoes
+import com.pwexpress.feature.corridas.data.Oferta
+import com.pwexpress.feature.corridas.data.TipoParada
+import com.pwexpress.feature.corridas.data.instante
 import com.pwexpress.feature.corridas.R
 import com.pwexpress.feature.corridas.ui.OfertaActivity
 
@@ -17,13 +23,12 @@ import com.pwexpress.feature.corridas.ui.OfertaActivity
 object Alarme {
     // Mudou o som ou a vibração? Troque o id do canal: o Android não atualiza canais existentes.
     private const val CANAL_OFERTA = "pwex_ofertas_v1"
-    private const val CANAL_AVISOS = "pwex_avisos"
-    private const val CANAL_SILENCIOSO = "pwex_silencioso"
     private const val NOTIF_VOLTOU = 2003
     const val NOTIF_OFERTA = 2001
     private const val NOTIF_AVISO = 2002
 
     private fun criarCanais(ctx: Context) {
+        PwNotificacoes.criarCanais(ctx)
         val nm = ctx.getSystemService(NotificationManager::class.java) ?: return
         val som = Uri.parse("${ContentResolver.SCHEME_ANDROID_RESOURCE}://${ctx.packageName}/${R.raw.pwex_oferta}")
         val audio = AudioAttributes.Builder()
@@ -33,6 +38,7 @@ object Alarme {
         nm.createNotificationChannel(
             NotificationChannel(CANAL_OFERTA, "Ofertas de corrida", NotificationManager.IMPORTANCE_HIGH).apply {
                 description = "Toca alto e abre em tela cheia quando chega uma corrida"
+                group = PwNotificacoes.GRUPO_CORRIDAS
                 setSound(som, audio)
                 enableVibration(true)
                 vibrationPattern = longArrayOf(0, 600, 300, 600, 300, 900)
@@ -40,56 +46,80 @@ object Alarme {
                 setBypassDnd(true)
             }
         )
-        nm.createNotificationChannel(
-            NotificationChannel(CANAL_AVISOS, "Avisos de corrida", NotificationManager.IMPORTANCE_HIGH)
-        )
-        nm.createNotificationChannel(
-            NotificationChannel(CANAL_SILENCIOSO, "Avisos silenciosos", NotificationManager.IMPORTANCE_LOW).apply {
-                description = "Informativos que não tocam nem acendem a tela"
-                setSound(null, null)
-                enableVibration(false)
-            }
-        )
     }
 
     /** Aviso discreto: sem som, sem vibrar, sem acender a tela. */
-    fun avisarSilencioso(ctx: Context, texto: String) {
-        criarCanais(ctx)
-        val abrir = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.let {
-            PendingIntent.getActivity(ctx, 12, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        }
-        val n = NotificationCompat.Builder(ctx, CANAL_SILENCIOSO)
-            .setSmallIcon(R.drawable.ic_notif_corrida)
-            .setColor(0xFFD4AF37.toInt())
-            .setContentTitle("PW Express")
-            .setContentText(texto)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setSilent(true)
-            .setOnlyAlertOnce(true)
-            .setAutoCancel(true)
-            .setContentIntent(abrir)
-            .build()
-        ctx.getSystemService(NotificationManager::class.java)?.notify(NOTIF_VOLTOU, n)
+    fun avisarSilencioso(ctx: Context, texto: String, titulo: String = "PW Express") {
+        PwNotificacoes.aviso(ctx, NOTIF_VOLTOU, PwNotificacoes.CANAL_SILENCIOSO, titulo, texto, silencioso = true)
     }
 
-    fun mostrarOferta(ctx: Context) {
+    private fun km(m: Int?) = when {
+        m == null -> null
+        m < 1000 -> "$m m"
+        else -> String.format(java.util.Locale.forLanguageTag("pt-BR"), "%.1f km", m / 1000.0)
+    }
+
+    /**
+     * Oferta de corrida no estilo "chamada recebida": valor, distância, contagem regressiva e
+     * os botões Aceitar / Recusar (funcionam direto da notificação). Toca até responder.
+     */
+    fun mostrarOferta(ctx: Context, oferta: Oferta? = null, ofertaId: String? = null) {
         criarCanais(ctx)
+        val id = oferta?.id ?: ofertaId
         val abrir = Intent(ctx, OfertaActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         val pi = PendingIntent.getActivity(ctx, 10, abrir, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        val n = NotificationCompat.Builder(ctx, CANAL_OFERTA)
-            .setSmallIcon(R.drawable.ic_notif_corrida)
-            .setColor(0xFFD4AF37.toInt())
-            .setContentTitle("Nova corrida!")
-            .setContentText("Toque para ver e aceitar. Você tem 30 segundos.")
+        val aceitar = PendingIntent.getActivity(
+            ctx, 13,
+            Intent(ctx, OfertaActivity::class.java).setAction(OfertaActivity.ACAO_ACEITAR).putExtra("oferta_id", id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val recusar = PendingIntent.getBroadcast(
+            ctx, 14,
+            Intent(ctx, OfertaReceiver::class.java).setAction(OfertaReceiver.ACAO_RECUSAR).putExtra("oferta_id", id),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val c = oferta?.corrida
+        PwNotificacoes.modoTeste = c?.teste ?: PwNotificacoes.modoTeste
+        val valor = c?.valorMotoboy?.let { java.text.NumberFormat.getCurrencyInstance(java.util.Locale.forLanguageTag("pt-BR")).format(it) }
+        val titulo = if (c != null) "Corrida ${c.numeroExibicao}${valor?.let { " · $it" } ?: ""}" else "Nova corrida!"
+        val coleta = c?.paradas?.firstOrNull()
+        val entregas = c?.paradas?.count { it.tipo == TipoParada.ENTREGA } ?: 0
+        val texto = if (c != null) listOfNotNull(km(oferta.distanciaM)?.let { "$it até a coleta" }, km(c.distanciaM)?.let { "percurso $it" }).joinToString(" · ")
+            else "Toque para ver e aceitar."
+        val detalhes = if (c != null) listOfNotNull(
+            coleta?.let { "Coleta: ${it.endereco}" },
+            c.paradas.lastOrNull { it.tipo == TipoParada.ENTREGA }?.let { "Entrega: ${it.endereco}" + if (entregas > 1) " (+${entregas - 1})" else "" },
+            c.empresaNome?.let { "Cliente: $it" },
+        ).joinToString("\n") else null
+
+        val pessoa = Person.Builder()
+            .setName(titulo)
+            .setIcon(PwNotificacoes.logoRedonda(ctx)?.let { IconCompat.createWithBitmap(it) })
+            .setImportant(true)
+            .build()
+        val b = PwNotificacoes.base(ctx, CANAL_OFERTA)
+            .setContentTitle(titulo)
+            .setContentText(texto)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_CALL)
-            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setFullScreenIntent(pi, true)
             .setContentIntent(pi)
-            .setAutoCancel(true)
             .setOngoing(true)
-            .setTimeoutAfter(32_000)
-            .build()
+            .setColorized(true)
+            .setTimeoutAfter(((oferta?.prazoMillis ?: (System.currentTimeMillis() + 30_000)) - System.currentTimeMillis() + 2_000).coerceAtLeast(5_000))
+        if (oferta != null) b.setWhen(oferta.prazoMillis).setShowWhen(true).setUsesChronometer(true).setChronometerCountDown(true)
+        if (id != null) {
+            b.setStyle(
+                NotificationCompat.CallStyle.forIncomingCall(pessoa, recusar, aceitar)
+                    .setAnswerButtonColorHint(0xFF22C55E.toInt())
+                    .setDeclineButtonColorHint(0xFFEF4444.toInt())
+                    .setVerificationText(detalhes ?: texto)
+            )
+        } else {
+            b.setStyle(NotificationCompat.BigTextStyle().bigText(detalhes ?: texto))
+        }
+        val n = b.build()
         n.flags = n.flags or Notification.FLAG_INSISTENT // repete o som até responder
         ctx.getSystemService(NotificationManager::class.java)?.notify(NOTIF_OFERTA, n)
     }
@@ -98,20 +128,45 @@ object Alarme {
         ctx.getSystemService(NotificationManager::class.java)?.cancel(NOTIF_OFERTA)
     }
 
-    fun avisar(ctx: Context, titulo: String, texto: String) {
-        criarCanais(ctx)
-        val abrir = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.let {
-            PendingIntent.getActivity(ctx, 11, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    fun avisar(ctx: Context, titulo: String, texto: String, longo: String? = null) {
+        PwNotificacoes.aviso(ctx, NOTIF_AVISO, PwNotificacoes.CANAL_AVISOS, titulo, texto, longo)
+    }
+
+    /** Notificações das corridas planejadas (vêm do servidor com o tipo e o horário). */
+    fun planejada(ctx: Context, tipo: String, corridaId: String?, agendadaPara: String?) {
+        val quando = agendadaPara?.let { instante(it) }?.let { formatarQuando(it) }
+        val abrir = PwNotificacoes.abrirApp(ctx, 3100 + (corridaId?.hashCode() ?: 0) % 500, "planejadas")
+        val (titulo, texto, longo) = when (tipo) {
+            "planejada_nova" -> Triple("Nova corrida planejada", quando?.let { "Para $it · reserve antes dos outros" } ?: "Reserve antes dos outros",
+                "Uma corrida com hora marcada está livre${quando?.let { " para $it" } ?: ""}. Abra o app para ver o valor e reservar.")
+            "planejada_voltou" -> Triple("Corrida planejada livre de novo", quando?.let { "Para $it · alguém desistiu" } ?: "Alguém desistiu",
+                "Quem tinha reservado desistiu. Ela está livre de novo${quando?.let { " para $it" } ?: ""}.")
+            "planejada_reservada" -> Triple("Corrida reservada para você", quando?.let { "Começa $it" } ?: "Veja os detalhes no app",
+                "O gestor reservou uma corrida planejada para você${quando?.let { " ($it)" } ?: ""}. Você pode iniciar pouco antes do horário.")
+            "planejada_liberada" -> Triple("Reserva removida", "O gestor tirou uma corrida planejada de você", null)
+            "planejada_reagendada" -> Triple("Horário mudou", quando?.let { "Sua corrida planejada agora é $it" } ?: "Sua corrida planejada mudou de horário", null)
+            "planejada_lembrete" -> Triple("Sua corrida começa em breve", quando?.let { "Às ${it.substringAfter(" às ")} · prepare-se" } ?: "Prepare-se",
+                "Lembrete da sua corrida planejada${quando?.let { " ($it)" } ?: ""}. Toque em Iniciar quando estiver pronto.")
+            "planejada_atrasada" -> Triple("Corrida planejada atrasada", "Já passou do horário e ela ainda não foi iniciada", "Inicie agora ou fale com o gestor.")
+            else -> return
         }
-        val n = NotificationCompat.Builder(ctx, CANAL_AVISOS)
-            .setSmallIcon(R.drawable.ic_notif_corrida)
-            .setColor(0xFFD4AF37.toInt())
-            .setContentTitle(titulo)
-            .setContentText(texto)
-            .setAutoCancel(true)
-            .setContentIntent(abrir)
-            .build()
-        ctx.getSystemService(NotificationManager::class.java)?.notify(NOTIF_AVISO, n)
+        val ver = NotificationCompat.Action.Builder(null, if (tipo == "planejada_lembrete" || tipo == "planejada_atrasada") "Abrir e iniciar" else "Ver planejadas", abrir).build()
+        PwNotificacoes.aviso(
+            ctx, 3000 + ((corridaId?.hashCode() ?: tipo.hashCode()) and 0x3FF),
+            if (tipo == "planejada_atrasada") PwNotificacoes.CANAL_AVISOS else PwNotificacoes.CANAL_PLANEJADAS,
+            titulo, texto, longo, abrir, listOf(ver),
+        )
+    }
+
+    private fun formatarQuando(ms: Long): String {
+        val z = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault())
+        val hoje = java.time.LocalDate.now()
+        val dia = when (z.toLocalDate()) {
+            hoje -> "hoje"
+            hoje.plusDays(1) -> "amanhã"
+            else -> z.format(java.time.format.DateTimeFormatter.ofPattern("EEE, dd/MM", java.util.Locale.forLanguageTag("pt-BR")))
+        }
+        return "$dia às ${z.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))}"
     }
 
     /** Toca o som de oferta uma vez, sem abrir nada. */
@@ -119,7 +174,8 @@ object Alarme {
         criarCanais(ctx)
         val n = NotificationCompat.Builder(ctx, CANAL_OFERTA)
             .setSmallIcon(R.drawable.ic_notif_corrida)
-            .setColor(0xFFD4AF37.toInt())
+            .setColor(PwNotificacoes.cor)
+            .setLargeIcon(PwNotificacoes.logoRedonda(ctx))
             .setContentTitle("Teste de som")
             .setContentText("É assim que uma nova corrida vai tocar.")
             .setAutoCancel(true)

@@ -64,6 +64,7 @@ dependencies {
     implementation(project(":feature:tracking"))
     implementation(project(":feature:corridas"))
     implementation(project(":feature:perfil"))
+    implementation(project(":feature:gestor"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     debugImplementation(libs.androidx.compose.ui.tooling)

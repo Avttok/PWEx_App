@@ -101,7 +101,7 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
             Column(Modifier.weight(1f)) {
                 Text("NOVA CORRIDA", style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 22.sp, letterSpacing = 1.5.sp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("#${corrida.numero}" + (corrida.empresaNome?.let { " · $it" } ?: ""), color = c.texto2, fontFamily = Archivo)
+                    Text(corrida.numeroExibicao + (corrida.empresaNome?.let { " · $it" } ?: ""), color = c.texto2, fontFamily = Archivo)
                     if (corrida.teste) {
                         Spacer(Modifier.width(8.dp))
                         PwSelo("TESTE", c.violeta, icone = PwIcones.FlaskConical)
@@ -146,6 +146,7 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
                         Column {
                             Text(if (coleta) "COLETA" else "ENTREGA", color = if (coleta) c.ouro else c.texto2, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = Archivo)
                             Text(p.endereco, style = MaterialTheme.typography.bodyMedium, color = c.texto)
+                            ReferenciasParada(p.referencias)
                         }
                     }
                 }

@@ -146,7 +146,7 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "CORRIDA #${corrida.numero}", maxLines = 1, softWrap = false,
+                            "CORRIDA ${corrida.numeroExibicao}", maxLines = 1, softWrap = false,
                             style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 15.sp, letterSpacing = 1.sp),
                         )
                         if (corrida.teste) {
@@ -203,6 +203,7 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
                     Text(parada.endereco, style = MaterialTheme.typography.titleLarge, color = c.texto)
                     parada.contatoNome?.let { Text("Contato: $it", color = c.texto2) }
                     parada.instrucoes?.let { Text(it, color = c.ouro) }
+                    ReferenciasParada(parada.referencias)
                     parada.contatoTelefone?.let { tel ->
                         Spacer(Modifier.height(10.dp))
                         PwBotaoVidro("Ligar para $tel", onClick = { ligar(ctx, tel) }, icone = PwIcones.Phone)

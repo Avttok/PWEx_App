@@ -16,6 +16,11 @@ import android.os.Build
 import android.os.IBinder
 import android.os.Looper
 import androidx.core.app.NotificationCompat
+import com.pwexpress.core.notificacoes.CorridaEmCurso
+import com.pwexpress.core.notificacoes.NotificacaoAoVivo
+import com.pwexpress.core.notificacoes.PwNotificacoes
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import androidx.core.app.ServiceCompat
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -42,6 +47,7 @@ class TrackingService : Service() {
     private var ultimoEnviado: Location? = null
     private var ultimoEnviadoEm = 0L
     private var redeCallback: ConnectivityManager.NetworkCallback? = null
+    private val escopo = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main)
 
     private val callback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
@@ -56,6 +62,15 @@ class TrackingService : Service() {
         fused = LocationServices.getFusedLocationProviderClient(this)
         criarCanal()
         registrarRede()
+        // corrida em andamento: a notificação fixa vira a notificação "ao vivo" da corrida
+        escopo.launch {
+            CorridaEmCurso.resumo.collect {
+                val modo = Tracking.prefs.modo
+                if (modo != Modo.OFFLINE) runCatching {
+                    getSystemService(NotificationManager::class.java)?.notify(NOTIF_ID, notificacao(modo, Tracking.prefs.economia))
+                }
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -85,6 +100,7 @@ class TrackingService : Service() {
     }
 
     override fun onDestroy() {
+        escopo.cancel()
         fused.removeLocationUpdates(callback)
         redeCallback?.let {
             runCatching { getSystemService(ConnectivityManager::class.java)?.unregisterNetworkCallback(it) }
@@ -174,7 +190,9 @@ class TrackingService : Service() {
     // ------------------------------------------------------------------ notificação
 
     private fun criarCanal() {
-        val canal = NotificationChannel(CANAL, "Rastreamento", NotificationManager.IMPORTANCE_LOW).apply {
+        PwNotificacoes.criarCanais(this)
+        val canal = NotificationChannel(CANAL, "Status e GPS", NotificationManager.IMPORTANCE_LOW).apply {
+            group = PwNotificacoes.GRUPO_SISTEMA
             description = "Aviso fixo enquanto o PW Express envia sua localização"
             setShowBadge(false)
         }
@@ -182,25 +200,24 @@ class TrackingService : Service() {
     }
 
     private fun notificacao(modo: Modo, economia: Boolean): Notification {
-        val texto = when (modo) {
-            Modo.EM_CORRIDA -> "Em corrida · posição a cada ${Intervalos.corridaMs(economia) / 1000} s" +
-                if (economia) " (economia)" else ""
-            Modo.DISPONIVEL -> "Disponível · aguardando corridas"
-            Modo.OFFLINE -> "Encerrando…"
+        val abrir = PwNotificacoes.abrirApp(this, 0)
+        val resumo = CorridaEmCurso.resumo.value
+        if (modo == Modo.EM_CORRIDA && resumo != null) {
+            return NotificacaoAoVivo.montar(this, resumo, abrir,
+                extra = "GPS a cada ${Intervalos.corridaMs(economia) / 1000} s" + if (economia) " (economia)" else "")
         }
-        val abrir = packageManager.getLaunchIntentForPackage(packageName)?.let {
-            PendingIntent.getActivity(
-                this, 0, it,
-                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-            )
+        val (titulo, texto) = when (modo) {
+            Modo.EM_CORRIDA -> "Em corrida" to "Enviando sua posição a cada ${Intervalos.corridaMs(economia) / 1000} s" + if (economia) " (economia de bateria)" else ""
+            Modo.DISPONIVEL -> "Disponível" to "Aguardando corridas… você será avisado assim que chegar uma."
+            Modo.OFFLINE -> "PW Express" to "Encerrando…"
         }
-        return NotificationCompat.Builder(this, CANAL)
-            .setSmallIcon(R.drawable.ic_notif_pwex)
-            .setColor(0xFFD4AF37.toInt())
-            .setContentTitle("PW Express")
+        return PwNotificacoes.base(this, CANAL)
+            .setContentTitle(titulo)
             .setContentText(texto)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(texto))
             .setOngoing(true)
             .setOnlyAlertOnce(true)
+            .setSilent(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .setContentIntent(abrir)

@@ -95,7 +95,7 @@ object Perfis {
         if (!r.ok) error(
             when {
                 r.corpo.contains("conclua_a_corrida_antes") -> "Conclua a corrida (ou a oferta) antes de trocar o modo."
-                r.corpo.contains("apenas_gestor_motoboy") -> "Só contas gestor + motoboy podem usar o modo teste."
+                r.corpo.contains("apenas_gestor") -> "Só gestores podem usar o modo teste."
                 else -> "Erro (${r.codigo})."
             },
         )

@@ -52,6 +52,8 @@ data class PwPaleta(
     val verde: Color,
     val vermelho: Color,
     val violeta: Color,
+    /** Corridas planejadas (hora marcada). */
+    val azul: Color = Color(0xFF60A5FA),
     val brilho1: Color,
     val brilho2: Color,
 ) {
@@ -64,7 +66,7 @@ data class PwPaleta(
 private val Noturno = PwPaleta(
     escuro = true,
     fundo = Color(0xFF08080A), fundo2 = Color(0xFF0F0F12),
-    vidro = Color(0x9E16161A), vidroForte = Color(0xD11A1A1F), vidroSutil = Color(0x0AFFFFFF),
+    vidro = Color(0xD6121216), vidroForte = Color(0xED18181D), vidroSutil = Color(0x0AFFFFFF),
     campo = Color(0x59000000), borda = Color(0x14FFFFFF), bordaForte = Color(0x29FFFFFF), reflexo = Color(0x1AFFFFFF),
     texto = Color(0xFFF5F2EA), texto2 = Color(0xFFA9A497), texto3 = Color(0xFF6F6B62),
     ouro = Color(0xFFD4AF37), ouroClaro = Color(0xFFF3D77E), ouroEscuro = Color(0xFF8F7019), sobreOuro = Color(0xFF120F06),
@@ -75,7 +77,7 @@ private val Noturno = PwPaleta(
 private val Claro = PwPaleta(
     escuro = false,
     fundo = Color(0xFFF6F2E9), fundo2 = Color(0xFFEFE9DC),
-    vidro = Color(0x9EFFFFFF), vidroForte = Color(0xDBFFFFFF), vidroSutil = Color(0x08140F04),
+    vidro = Color(0xDBFFFFFF), vidroForte = Color(0xF2FFFFFF), vidroSutil = Color(0x08140F04),
     campo = Color(0xBFFFFFFF), borda = Color(0x1A28200A), bordaForte = Color(0x3328200A), reflexo = Color(0xE6FFFFFF),
     texto = Color(0xFF16130C), texto2 = Color(0xFF6B6455), texto3 = Color(0xFF9A9384),
     ouro = Color(0xFFB8901F), ouroClaro = Color(0xFFE2BD52), ouroEscuro = Color(0xFF7D6110), sobreOuro = Color(0xFFFFFFFF),

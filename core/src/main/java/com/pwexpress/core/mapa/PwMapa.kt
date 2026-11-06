@@ -4,6 +4,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -36,6 +39,11 @@ import org.maplibre.geojson.Point
 /** Um ponto no mapa (parada da corrida). */
 data class PinoMapa(val lat: Double, val lng: Double, val coleta: Boolean, val atual: Boolean, val concluida: Boolean)
 
+/** Marcador livre (ex.: motoboy no mapa do gestor): cor em hex e rótulo curto. */
+data class MarcadorMapa(val id: String, val lat: Double, val lng: Double, val cor: String, val rotulo: String)
+
+private fun Color.hex(): String = String.format("#%06X", 0xFFFFFF and toArgb())
+
 private const val ESTILO_CLARO = "https://tiles.openfreemap.org/styles/positron"
 private const val ESTILO_ESCURO = "https://tiles.openfreemap.org/styles/dark"
 
@@ -49,9 +57,15 @@ fun PwMapa(
     rota: String?,
     minhaPosicao: Pair<Double, Double>?,
     modifier: Modifier = Modifier,
+    marcadores: List<MarcadorMapa> = emptyList(),
+    onToque: ((Double, Double) -> Unit)? = null,
+    /** Mude este valor para o mapa enquadrar tudo de novo. */
+    enquadrar: Any? = null,
 ) {
     val ctx = LocalContext.current
     val escuro = Pw.cores.escuro
+    val ouro = Pw.cores.ouro.hex()
+    val toque by rememberUpdatedState(onToque)
     val ciclo = LocalLifecycleOwner.current
 
     val mapView = remember {
@@ -83,7 +97,9 @@ fun PwMapa(
     }
 
     // estilo (recarrega ao trocar o tema)
-    LaunchedEffect(escuro) {
+    LaunchedEffect(enquadrar) { enquadrou = false }
+
+    LaunchedEffect(escuro, ouro) {
         estilo = null
         enquadrou = false
         mapView.getMapAsync { m ->
@@ -91,15 +107,16 @@ fun PwMapa(
             m.uiSettings.isCompassEnabled = false
             m.uiSettings.isRotateGesturesEnabled = false
             m.uiSettings.isTiltGesturesEnabled = false
+            m.addOnMapClickListener { p -> toque?.let { it(p.latitude, p.longitude); true } ?: false }
             m.setStyle(Style.Builder().fromUri(if (escuro) ESTILO_ESCURO else ESTILO_CLARO)) { s ->
-                criarCamadas(s, escuro)
+                criarCamadas(s, escuro, ouro)
                 estilo = s
             }
         }
     }
 
     // dados
-    LaunchedEffect(estilo, paradas, rota, minhaPosicao) {
+    LaunchedEffect(estilo, paradas, rota, minhaPosicao, marcadores) {
         val s = estilo ?: return@LaunchedEffect
         val m = mapa ?: return@LaunchedEffect
 
@@ -115,7 +132,7 @@ fun PwMapa(
             FeatureCollection.fromFeatures(
                 paradas.map { p ->
                     Feature.fromGeometry(Point.fromLngLat(p.lng, p.lat)).apply {
-                        addStringProperty("cor", if (p.coleta) "#D4AF37" else "#111114")
+                        addStringProperty("cor", if (p.coleta) ouro else "#111114")
                         addNumberProperty("raio", if (p.atual) 11 else 7)
                         addNumberProperty("opacidade", if (p.concluida) 0.45 else 1.0)
                     }
@@ -129,8 +146,20 @@ fun PwMapa(
             ),
         )
 
+        (s.getSource("marcadores") as? GeoJsonSource)?.setGeoJson(
+            FeatureCollection.fromFeatures(
+                marcadores.map { mk ->
+                    Feature.fromGeometry(Point.fromLngLat(mk.lng, mk.lat)).apply {
+                        addStringProperty("cor", mk.cor)
+                        addStringProperty("rotulo", mk.rotulo)
+                    }
+                },
+            ),
+        )
+
         if (!enquadrou) {
-            val pontos = paradas.map { LatLng(it.lat, it.lng) } + listOfNotNull(minhaPosicao?.let { LatLng(it.first, it.second) })
+            val pontos = paradas.map { LatLng(it.lat, it.lng) } + listOfNotNull(minhaPosicao?.let { LatLng(it.first, it.second) }) +
+                marcadores.map { LatLng(it.lat, it.lng) }
             when {
                 pontos.size >= 2 -> m.easeCamera(
                     CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(pontos).build(), 120),
@@ -145,8 +174,9 @@ fun PwMapa(
     AndroidView(factory = { mapView }, modifier = modifier)
 }
 
-private fun criarCamadas(s: Style, escuro: Boolean) {
+private fun criarCamadas(s: Style, escuro: Boolean, ouro: String) {
     adicionarEstabelecimentos(s, escuro)
+    s.addSource(GeoJsonSource("marcadores"))
     s.addSource(GeoJsonSource("rota"))
     s.addSource(GeoJsonSource("paradas"))
     s.addSource(GeoJsonSource("eu"))
@@ -162,7 +192,7 @@ private fun criarCamadas(s: Style, escuro: Boolean) {
     )
     s.addLayer(
         LineLayer("rota", "rota").withProperties(
-            PropertyFactory.lineColor("#D4AF37"),
+            PropertyFactory.lineColor(ouro),
             PropertyFactory.lineWidth(5.5f),
             PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
             PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
@@ -180,7 +210,7 @@ private fun criarCamadas(s: Style, escuro: Boolean) {
     s.addLayer(
         CircleLayer("eu-halo", "eu").withProperties(
             PropertyFactory.circleRadius(20f),
-            PropertyFactory.circleColor("#D4AF37"),
+            PropertyFactory.circleColor(ouro),
             PropertyFactory.circleOpacity(0.22f),
         ),
     )
@@ -190,6 +220,27 @@ private fun criarCamadas(s: Style, escuro: Boolean) {
             PropertyFactory.circleColor("#F3D77E"),
             PropertyFactory.circleStrokeColor("#0A0A0A"),
             PropertyFactory.circleStrokeWidth(3f),
+        ),
+    )
+    s.addLayer(
+        CircleLayer("marcadores", "marcadores").withProperties(
+            PropertyFactory.circleRadius(13f),
+            PropertyFactory.circleColor(Expression.toColor(Expression.get("cor"))),
+            PropertyFactory.circleStrokeColor(if (escuro) "#0A0A0A" else "#FFFFFF"),
+            PropertyFactory.circleStrokeWidth(3f),
+        ),
+    )
+    s.addLayer(
+        SymbolLayer("marcadores-rotulo", "marcadores").withProperties(
+            PropertyFactory.textField(Expression.get("rotulo")),
+            PropertyFactory.textFont(arrayOf("Noto Sans Regular")),
+            PropertyFactory.textSize(12f),
+            PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
+            PropertyFactory.textOffset(arrayOf(0f, 1.3f)),
+            PropertyFactory.textColor(if (escuro) "#F5F2EA" else "#16130C"),
+            PropertyFactory.textHaloColor(if (escuro) "#0B0B0D" else "#FFFFFF"),
+            PropertyFactory.textHaloWidth(1.6f),
+            PropertyFactory.textAllowOverlap(true),
         ),
     )
 }

@@ -12,30 +12,41 @@ class HttpResposta(val codigo: Int, val corpo: String) {
     val ok: Boolean get() = codigo in 200..299
 }
 
-/** Cliente HTTP mínimo para a API REST do Supabase (Auth + PostgREST). */
+/** Cliente HTTP mínimo para a API REST do Supabase (Auth + PostgREST + Storage) e para o site. */
 class SupabaseHttp(private val baseUrl: String, private val apiKey: String) {
 
-    private val client = OkHttpClient.Builder()
+    val client: OkHttpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
-        .writeTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(20, TimeUnit.SECONDS)
-        .callTimeout(40, TimeUnit.SECONDS)
+        .writeTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .callTimeout(60, TimeUnit.SECONDS)
         .build()
 
     private val tipoJson = "application/json; charset=utf-8".toMediaType()
 
     /** Lança IOException quando não há conexão. */
     suspend fun post(caminho: String, corpo: String, bearer: String? = null): HttpResposta =
-        withContext(Dispatchers.IO) {
-            val builder = Request.Builder()
-                .url(baseUrl + caminho)
-                .post(corpo.toRequestBody(tipoJson))
-                .header("apikey", apiKey)
-            if (bearer != null) builder.header("Authorization", "Bearer $bearer")
-            client.newCall(builder.build()).execute().use { r ->
-                HttpResposta(r.code, r.body?.string().orEmpty())
-            }
-        }
+        requisitar("POST", caminho, corpo, bearer)
+
+    /**
+     * Requisição genérica. `caminho` relativo vai para o Supabase; URL completa (https://…) vai direto
+     * (o site do gestor, por exemplo). Lança IOException sem conexão.
+     */
+    suspend fun requisitar(
+        metodo: String,
+        caminho: String,
+        corpo: String? = null,
+        bearer: String? = null,
+        cabecalhos: Map<String, String> = emptyMap(),
+    ): HttpResposta = withContext(Dispatchers.IO) {
+        val url = if (caminho.startsWith("http")) caminho else baseUrl + caminho
+        val body = corpo?.toRequestBody(tipoJson)
+        val b = Request.Builder().url(url).method(metodo, if (metodo == "GET") null else body ?: "".toRequestBody(tipoJson))
+        if (!caminho.startsWith("http")) b.header("apikey", apiKey)
+        if (bearer != null) b.header("Authorization", "Bearer $bearer")
+        cabecalhos.forEach { (k, v) -> b.header(k, v) }
+        client.newCall(b.build()).execute().use { r -> HttpResposta(r.code, r.body?.string().orEmpty()) }
+    }
 
     /** Envia bytes (ex.: foto) para o Storage. Lança IOException sem conexão. */
     suspend fun postBytes(caminho: String, bytes: ByteArray, tipo: String, bearer: String): HttpResposta =

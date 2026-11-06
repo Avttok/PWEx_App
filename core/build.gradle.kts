@@ -20,6 +20,8 @@ android {
         minSdk = 26
         buildConfigField("String", "SUPABASE_URL", "\"${pwexConfig("pwex.supabaseUrl", "PWEX_SUPABASE_URL")}\"")
         buildConfigField("String", "SUPABASE_KEY", "\"${pwexConfig("pwex.supabaseKey", "PWEX_SUPABASE_KEY")}\"")
+        buildConfigField("String", "SITE_URL", "\"${pwexConfig("pwex.siteUrl", "PWEX_SITE_URL")}\"")
+        buildConfigField("String", "GITHUB_REPO", "\"${pwexConfig("pwex.githubRepo", "PWEX_GITHUB_REPO")}\"")
     }
 
     buildFeatures {
@@ -46,7 +48,7 @@ dependencies {
     api(libs.androidx.core.ktx)
     api(libs.kotlinx.coroutines.android)
     api(libs.kotlinx.serialization.json)
-    implementation(libs.okhttp)
+    api(libs.okhttp)
     api(libs.maplibre.android)
     api(libs.coil.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)

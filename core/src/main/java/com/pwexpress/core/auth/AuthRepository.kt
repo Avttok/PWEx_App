@@ -131,7 +131,12 @@ class AuthRepository(
         )
     }
 
-    private fun mensagemErro(r: HttpResposta): String = when (r.codigo) {
+    private fun mensagemErro(r: HttpResposta): String = when {
+        r.corpo.contains("banned", ignoreCase = true) -> "Seu acesso foi bloqueado pelo gestor. Fale com ele para liberar."
+        else -> mensagemPorCodigo(r)
+    }
+
+    private fun mensagemPorCodigo(r: HttpResposta): String = when (r.codigo) {
         400 -> "E-mail ou senha incorretos."
         422 -> "E-mail ou senha em formato inválido."
         429 -> "Muitas tentativas. Aguarde um minuto e tente de novo."

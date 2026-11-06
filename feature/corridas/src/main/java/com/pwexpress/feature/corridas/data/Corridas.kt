@@ -75,6 +75,50 @@ object Corridas {
         _oferta.value = null
         _ativa.value = null
         _carregou.value = false
+        _planejadas.value = emptyList()
+    }
+
+    // ------------------------------------------------------------------ planejadas (hora marcada)
+
+    private val _planejadas = MutableStateFlow<List<Corrida>>(emptyList())
+    /** Livres para reservar (do meu modo) + as que eu reservei, por horário. */
+    val planejadas: StateFlow<List<Corrida>> = _planejadas.asStateFlow()
+
+    suspend fun carregarPlanejadas(): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar("corridas_planejadas", JsonObject(emptyMap()))
+        if (!r.ok) throw Exception(traduzir(r))
+        _planejadas.value = (r.json() as? kotlinx.serialization.json.JsonArray)?.map { it.paraCorrida() }.orEmpty()
+            .sortedBy { it.agendadaPara ?: Long.MAX_VALUE }
+        Unit
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
+    suspend fun reservar(corridaId: String): Result<Unit> = acaoPlanejada("reservar_corrida", buildJsonObject { put("p_corrida", corridaId) })
+    suspend fun cancelarReserva(corridaId: String, motivo: String?): Result<Unit> =
+        acaoPlanejada("cancelar_reserva", buildJsonObject { put("p_corrida", corridaId); motivo?.let { put("p_motivo", it) } })
+
+    /** Começa a corrida reservada: vira a corrida ativa. */
+    suspend fun iniciarPlanejada(corridaId: String): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar("iniciar_planejada", buildJsonObject { put("p_corrida", corridaId) })
+        if (!r.ok) throw Exception(traduzir(r))
+        _ativa.value = r.json()?.paraCorrida()
+        carregarPlanejadas()
+        Unit
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
+    private suspend fun acaoPlanejada(funcao: String, args: JsonObject): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar(funcao, args)
+        if (!r.ok) throw Exception(traduzir(r))
+        carregarPlanejadas()
+        Unit
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
+    /** Resposta vinda da notificação (o app pode nem estar aberto). */
+    suspend fun responderPorId(ofertaId: String, aceitar: Boolean): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar("responder_oferta", buildJsonObject { put("p_oferta", ofertaId); put("p_aceitar", aceitar) })
+        if (_oferta.value?.id == ofertaId) _oferta.value = null
+        if (!r.ok) throw Exception(traduzir(r))
+        if (aceitar) _ativa.value = r.json()?.paraCorrida()
+        Unit
     }
 
     // ------------------------------------------------------------------ oferta
@@ -185,6 +229,15 @@ object Corridas {
         "falta_a_foto" to "Tire a foto do comprovante.",
         "falta_a_assinatura" to "Colete a assinatura.",
         "sem_localizacao" to "Não consegui sua localização. Ative o GPS e tente de novo.",
+        "corrida_ja_reservada" to "Outro motoboy reservou essa corrida antes.",
+        "modo_teste_diferente" to "Essa corrida é de outro modo (teste/real).",
+        "horario_passou" to "O horário dessa corrida já passou.",
+        "limite_de_reservas" to "Você já tem o máximo de reservas permitido.",
+        "conflito_de_horario" to "Você já tem uma reserva nesse horário.",
+        "reserva_nao_encontrada" to "Essa reserva não é mais sua (o gestor pode ter mudado).",
+        "prazo_de_cancelamento_passou" to "O prazo para desistir já passou. Fale com o gestor.",
+        "ainda_nao_pode_iniciar" to "Ainda é cedo para iniciar essa corrida.",
+        "apenas_motoboy" to "Só motoboys podem fazer isso.",
     )
 
     private fun traduzir(r: HttpResposta): String {

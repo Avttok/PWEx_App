@@ -27,6 +27,11 @@
             android:taskAffinity=""
             android:theme="@style/Theme.PWExpress.Oferta" />
 
+        <!-- botão "Recusar" da notificação da oferta -->
+        <receiver
+            android:name="com.pwexpress.feature.corridas.push.OfertaReceiver"
+            android:exported="false" />
+
         <!-- fotos de comprovante tiradas pela câmera -->
         <provider
             android:name="androidx.core.content.FileProvider"

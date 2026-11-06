@@ -36,6 +36,8 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import com.pwexpress.core.R
@@ -198,25 +200,48 @@ fun BotaoTema(modifier: Modifier = Modifier) {
 
 // ------------------------------------------------------------------ marca e detalhes
 
-/** Logo oficial (selo) + "PW EXPRESS". Com `soSelo`, mostra só a imagem (ela já traz o nome). */
+/** Matriz do filtro "hue-rotate" do CSS: gira as cores da logo (dourado → violeta no modo teste). */
+private fun girarMatiz(graus: Float): ColorMatrix {
+    val r = Math.toRadians(graus.toDouble())
+    val cos = kotlin.math.cos(r).toFloat()
+    val sin = kotlin.math.sin(r).toFloat()
+    return ColorMatrix(floatArrayOf(
+        0.213f + cos * 0.787f - sin * 0.213f, 0.715f - cos * 0.715f - sin * 0.715f, 0.072f - cos * 0.072f + sin * 0.928f, 0f, 0f,
+        0.213f - cos * 0.213f + sin * 0.143f, 0.715f + cos * 0.285f + sin * 0.140f, 0.072f - cos * 0.072f - sin * 0.283f, 0f, 0f,
+        0.213f - cos * 0.213f - sin * 0.787f, 0.715f - cos * 0.715f + sin * 0.715f, 0.072f + cos * 0.928f + sin * 0.072f, 0f, 0f,
+        0f, 0f, 0f, 1f, 0f,
+    ))
+}
+
+/** Logo oficial; no modo teste fica violeta, como no site. */
+@Composable
+fun PwSeloLogo(tamanho: Dp, modifier: Modifier = Modifier, descricao: String? = "PW Express · Agilidade e segurança") {
+    val teste by TemaApp.modoTeste.collectAsState()
+    Image(
+        painterResource(R.drawable.pwex_logo), descricao, modifier.size(tamanho),
+        colorFilter = if (teste) ColorFilter.colorMatrix(girarMatiz(215f)) else null,
+    )
+}
+
+/** Logo oficial (selo) + "PW Express". Com `soSelo`, mostra só a imagem (ela já traz o nome). */
 @Composable
 fun PwLogo(modifier: Modifier = Modifier, tamanho: Int = 26, soSelo: Boolean = false) {
     val c = Pw.cores
     if (soSelo) {
-        Image(painterResource(R.drawable.pwex_logo), "PW Express · Agilidade e segurança", modifier.size(tamanho.dp))
+        PwSeloLogo(tamanho.dp, modifier)
         return
     }
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Image(painterResource(R.drawable.pwex_logo), null, Modifier.size((tamanho * 1.6f).dp))
+        PwSeloLogo((tamanho * 1.6f).dp, descricao = null)
         Spacer(Modifier.width((tamanho * 0.4f).dp))
         Text("PW", style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = tamanho.sp))
         Text(
-            "  EXPRESS",
-            color = c.texto2,
+            " Express",
+            color = c.texto,
             fontFamily = Archivo,
-            fontWeight = FontWeight.Light,
-            fontSize = (tamanho * 0.5f).sp,
-            letterSpacing = (tamanho * 0.16f).sp,
+            fontWeight = FontWeight.Medium,
+            fontSize = (tamanho * 0.78f).sp,
+            letterSpacing = (tamanho * 0.02f).sp,
         )
     }
 }

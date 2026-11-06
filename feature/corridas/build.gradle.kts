@@ -30,4 +30,5 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.messaging)
+    implementation(libs.play.services.location)
 }

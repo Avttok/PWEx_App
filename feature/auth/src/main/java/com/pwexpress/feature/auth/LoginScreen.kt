@@ -7,11 +7,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -32,7 +29,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.pwexpress.core.PwCore
 import com.pwexpress.core.config.PwConfig
-import com.pwexpress.core.designsystem.PwCores
+import com.pwexpress.core.designsystem.Pw
+import com.pwexpress.core.designsystem.PwBotaoOuro
+import com.pwexpress.core.designsystem.PwIcones
 import com.pwexpress.core.designsystem.PwLogo
 import kotlinx.coroutines.launch
 
@@ -64,13 +63,9 @@ fun LoginScreen(modifier: Modifier = Modifier) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        PwLogo(tamanho = 40)
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "App do motoboy",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        PwLogo(tamanho = 180, soSelo = true)
+        Spacer(Modifier.height(10.dp))
+        Text("App do motoboy", style = MaterialTheme.typography.titleMedium, color = Pw.cores.texto2)
         Spacer(Modifier.height(40.dp))
 
         if (!PwConfig.configurado) {
@@ -108,16 +103,11 @@ fun LoginScreen(modifier: Modifier = Modifier) {
         }
 
         Spacer(Modifier.height(24.dp))
-        Button(
+        PwBotaoOuro(
+            if (carregando) "Entrando…" else "Entrar",
             onClick = { entrar() },
-            enabled = podeEntrar,
-            modifier = Modifier.fillMaxWidth().height(54.dp),
-        ) {
-            if (carregando) {
-                CircularProgressIndicator(Modifier.size(22.dp), color = PwCores.Preto, strokeWidth = 2.dp)
-            } else {
-                Text("Entrar")
-            }
-        }
+            habilitado = podeEntrar,
+            icone = PwIcones.ChevronsRight,
+        )
     }
 }

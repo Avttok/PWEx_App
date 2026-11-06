@@ -6,7 +6,10 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -20,14 +23,13 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,118 +38,204 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.pwexpress.core.designsystem.Archivo
+import com.pwexpress.core.designsystem.ArchivoLargo
+import com.pwexpress.core.designsystem.Pw
+import com.pwexpress.core.designsystem.PwBotaoOuro
+import com.pwexpress.core.designsystem.PwBotaoVidro
 import com.pwexpress.core.designsystem.PwCartao
-import com.pwexpress.core.designsystem.PwCores
+import com.pwexpress.core.designsystem.PwIcones
 import com.pwexpress.core.designsystem.PwPonto
 import com.pwexpress.core.designsystem.PwRotulo
+import com.pwexpress.core.designsystem.PwSelo
+import com.pwexpress.core.mapa.PinoMapa
+import com.pwexpress.core.mapa.PwMapa
 import com.pwexpress.feature.corridas.data.Corrida
 import com.pwexpress.feature.corridas.data.Corridas
 import com.pwexpress.feature.corridas.data.Parada
+import com.pwexpress.feature.corridas.data.Posicao
+import com.pwexpress.feature.corridas.data.PosicaoAtual
 import com.pwexpress.feature.corridas.data.StatusParada
 import com.pwexpress.feature.corridas.data.TipoParada
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
 
-/** Corrida em andamento: uma parada por vez, na ordem. */
+/**
+ * Corrida em andamento: mapa com a rota dourada, uma parada por vez.
+ * [admin] = conta gestor + motoboy (pode ignorar a localização em corridas de teste).
+ */
 @Composable
-fun CorridaScreen(corrida: Corrida, modifier: Modifier = Modifier) {
+fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier = Modifier) {
     val ctx = LocalContext.current
+    val c = Pw.cores
     val scope = rememberCoroutineScope()
     val parada = corrida.paradaAtual
     var enviando by remember { mutableStateOf(false) }
     var erro by remember { mutableStateOf<String?>(null) }
     var comprovanteAberto by remember { mutableStateOf(false) }
+    var posicao by remember { mutableStateOf<Posicao?>(null) }
 
-    fun avancar(acao: String) {
+    // posição ao vivo enquanto a tela está aberta
+    LaunchedEffect(Unit) {
+        while (true) {
+            PosicaoAtual.obter(ctx, 6_000)?.let { posicao = it }
+            delay(5_000)
+        }
+    }
+
+    val distancia = if (parada != null) posicao?.let { PosicaoAtual.distanciaM(it, parada.lat, parada.lng) } else null
+    val tolerancia = (posicao?.precisaoM ?: 0f).coerceAtMost(80f)
+    val noLocal = !corrida.exigirNoLocal || (distancia != null && distancia - tolerancia <= corrida.raioChegadaM)
+    val podeIgnorar = admin && corrida.teste && corrida.exigirNoLocal
+
+    fun avancar(acao: String, ignorar: Boolean = false) {
         val p = parada ?: return
         enviando = true
         erro = null
         scope.launch {
-            Corridas.avancar(p.id, acao).onFailure { erro = it.message }
+            val agora = PosicaoAtual.obter(ctx, 8_000) ?: posicao
+            posicao = agora ?: posicao
+            Corridas.avancar(p.id, acao, posicao = agora, ignorarLocal = ignorar).onFailure { erro = it.message }
             enviando = false
         }
     }
 
     if (comprovanteAberto && parada != null) {
-        ComprovanteEntrega(corrida, parada, onFechar = { comprovanteAberto = false }, modifier = modifier)
+        ComprovanteEntrega(corrida, parada, posicao, admin, onFechar = { comprovanteAberto = false }, modifier = modifier)
         return
     }
 
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("CORRIDA #${corrida.numero}", color = PwCores.Ouro, fontWeight = FontWeight.Black, letterSpacing = 1.5.sp)
-                corrida.empresaNome?.let { Text(it, color = PwCores.Cinza) }
-            }
-            Text(moeda(corrida.valor), fontWeight = FontWeight.Black, fontSize = 22.sp)
-        }
+    val pinos = remember(corrida) {
+        corrida.paradas.map { PinoMapa(it.lat, it.lng, it.tipo == TipoParada.COLETA, it.id == corrida.paradaAtual?.id, it.status == StatusParada.CONCLUIDA) }
+    }
 
-        if (parada != null) {
-            val coleta = parada.tipo == TipoParada.COLETA
-            PwCartao(destaque = true) {
-                PwRotulo("Parada ${parada.ordem + 1} de ${corrida.paradas.size} · ${if (coleta) "Coleta" else "Entrega"}")
-                Spacer(Modifier.height(6.dp))
-                Text(parada.endereco, style = MaterialTheme.typography.titleLarge)
-                parada.contatoNome?.let { Text("Contato: $it", color = PwCores.Cinza) }
-                parada.instrucoes?.let { Text(it, color = PwCores.OuroClaro) }
-                Spacer(Modifier.height(12.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { abrirMaps(ctx, parada) }, modifier = Modifier.weight(1f)) { Text("Google Maps", color = PwCores.Branco) }
-                    OutlinedButton(onClick = { abrirWaze(ctx, parada) }, modifier = Modifier.weight(1f)) { Text("Waze", color = PwCores.Branco) }
-                    parada.contatoTelefone?.let { tel ->
-                        OutlinedButton(onClick = { ligar(ctx, tel) }) { Text("Ligar", color = PwCores.Branco) }
-                    }
+    Column(modifier.fillMaxSize()) {
+        // ---------------------------------------------------------- mapa
+        Box(Modifier.fillMaxWidth().height(300.dp)) {
+            PwMapa(
+                paradas = pinos,
+                rota = corrida.rotaPlanejada,
+                minhaPosicao = posicao?.let { it.lat to it.lng },
+                modifier = Modifier.fillMaxSize(),
+            )
+            // barra de vidro sobre o mapa
+            Row(
+                Modifier.padding(12.dp).clip(RoundedCornerShape(18.dp)).background(c.vidroForte).border(1.dp, c.borda, RoundedCornerShape(18.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column {
+                    Text("CORRIDA #${corrida.numero}", style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 15.sp, letterSpacing = 1.sp))
+                    corrida.empresaNome?.let { Text(it, color = c.texto2, fontSize = 12.sp, fontFamily = Archivo) }
+                }
+                Spacer(Modifier.width(14.dp))
+                Text(moeda(corrida.valorMotoboy), color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 18.sp)
+                if (corrida.teste) {
+                    Spacer(Modifier.width(8.dp))
+                    PwSelo("TESTE", c.violeta, icone = PwIcones.FlaskConical)
                 }
             }
-
-            erro?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-
-            val (rotulo, acao) = when {
-                parada.status != StatusParada.CHEGOU -> "Cheguei no local" to { avancar("chegou") }
-                coleta -> "Coletado ✓" to { avancar("concluir") }
-                corrida.precisaComprovante -> "Finalizar entrega" to { comprovanteAberto = true }
-                else -> "Entregue ✓" to { avancar("concluir") }
-            }
-            BotaoPrincipal(if (enviando) "Enviando…" else rotulo, habilitado = !enviando, onClick = acao)
         }
 
-        PwCartao {
-            PwRotulo("Trajeto")
-            Spacer(Modifier.height(6.dp))
-            corrida.paradas.forEach { p ->
-                Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    PwPonto(
-                        when {
-                            p.status == StatusParada.CONCLUIDA -> PwCores.Verde
-                            p.id == parada?.id -> PwCores.Ouro
-                            else -> PwCores.Borda
+        // ---------------------------------------------------------- etapas
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            if (parada != null) {
+                val coleta = parada.tipo == TipoParada.COLETA
+                PwCartao(destaque = true) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        PwRotulo("Parada ${parada.ordem + 1} de ${corrida.paradas.size} · ${if (coleta) "Coleta" else "Entrega"}", Modifier.weight(1f))
+                        IndicadorDistancia(distancia, noLocal, corrida.exigirNoLocal)
+                    }
+                    Spacer(Modifier.height(6.dp))
+                    Text(parada.endereco, style = MaterialTheme.typography.titleLarge, color = c.texto)
+                    parada.contatoNome?.let { Text("Contato: $it", color = c.texto2) }
+                    parada.instrucoes?.let { Text(it, color = c.ouro) }
+                    Spacer(Modifier.height(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        PwBotaoVidro("Maps", onClick = { abrirMaps(ctx, parada) }, icone = PwIcones.Navigation, modifier = Modifier.weight(1f))
+                        PwBotaoVidro("Waze", onClick = { abrirWaze(ctx, parada) }, icone = PwIcones.Route, modifier = Modifier.weight(1f))
+                        parada.contatoTelefone?.let { tel -> PwBotaoVidro("Ligar", onClick = { ligar(ctx, tel) }, icone = PwIcones.Phone) }
+                    }
+                }
+
+                erro?.let { Text(it, color = c.vermelho) }
+
+                val (rotulo, icone, acao) = when {
+                    parada.status != StatusParada.CHEGOU -> Triple("Cheguei no local", PwIcones.MapPin, { avancar("chegou") })
+                    coleta -> Triple("Coletado", PwIcones.PackageCheck, { avancar("concluir") })
+                    corrida.precisaComprovante -> Triple("Finalizar entrega", PwIcones.Check, { comprovanteAberto = true })
+                    else -> Triple("Entregue", PwIcones.CircleCheck, { avancar("concluir") })
+                }
+                PwBotaoOuro(
+                    when {
+                        enviando -> "Enviando…"
+                        !noLocal -> "Aproxime-se do endereço"
+                        else -> rotulo
+                    },
+                    onClick = acao,
+                    icone = if (noLocal) icone else PwIcones.MapPinned,
+                    habilitado = !enviando && noLocal,
+                    altura = 64.dp,
+                    tamanhoTexto = 19,
+                )
+                if (podeIgnorar && !noLocal) {
+                    PwBotaoVidro(
+                        "Ignorar localização (teste)",
+                        onClick = {
+                            if (parada.status != StatusParada.CHEGOU) avancar("chegou", ignorar = true)
+                            else if (corrida.precisaComprovante && !coleta) comprovanteAberto = true
+                            else avancar("concluir", ignorar = true)
                         },
+                        icone = PwIcones.FlaskConical,
+                        cor = c.violeta,
+                        habilitado = !enviando,
+                        modifier = Modifier.fillMaxWidth(),
                     )
-                    Spacer(Modifier.width(10.dp))
-                    Column {
-                        Text(
-                            "${p.ordem + 1}. ${if (p.tipo == TipoParada.COLETA) "Coleta" else "Entrega"}" +
-                                if (p.status == StatusParada.CONCLUIDA) " · concluída" else "",
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(p.endereco, color = PwCores.Cinza, style = MaterialTheme.typography.bodyMedium)
-                    }
                 }
             }
-            corrida.observacoes?.let {
+
+            PwCartao {
+                PwRotulo("Trajeto")
                 Spacer(Modifier.height(6.dp))
-                Text("Obs.: $it", color = PwCores.OuroClaro)
+                corrida.paradas.forEach { p ->
+                    Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        PwPonto(
+                            when {
+                                p.status == StatusParada.CONCLUIDA -> c.verde
+                                p.id == parada?.id -> c.ouro
+                                else -> c.bordaForte
+                            },
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                "${p.ordem + 1}. ${if (p.tipo == TipoParada.COLETA) "Coleta" else "Entrega"}" +
+                                    if (p.status == StatusParada.CONCLUIDA) " · concluída" else "",
+                                fontWeight = FontWeight.SemiBold, color = c.texto,
+                            )
+                            Text(p.endereco, color = c.texto2, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+                corrida.observacoes?.let {
+                    Spacer(Modifier.height(6.dp))
+                    Text("Obs.: $it", color = c.ouro)
+                }
             }
         }
     }
@@ -156,21 +244,28 @@ fun CorridaScreen(corrida: Corrida, modifier: Modifier = Modifier) {
 private val Corrida.precisaComprovante get() = exigeNome || exigeFoto || exigeAssinatura || exigeCodigo
 
 @Composable
-private fun BotaoPrincipal(texto: String, habilitado: Boolean, onClick: () -> Unit) {
-    Button(
-        onClick = onClick,
-        enabled = habilitado,
-        modifier = Modifier.fillMaxWidth().height(64.dp),
-        shape = RoundedCornerShape(16.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = PwCores.Ouro, contentColor = PwCores.Preto),
-    ) { Text(texto, fontWeight = FontWeight.Black, fontSize = 19.sp) }
+private fun IndicadorDistancia(distancia: Float?, noLocal: Boolean, exige: Boolean) {
+    val c = Pw.cores
+    val texto = when {
+        distancia == null -> "Localizando…"
+        distancia < 1000 -> "${distancia.toInt()} m"
+        else -> String.format(localeBr, "%.1f km", distancia / 1000)
+    }
+    val cor = when {
+        distancia == null -> c.texto3
+        noLocal && exige -> c.verde
+        exige -> c.vermelho
+        else -> c.texto2
+    }
+    PwSelo(if (noLocal && exige && distancia != null) "No local · $texto" else texto, cor, icone = PwIcones.LocateFixed)
 }
 
 // ------------------------------------------------------------------ comprovante
 
 @Composable
-private fun ComprovanteEntrega(corrida: Corrida, parada: Parada, onFechar: () -> Unit, modifier: Modifier) {
+private fun ComprovanteEntrega(corrida: Corrida, parada: Parada, posicaoInicial: Posicao?, admin: Boolean, onFechar: () -> Unit, modifier: Modifier) {
     val ctx = LocalContext.current
+    val c = Pw.cores
     val scope = rememberCoroutineScope()
     var nome by remember { mutableStateOf("") }
     var codigo by remember { mutableStateOf("") }
@@ -217,23 +312,30 @@ private fun ComprovanteEntrega(corrida: Corrida, parada: Parada, onFechar: () ->
                 assinaturaPath = Corridas.enviarComprovante(corrida.id, parada.id, "assinatura", png, "image/png")
                     .onFailure { erro = it.message }.getOrNull() ?: run { enviando = false; return@launch }
             }
+            etapa = "Conferindo localização…"
+            val posicao = PosicaoAtual.obter(ctx, 8_000) ?: posicaoInicial
             etapa = "Finalizando…"
-            Corridas.avancar(parada.id, "concluir", buildJsonObject {
-                put("recebedor_nome", nome.trim())
-                put("codigo", codigo)
-                fotoPath?.let { put("foto_path", it) }
-                assinaturaPath?.let { put("assinatura_path", it) }
-            }).onSuccess { onFechar() }.onFailure { erro = it.message }
+            Corridas.avancar(
+                parada.id, "concluir",
+                buildJsonObject {
+                    put("recebedor_nome", nome.trim())
+                    put("codigo", codigo)
+                    fotoPath?.let { put("foto_path", it) }
+                    assinaturaPath?.let { put("assinatura_path", it) }
+                },
+                posicao = posicao,
+                ignorarLocal = admin && corrida.teste,
+            ).onSuccess { onFechar() }.onFailure { erro = it.message }
             enviando = false
         }
     }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Comprovante de entrega", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            TextButton(onClick = onFechar, enabled = !enviando) { Text("Voltar", color = PwCores.Cinza) }
+            Text("Comprovante de entrega", style = MaterialTheme.typography.headlineSmall, color = c.texto, modifier = Modifier.weight(1f))
+            TextButton(onClick = onFechar, enabled = !enviando) { Text("Voltar", color = c.texto2) }
         }
-        Text(parada.endereco, color = PwCores.Cinza)
+        Text(parada.endereco, color = c.texto2)
 
         if (corrida.exigeNome) {
             OutlinedTextField(nome, { nome = it }, label = { Text("Nome de quem recebeu") }, singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -247,39 +349,47 @@ private fun ComprovanteEntrega(corrida: Corrida, parada: Parada, onFechar: () ->
         }
         if (corrida.exigeFoto) {
             PwCartao {
-                PwRotulo("Foto")
-                Spacer(Modifier.height(8.dp))
+                Titulo(PwIcones.Camera, "Foto")
                 foto?.let { bytes ->
                     Fotos.miniatura(bytes)?.let {
                         Image(it.asImageBitmap(), "Foto do comprovante", contentScale = ContentScale.Crop,
-                            modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(12.dp)))
+                            modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(14.dp)))
                         Spacer(Modifier.height(8.dp))
                     }
                 }
-                OutlinedButton(onClick = {
+                PwBotaoVidro(if (foto == null) "Tirar foto" else "Tirar outra", onClick = {
                     val (arq, uri) = Fotos.novoDestino(ctx)
                     arquivoFoto = arq
                     camera.launch(uri)
-                }, modifier = Modifier.fillMaxWidth()) { Text(if (foto == null) "Tirar foto" else "Tirar outra", color = PwCores.Branco) }
+                }, icone = PwIcones.Camera, modifier = Modifier.fillMaxWidth())
             }
         }
         if (corrida.exigeAssinatura) {
             PwCartao {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    PwRotulo("Assinatura", Modifier.weight(1f))
-                    TextButton(onClick = { assinatura.limpar() }) { Text("Limpar", color = PwCores.Ouro) }
+                    Box(Modifier.weight(1f)) { Titulo(PwIcones.PenLine, "Assinatura") }
+                    TextButton(onClick = { assinatura.limpar() }) { Text("Limpar", color = c.ouro) }
                 }
                 PainelAssinatura(assinatura)
             }
         }
 
-        erro?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-        BotaoPrincipal(if (enviando) etapa else "Confirmar entrega", habilitado = !enviando, onClick = { finalizar() })
+        erro?.let { Text(it, color = c.vermelho) }
+        PwBotaoOuro(if (enviando) etapa else "Confirmar entrega", onClick = { finalizar() }, habilitado = !enviando, icone = PwIcones.CircleCheck, altura = 64.dp)
         Spacer(Modifier.size(12.dp))
     }
 }
 
-// ------------------------------------------------------------------ navegação
+@Composable
+private fun Titulo(icone: ImageVector, texto: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 8.dp)) {
+        Icon(icone, null, tint = Pw.cores.ouro, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(8.dp))
+        PwRotulo(texto)
+    }
+}
+
+// ------------------------------------------------------------------ navegação externa
 
 private fun abrirMaps(ctx: Context, p: Parada) {
     val app = Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=${p.lat},${p.lng}"))
@@ -295,3 +405,6 @@ private fun abrirWaze(ctx: Context, p: Parada) {
 private fun ligar(ctx: Context, telefone: String) {
     runCatching { ctx.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${telefone.filter { it.isDigit() || it == '+' }}"))) }
 }
+
+@Suppress("unused")
+private val transparente = Color.Transparent

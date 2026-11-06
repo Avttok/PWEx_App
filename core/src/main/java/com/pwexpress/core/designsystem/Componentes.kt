@@ -1,60 +1,250 @@
 package com.pwexpress.core.designsystem
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
+import com.pwexpress.core.R
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Marca textual: "PW" dourado + "EXPRESS" branco. */
+// ------------------------------------------------------------------ fundo com brilhos dourados
+
+/** Fundo da tela: base do tema + três brilhos dourados difusos (igual ao site). */
 @Composable
-fun PwLogo(modifier: Modifier = Modifier, tamanho: Int = 28) {
-    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Text("PW", color = PwCores.Ouro, fontWeight = FontWeight.Black, fontSize = tamanho.sp)
-        Text(
-            " EXPRESS",
-            color = PwCores.Branco,
-            fontWeight = FontWeight.Light,
-            fontSize = (tamanho * 0.62f).sp,
-            letterSpacing = (tamanho * 0.12f).sp,
-        )
-    }
+fun PwFundo(modifier: Modifier = Modifier, content: @Composable BoxScope.() -> Unit) {
+    val c = Pw.cores
+    Box(
+        modifier
+            .fillMaxSize()
+            .background(c.fundo)
+            .drawBehind {
+                drawRect(Brush.radialGradient(listOf(c.brilho1, Color.Transparent), center = Offset(-size.width * 0.1f, -size.height * 0.05f), radius = size.width * 1.1f))
+                drawRect(Brush.radialGradient(listOf(c.brilho2, Color.Transparent), center = Offset(size.width * 1.1f, size.height * 0.05f), radius = size.width * 0.9f))
+                drawRect(Brush.radialGradient(listOf(c.brilho2, Color.Transparent), center = Offset(size.width * 0.5f, size.height * 1.08f), radius = size.width))
+            },
+        content = content,
+    )
 }
 
-/** Cartão padrão: grafite com borda sutil. */
+// ------------------------------------------------------------------ vidro
+
+/** Cartão de vidro: translúcido, borda sutil e reflexo no topo. */
 @Composable
 fun PwCartao(
     modifier: Modifier = Modifier,
     destaque: Boolean = false,
+    cor: Color? = null,
+    padding: PaddingValues = PaddingValues(18.dp),
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val forma = RoundedCornerShape(18.dp)
+    val c = Pw.cores
+    val forma = RoundedCornerShape(22.dp)
+    val borda = cor ?: if (destaque) c.ouro.copy(alpha = 0.7f) else c.borda
     Column(
         modifier
             .fillMaxWidth()
             .clip(forma)
-            .background(MaterialTheme.colorScheme.surface)
-            .border(1.dp, if (destaque) PwCores.Ouro else PwCores.Borda, forma)
-            .padding(18.dp),
+            .background(Brush.verticalGradient(listOf(c.vidroForte, c.vidro)))
+            .background(Brush.linearGradient(listOf(c.vidroSutil, Color.Transparent)))
+            .drawBehind {
+                // reflexo de 1 px no topo
+                drawLine(c.reflexo, Offset(size.width * 0.08f, 0.5f), Offset(size.width * 0.92f, 0.5f), strokeWidth = 1.5f)
+            }
+            .border(1.dp, borda, forma)
+            .padding(padding),
         content = content,
     )
+}
+
+/** Bloco interno (dentro de um cartão). */
+@Composable
+fun PwBloco(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val c = Pw.cores
+    val forma = RoundedCornerShape(16.dp)
+    Column(
+        modifier.fillMaxWidth().clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        content = content,
+    )
+}
+
+// ------------------------------------------------------------------ botões
+
+@Composable
+fun PwBotaoOuro(
+    texto: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icone: ImageVector? = null,
+    habilitado: Boolean = true,
+    altura: Dp = 58.dp,
+    tamanhoTexto: Int = 17,
+) {
+    val c = Pw.cores
+    val forma = RoundedCornerShape(18.dp)
+    Row(
+        modifier
+            .fillMaxWidth()
+            .heightIn(min = altura)
+            .alpha(if (habilitado) 1f else 0.5f)
+            .clip(forma)
+            .background(c.gradOuro)
+            .drawBehind { drawLine(Color.White.copy(alpha = 0.35f), Offset(0f, 0.5f), Offset(size.width, 0.5f), 1.5f) }
+            .clickable(enabled = habilitado, onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icone != null) {
+            Icon(icone, null, tint = c.sobreOuro, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+        }
+        Text(texto, color = c.sobreOuro, fontWeight = FontWeight.ExtraBold, fontSize = tamanhoTexto.sp, fontFamily = Archivo)
+    }
+}
+
+@Composable
+fun PwBotaoVidro(
+    texto: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icone: ImageVector? = null,
+    habilitado: Boolean = true,
+    cor: Color? = null,
+) {
+    val c = Pw.cores
+    val forma = RoundedCornerShape(14.dp)
+    val tinta = cor ?: c.texto
+    Row(
+        modifier
+            .heightIn(min = 46.dp)
+            .alpha(if (habilitado) 1f else 0.5f)
+            .clip(forma)
+            .background(c.vidroSutil)
+            .border(1.dp, (cor ?: c.bordaForte).copy(alpha = if (cor != null) 0.6f else 1f), forma)
+            .clickable(enabled = habilitado, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icone != null) {
+            Icon(icone, null, tint = tinta, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+        }
+        Text(texto, color = tinta, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, fontFamily = Archivo)
+    }
+}
+
+/** Botão só de ícone (quadrado de vidro). */
+@Composable
+fun PwBotaoIcone(icone: ImageVector, descricao: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = Pw.cores
+    val forma = RoundedCornerShape(13.dp)
+    Box(
+        modifier.size(42.dp).clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icone, descricao, tint = c.texto2, modifier = Modifier.size(19.dp)) }
+}
+
+/** Alterna claro / noturno / sistema. */
+@Composable
+fun BotaoTema(modifier: Modifier = Modifier) {
+    val pref by TemaApp.preferencia.collectAsState()
+    val (icone, rotulo) = when (pref) {
+        PreferenciaTema.SISTEMA -> PwIcones.Monitor to "Tema automático"
+        PreferenciaTema.CLARO -> PwIcones.Sun to "Tema claro"
+        PreferenciaTema.ESCURO -> PwIcones.Moon to "Tema noturno"
+    }
+    PwBotaoIcone(icone, rotulo, onClick = { TemaApp.alternar() }, modifier = modifier)
+}
+
+// ------------------------------------------------------------------ marca e detalhes
+
+/** Logo oficial (selo) + "PW EXPRESS". Com `soSelo`, mostra só a imagem (ela já traz o nome). */
+@Composable
+fun PwLogo(modifier: Modifier = Modifier, tamanho: Int = 26, soSelo: Boolean = false) {
+    val c = Pw.cores
+    if (soSelo) {
+        Image(painterResource(R.drawable.pwex_logo), "PW Express · Agilidade e segurança", modifier.size(tamanho.dp))
+        return
+    }
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Image(painterResource(R.drawable.pwex_logo), null, Modifier.size((tamanho * 1.6f).dp))
+        Spacer(Modifier.width((tamanho * 0.4f).dp))
+        Text("PW", style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = tamanho.sp))
+        Text(
+            "  EXPRESS",
+            color = c.texto2,
+            fontFamily = Archivo,
+            fontWeight = FontWeight.Light,
+            fontSize = (tamanho * 0.5f).sp,
+            letterSpacing = (tamanho * 0.16f).sp,
+        )
+    }
+}
+
+/** Azulejo de ícone com degradê suave (como no site). */
+@Composable
+fun PwAzulejo(icone: ImageVector, modifier: Modifier = Modifier, tamanho: Dp = 44.dp, cor: Color? = null) {
+    val c = Pw.cores
+    val tinta = cor ?: c.ouro
+    Box(
+        modifier.size(tamanho).clip(RoundedCornerShape(tamanho * 0.32f))
+            .background(Brush.linearGradient(listOf(tinta.copy(alpha = 0.26f), tinta.copy(alpha = 0.08f)))),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icone, null, tint = tinta, modifier = Modifier.size(tamanho * 0.5f)) }
+}
+
+/** Cabeçalho de seção: azulejo + título + subtítulo. */
+@Composable
+fun PwCabeca(icone: ImageVector, titulo: String, subtitulo: String? = null, modifier: Modifier = Modifier, acoes: @Composable RowScope.() -> Unit = {}) {
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        PwAzulejo(icone)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(titulo, style = MaterialTheme.typography.headlineSmall, color = Pw.cores.texto)
+            if (subtitulo != null) Text(subtitulo, style = MaterialTheme.typography.bodyMedium, color = Pw.cores.texto2)
+        }
+        acoes()
+    }
 }
 
 @Composable
@@ -64,10 +254,37 @@ fun PwPonto(cor: Color, tamanho: Dp = 12.dp) {
 
 @Composable
 fun PwRotulo(texto: String, modifier: Modifier = Modifier) {
-    Text(
-        texto.uppercase(),
-        modifier = modifier,
-        style = MaterialTheme.typography.labelSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
+    Text(texto.uppercase(), modifier = modifier, style = MaterialTheme.typography.labelSmall, color = Pw.cores.texto3)
 }
+
+/** Selo arredondado colorido (status, "TESTE"…). */
+@Composable
+fun PwSelo(texto: String, cor: Color, modifier: Modifier = Modifier, icone: ImageVector? = null) {
+    Row(
+        modifier.clip(RoundedCornerShape(99.dp)).background(cor.copy(alpha = 0.15f)).padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (icone != null) {
+            Icon(icone, null, tint = cor, modifier = Modifier.size(12.dp))
+            Spacer(Modifier.width(4.dp))
+        }
+        Text(texto, color = cor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = Archivo)
+    }
+}
+
+/** Linha "rótulo ........ valor". */
+@Composable
+fun PwLinhaInfo(icone: ImageVector?, rotulo: String, valor: String, destaque: Boolean = false) {
+    val c = Pw.cores
+    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (icone != null) {
+            Icon(icone, null, tint = c.texto3, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(10.dp))
+        }
+        Text(rotulo, Modifier.weight(1f), color = c.texto2, style = MaterialTheme.typography.bodyMedium)
+        Text(valor, color = if (destaque) c.ouro else c.texto, fontWeight = FontWeight.SemiBold, fontFamily = Archivo)
+    }
+}
+
+@Composable
+fun PwEspaco(altura: Dp) = Spacer(Modifier.height(altura))

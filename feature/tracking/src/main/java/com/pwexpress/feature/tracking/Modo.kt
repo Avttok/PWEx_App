@@ -11,22 +11,25 @@ enum class Modo(val api: String, val rotulo: String) {
     }
 }
 
-/** Ritmo do rastreamento. Ajuste aqui sem mexer no resto do código. */
+/**
+ * Ritmo do rastreamento. Valores padrão; o servidor pode mudar pela tela de Configurações
+ * do gestor (aplicado em [Tracking.aplicarConfiguracoes]).
+ */
 object Intervalos {
-    const val CORRIDA_NORMAL_MS = 45_000L
-    const val CORRIDA_ECONOMIA_MS = 90_000L
+    @Volatile var corridaNormalMs = 45_000L
+    @Volatile var corridaEconomiaMs = 90_000L
 
-    /** Disponível: lê a cada 60 s, mas só envia a cada 3 min OU se andou 300 m. */
+    /** Disponível: lê a cada 60 s, mas só envia a cada X min OU se andou Y m. */
     const val DISPONIVEL_LEITURA_MS = 60_000L
-    const val DISPONIVEL_ENVIO_MS = 180_000L
-    const val DISPONIVEL_DISTANCIA_M = 300f
+    @Volatile var disponivelEnvioMs = 180_000L
+    @Volatile var disponivelDistanciaM = 300f
 
     /** Em corrida, descarta leituras com erro maior que isso (evita "saltos" no mapa). */
     const val PRECISAO_MAXIMA_M = 150f
 
     const val LOTE_MAXIMO = 200
 
-    fun corridaMs(economia: Boolean) = if (economia) CORRIDA_ECONOMIA_MS else CORRIDA_NORMAL_MS
+    fun corridaMs(economia: Boolean) = if (economia) corridaEconomiaMs else corridaNormalMs
 }
 
 /** Estado exibido na tela. */

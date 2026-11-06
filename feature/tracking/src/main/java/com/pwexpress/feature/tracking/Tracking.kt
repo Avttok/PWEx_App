@@ -74,6 +74,17 @@ object Tracking {
         sincronizarAgora()
     }
 
+    /** Aplica os intervalos vindos do servidor (Configurações do gestor), em segundos/minutos/metros. */
+    fun aplicarConfiguracoes(corridaS: Double?, economiaS: Double?, disponivelMin: Double?, disponivelM: Double?) {
+        var mudou = false
+        corridaS?.takeIf { it >= 5 }?.let { val v = (it * 1000).toLong(); if (v != Intervalos.corridaNormalMs) { Intervalos.corridaNormalMs = v; mudou = true } }
+        economiaS?.takeIf { it >= 10 }?.let { val v = (it * 1000).toLong(); if (v != Intervalos.corridaEconomiaMs) { Intervalos.corridaEconomiaMs = v; mudou = true } }
+        disponivelMin?.takeIf { it >= 1 }?.let { Intervalos.disponivelEnvioMs = (it * 60_000).toLong() }
+        disponivelM?.takeIf { it >= 50 }?.let { Intervalos.disponivelDistanciaM = it.toFloat() }
+        if (mudou && prefs.modo != Modo.OFFLINE) iniciarServico() // reaplica o ritmo do GPS
+        _info.update { it.copy() }
+    }
+
     /** Chamado quando uma corrida é aceita: liga o GPS de alta precisão vinculado a ela. */
     fun entrarEmCorrida(corridaId: String) {
         if (prefs.modo == Modo.EM_CORRIDA && prefs.sessaoId == corridaId) return

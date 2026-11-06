@@ -38,7 +38,7 @@ import java.util.UUID
 class TrackingService : Service() {
 
     private lateinit var fused: FusedLocationProviderClient
-    private var configAtual: Pair<Modo, Boolean>? = null
+    private var configAtual: Triple<Modo, Boolean, Long>? = null
     private var ultimoEnviado: Location? = null
     private var ultimoEnviadoEm = 0L
     private var redeCallback: ConnectivityManager.NetworkCallback? = null
@@ -96,7 +96,7 @@ class TrackingService : Service() {
 
     @SuppressLint("MissingPermission") // verificado em onStartCommand
     private fun aplicar(modo: Modo, economia: Boolean) {
-        val nova = modo to economia
+        val nova = Triple(modo, economia, Intervalos.corridaMs(economia))
         if (nova == configAtual) return
         configAtual = nova
 
@@ -125,8 +125,8 @@ class TrackingService : Service() {
             Modo.DISPONIVEL -> {
                 val ult = ultimoEnviado
                 val deveEnviar = ult == null ||
-                    loc.time - ultimoEnviadoEm >= Intervalos.DISPONIVEL_ENVIO_MS ||
-                    loc.distanceTo(ult) >= Intervalos.DISPONIVEL_DISTANCIA_M
+                    loc.time - ultimoEnviadoEm >= Intervalos.disponivelEnvioMs ||
+                    loc.distanceTo(ult) >= Intervalos.disponivelDistanciaM
                 if (!deveEnviar) return
             }
             Modo.EM_CORRIDA -> {

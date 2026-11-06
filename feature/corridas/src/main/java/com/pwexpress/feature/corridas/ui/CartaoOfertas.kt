@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -24,8 +23,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.pwexpress.core.designsystem.Pw
+import com.pwexpress.core.designsystem.PwBotaoVidro
 import com.pwexpress.core.designsystem.PwCartao
-import com.pwexpress.core.designsystem.PwCores
+import com.pwexpress.core.designsystem.PwIcones
 import com.pwexpress.core.designsystem.PwPonto
 import com.pwexpress.core.designsystem.PwRotulo
 import com.pwexpress.feature.corridas.push.Alarme
@@ -44,17 +45,17 @@ fun CartaoOfertas() {
         PwRotulo("Ofertas de corrida")
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            PwPonto(if (telaCheia) PwCores.Verde else PwCores.Vermelho, 10.dp)
+            PwPonto(if (telaCheia) Pw.cores.verde else Pw.cores.vermelho, 10.dp)
             Spacer(Modifier.width(10.dp))
-            Text("Abrir em tela cheia", Modifier.weight(1f))
+            Text("Abrir em tela cheia", Modifier.weight(1f), color = Pw.cores.texto)
             if (!telaCheia && Build.VERSION.SDK_INT >= 34) {
                 TextButton(onClick = {
                     runCatching {
                         ctx.startActivity(Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT, Uri.parse("package:${ctx.packageName}")))
                     }
-                }) { Text("Liberar", color = PwCores.Ouro) }
+                }) { Text("Liberar", color = Pw.cores.ouro) }
             } else {
-                Text("OK", color = PwCores.Verde, modifier = Modifier.padding(12.dp))
+                Text("OK", color = Pw.cores.verde, modifier = Modifier.padding(12.dp))
             }
         }
         Text(
@@ -63,6 +64,6 @@ fun CartaoOfertas() {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(8.dp))
-        OutlinedButton(onClick = { Alarme.testarSom(ctx) }) { Text("Testar som", color = PwCores.Branco) }
+        PwBotaoVidro("Testar som", onClick = { Alarme.testarSom(ctx) }, icone = PwIcones.Volume2)
     }
 }

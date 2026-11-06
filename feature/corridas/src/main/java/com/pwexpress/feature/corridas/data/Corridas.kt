@@ -101,12 +101,31 @@ object Corridas {
 
     // ------------------------------------------------------------------ etapas
 
-    suspend fun avancar(paradaId: String, acao: String, dados: JsonObject = JsonObject(emptyMap())): Result<Unit> =
+    /**
+     * Avança a etapa. Envia junto a posição atual (o servidor confere se o motoboy está no local).
+     * [ignorarLocal] só funciona em corrida de teste e para contas gestor + motoboy.
+     */
+    suspend fun avancar(
+        paradaId: String,
+        acao: String,
+        dados: JsonObject = JsonObject(emptyMap()),
+        posicao: Posicao? = null,
+        ignorarLocal: Boolean = false,
+    ): Result<Unit> =
         runCatching {
+            val completo = buildJsonObject {
+                dados.forEach { (k, v) -> put(k, v) }
+                posicao?.let {
+                    put("lat", it.lat)
+                    put("lng", it.lng)
+                    put("precisao_m", it.precisaoM)
+                }
+                if (ignorarLocal) put("ignorar_local", true)
+            }
             val r = PwCore.rpc.chamar("avancar_parada", buildJsonObject {
                 put("p_parada", paradaId)
                 put("p_acao", acao)
-                put("p_dados", dados)
+                put("p_dados", completo)
             })
             if (!r.ok) throw Exception(traduzir(r))
             _ativa.value = r.json()?.paraCorrida() // null = corrida concluída
@@ -165,10 +184,17 @@ object Corridas {
         "codigo_incorreto" to "Código de entrega incorreto.",
         "falta_a_foto" to "Tire a foto do comprovante.",
         "falta_a_assinatura" to "Colete a assinatura.",
+        "sem_localizacao" to "Não consegui sua localização. Ative o GPS e tente de novo.",
     )
 
     private fun traduzir(r: HttpResposta): String {
         val msg = runCatching { Json.parseToJsonElement(r.corpo).jsonObject["message"]?.jsonPrimitive?.content }.getOrNull()
+        if (msg != null && msg.startsWith("longe_do_local")) {
+            val partes = msg.split(":")
+            val dist = partes.getOrNull(1)
+            val raio = partes.getOrNull(2)
+            return "Você está a ${dist ?: "?"} m do endereço. Aproxime-se (até ${raio ?: "?"} m) para continuar."
+        }
         return mensagens[msg] ?: msg ?: "Erro no servidor (${r.codigo})."
     }
 }

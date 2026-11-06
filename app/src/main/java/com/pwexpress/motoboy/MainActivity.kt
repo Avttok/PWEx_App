@@ -2,27 +2,35 @@ package com.pwexpress.motoboy
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.pwexpress.core.PwCore
+import com.pwexpress.core.designsystem.PwFundo
 import com.pwexpress.core.designsystem.PwTheme
+import com.pwexpress.core.perfil.Perfis
 import com.pwexpress.feature.auth.LoginScreen
 import com.pwexpress.feature.corridas.data.Corridas
 import com.pwexpress.feature.corridas.ui.CartaoOfertas
 import com.pwexpress.feature.corridas.ui.CorridaScreen
 import com.pwexpress.feature.corridas.ui.OfertaScreen
+import com.pwexpress.feature.perfil.AvatarPerfil
+import com.pwexpress.feature.perfil.CartaoGanhos
+import com.pwexpress.feature.perfil.Linha
+import com.pwexpress.feature.perfil.NomePerfil
+import com.pwexpress.feature.perfil.PerfilScreen
 import com.pwexpress.feature.tracking.Modo
 import com.pwexpress.feature.tracking.Tracking
 import com.pwexpress.feature.tracking.ui.TrackingScreen
@@ -36,11 +44,13 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             PwTheme {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                PwFundo {
                     val sessao by PwCore.auth.sessao.collectAsState()
                     val oferta by Corridas.oferta.collectAsState()
                     val ativa by Corridas.ativa.collectAsState()
                     val info by Tracking.info.collectAsState()
+                    val perfil by Perfis.perfil.collectAsState()
+                    var noPerfil by remember { mutableStateOf(false) }
                     val scope = rememberCoroutineScope()
                     val ciclo = LocalLifecycleOwner.current
 
@@ -55,6 +65,8 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    BackHandler(enabled = noPerfil) { noPerfil = false }
+
                     val s = sessao
                     val o = oferta
                     val a = ativa
@@ -62,12 +74,30 @@ class MainActivity : ComponentActivity() {
                     when {
                         s == null -> LoginScreen(conteudo)
                         o != null -> OfertaScreen(o, onFim = { }, modifier = conteudo)
-                        a != null -> CorridaScreen(a, modifier = conteudo)
-                        else -> TrackingScreen(
+                        noPerfil -> PerfilScreen(
                             email = s.email,
-                            onSair = { scope.launch { Tracking.sairDaConta() } },
+                            versao = BuildConfig.VERSION_NAME,
+                            onVoltar = { noPerfil = false },
+                            onSair = {
+                                noPerfil = false
+                                scope.launch { Tracking.sairDaConta() }
+                            },
                             modifier = conteudo,
-                            extras = { CartaoOfertas() },
+                            diagnostico = {
+                                Linha("Estado do GPS", info.modo.rotulo)
+                                Linha("Pontos na fila", info.naFila.toString())
+                                Linha("Último erro", info.erro ?: "nenhum")
+                            },
+                        )
+                        a != null -> CorridaScreen(a, admin = perfil?.admin == true, modifier = conteudo)
+                        else -> TrackingScreen(
+                            modifier = conteudo,
+                            saudacao = NomePerfil(s.email).substringBefore(" "),
+                            acoesTopo = { AvatarPerfil(s.email, onClick = { noPerfil = true }) },
+                            extras = {
+                                CartaoGanhos()
+                                CartaoOfertas()
+                            },
                         )
                     }
                 }

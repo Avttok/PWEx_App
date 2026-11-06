@@ -47,4 +47,7 @@ dependencies {
     api(libs.kotlinx.coroutines.android)
     api(libs.kotlinx.serialization.json)
     implementation(libs.okhttp)
+    api(libs.maplibre.android)
+    api(libs.coil.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
 }

@@ -8,12 +8,11 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import com.pwexpress.core.designsystem.PwFundo
 import com.pwexpress.core.designsystem.PwTheme
 import com.pwexpress.feature.corridas.data.Corridas
 import com.pwexpress.feature.corridas.push.Alarme
@@ -36,7 +35,7 @@ class OfertaActivity : ComponentActivity() {
 
         setContent {
             PwTheme {
-                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                PwFundo {
                     val oferta by Corridas.oferta.collectAsState()
                     val atual = oferta
                     if (atual == null) {

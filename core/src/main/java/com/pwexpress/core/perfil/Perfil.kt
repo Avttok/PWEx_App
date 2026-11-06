@@ -56,8 +56,8 @@ data class Perfil(
         (configuracoes[chave] as? JsonPrimitive)?.booleanOrNull ?: padrao
 }
 
-/** Para onde o dinheiro das corridas é repassado. */
-data class ChavePix(val tipo: String, val chave: String, val titular: String)
+/** Uma chave PIX da pessoa. A [principal] é para onde o dinheiro das corridas é repassado. */
+data class ChavePix(val id: String, val tipo: String, val chave: String, val titular: String, val principal: Boolean)
 
 data class Ganhos(
     val hoje: Double, val semana: Double, val mes: Double, val corridasHoje: Int,
@@ -152,27 +152,46 @@ object Perfis {
         carregar()
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
-    /** A chave PIX cadastrada (null = nenhuma). */
-    suspend fun minhaChavePix(): ChavePix? = runCatching {
+    /** Todas as chaves PIX da pessoa (a principal primeiro). null = não deu para carregar. */
+    suspend fun minhasChavesPix(): List<ChavePix>? = runCatching {
         val id = _perfil.value?.id ?: return null
-        val r = PwCore.rpc.rest("GET", "/rest/v1/dados_recebimento?usuario_id=eq.$id&select=tipo_chave,chave,titular")
+        val r = PwCore.rpc.rest("GET", "/rest/v1/chaves_pix?usuario_id=eq.$id&select=id,tipo_chave,chave,titular,principal&order=principal.desc,criado_em.asc")
         if (!r.ok) return null
-        r.json()?.jsonArray?.firstOrNull()?.jsonObject?.let { o ->
-            ChavePix(o["tipo_chave"]!!.jsonPrimitive.content, o["chave"]!!.jsonPrimitive.content, o["titular"]!!.jsonPrimitive.content)
-        }
+        r.json()?.jsonArray?.map { e ->
+            val o = e.jsonObject
+            ChavePix(
+                o["id"]!!.jsonPrimitive.content, o["tipo_chave"]!!.jsonPrimitive.content, o["chave"]!!.jsonPrimitive.content,
+                o["titular"]!!.jsonPrimitive.content, o["principal"]?.jsonPrimitive?.booleanOrNull == true,
+            )
+        }.orEmpty()
     }.getOrNull()
 
-    /** Salva (ou apaga, com chave vazia) a chave PIX para receber os repasses. */
-    suspend fun definirChavePix(tipo: String, chave: String, titular: String): Result<Unit> = runCatching {
-        val r = PwCore.rpc.chamar("definir_minha_chave_pix", buildJsonObject { put("p_tipo", tipo); put("p_chave", chave); put("p_titular", titular) })
-        if (!r.ok) error(
-            when {
-                r.corpo.contains("titular_invalido") -> "Informe o nome do titular."
-                r.corpo.contains("tipo_invalido") -> "Tipo de chave inválido."
-                else -> "Erro (${r.codigo})."
-            },
-        )
+    /** Cadastra mais uma chave (a primeira vira a principal sozinha). */
+    suspend fun adicionarChavePix(tipo: String, chave: String, titular: String): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar("adicionar_chave_pix", buildJsonObject { put("p_tipo", tipo); put("p_chave", chave); put("p_titular", titular) })
+        if (!r.ok) error(erroPix(r))
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
+    suspend fun removerChavePix(id: String): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar("remover_chave_pix", buildJsonObject { put("p_id", id) })
+        if (!r.ok) error(erroPix(r))
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
+    /** Escolhe para qual chave os repasses vão. */
+    suspend fun definirChavePixPrincipal(id: String): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar("definir_chave_pix_principal", buildJsonObject { put("p_id", id) })
+        if (!r.ok) error(erroPix(r))
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
+    private fun erroPix(r: HttpResposta) = when {
+        r.corpo.contains("chave_repetida") -> "Essa chave já está cadastrada."
+        r.corpo.contains("chave_invalida") -> "A chave não confere com o tipo."
+        r.corpo.contains("titular_invalido") -> "Informe o nome do titular."
+        r.corpo.contains("tipo_invalido") -> "Tipo de chave inválido."
+        r.corpo.contains("limite_chaves") -> "Limite de chaves atingido."
+        r.codigo == 404 -> "Atualize o banco: a função de chaves PIX ainda não existe."
+        else -> "Erro (${r.codigo})."
+    }
 
     // ------------------------------------------------------------------ util
 

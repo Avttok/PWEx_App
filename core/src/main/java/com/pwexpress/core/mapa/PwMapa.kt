@@ -69,8 +69,11 @@ val CENTRO_PADRAO = -27.2 to -49.5
 fun coordenadaValida(lat: Double?, lng: Double?): Boolean =
     lat != null && lng != null && lat in -85.0..85.0 && lng in -180.0..180.0 && !(kotlin.math.abs(lat) < 0.001 && kotlin.math.abs(lng) < 0.001)
 
-/** Como os nomes de rua aparecem: na própria rua, em placas, ou escondidos. */
-enum class ModoRuas(val rotulo: String) { RUA("Na rua"), PLACA("Placas"), OCULTA("Ocultos") }
+/** Nomes de rua: escritos na própria rua ou escondidos (separado dos estabelecimentos). */
+enum class ModoRuas(val rotulo: String) { RUA("Na rua"), OCULTA("Ocultos") }
+
+/** O que aparece de nome no mapa: combinação das ruas com os ícones de estabelecimento. */
+enum class Rotulos(val rotulo: String) { TUDO("Ruas e ícones"), RUAS("Só ruas"), ICONES("Só ícones"), NADA("Sem nomes") }
 
 /** Mostrar/ocultar estabelecimentos e o modo dos nomes de rua em todos os mapas (lembrado no aparelho, como no site). */
 object Estabelecimentos {
@@ -83,10 +86,23 @@ object Estabelecimentos {
         if (prefs != null) return
         prefs = ctx.applicationContext.getSharedPreferences("pwex_mapa", Context.MODE_PRIVATE)
         _visiveis.value = prefs!!.getBoolean("estabelecimentos", true)
-        _ruas.value = runCatching { ModoRuas.valueOf(prefs!!.getString("ruas", "RUA")!!) }.getOrDefault(ModoRuas.RUA)
+        // "PLACA" (modo antigo, removido) volta para RUA
+        _ruas.value = if (prefs!!.getString("ruas", "RUA") == "OCULTA") ModoRuas.OCULTA else ModoRuas.RUA
     }
     fun definir(v: Boolean) { _visiveis.value = v; prefs?.edit()?.putBoolean("estabelecimentos", v)?.apply() }
     fun definirRuas(m: ModoRuas) { _ruas.value = m; prefs?.edit()?.putString("ruas", m.name)?.apply() }
+
+    fun rotulos(ruas: ModoRuas, icones: Boolean): Rotulos = when {
+        ruas == ModoRuas.RUA && icones -> Rotulos.TUDO
+        ruas == ModoRuas.RUA -> Rotulos.RUAS
+        icones -> Rotulos.ICONES
+        else -> Rotulos.NADA
+    }
+
+    fun definirRotulos(r: Rotulos) {
+        definirRuas(if (r == Rotulos.TUDO || r == Rotulos.RUAS) ModoRuas.RUA else ModoRuas.OCULTA)
+        definir(r == Rotulos.TUDO || r == Rotulos.ICONES)
+    }
 }
 
 /**

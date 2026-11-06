@@ -121,22 +121,12 @@ fun TrackingScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         if (saudacao.isNotBlank()) {
-            Column {
-                Text("Olá, $saudacao", style = MaterialTheme.typography.headlineMedium, color = c.texto, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(
-                    when (info.modo) {
-                        Modo.OFFLINE -> "Fora de serviço: você não recebe corridas."
-                        Modo.DISPONIVEL -> "Disponível: as corridas chegam aqui."
-                        Modo.EM_CORRIDA -> "Corrida em andamento."
-                    },
-                    color = c.texto2, fontSize = 14.sp, fontFamily = Archivo,
-                )
-            }
+            Text("Olá, $saudacao", style = MaterialTheme.typography.headlineMedium, color = c.texto, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
 
         // ---------------------------------------------------------- o botão
         Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
-            BotaoStatus(info.modo, agora - (info.ultimaLeitura ?: agora), info.economia) {
+            BotaoStatus(info.modo) {
                 when (info.modo) {
                     Modo.OFFLINE -> escolher(Modo.DISPONIVEL)
                     Modo.DISPONIVEL -> confirmarOffline = true
@@ -148,7 +138,9 @@ fun TrackingScreen(
         // atalhos (GPS, raio, economia, aparelho)
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (info.modo != Modo.OFFLINE) {
-                Chip(PwIcones.Crosshair, info.ultimaPrecisao?.let { "GPS ± ${it.toInt()} m" } ?: "Buscando GPS…", if (info.ultimaPrecisao != null) c.verde else c.texto3)
+                val semLeituraMs = agora - (info.ultimaLeitura ?: agora)
+                if (semLeituraMs > 5 * 60_000) Chip(PwIcones.Alerta, "Sem GPS há ${semLeituraMs / 60_000} min", c.vermelho)
+                else Chip(PwIcones.Crosshair, info.ultimaPrecisao?.let { "GPS ± ${it.toInt()} m" } ?: "Buscando GPS…", if (info.ultimaPrecisao != null) c.verde else c.texto3)
             }
             if (info.economia) Chip(PwIcones.BatteryLow, "Economia", c.ouro)
             chips()
@@ -174,7 +166,7 @@ fun TrackingScreen(
  * medalhão. Offline convida (na cor da marca), disponível pulsa em verde, em corrida fica na cor da marca.
  */
 @Composable
-private fun BotaoStatus(modo: Modo, semLeituraMs: Long, economia: Boolean, onClick: () -> Unit) {
+private fun BotaoStatus(modo: Modo, onClick: () -> Unit) {
     val c = Pw.cores
     val ligado = modo != Modo.OFFLINE
     val cor by animateColorAsState(if (modo == Modo.DISPONIVEL) c.verde else c.ouro, label = "cor-status")
@@ -216,31 +208,22 @@ private fun BotaoStatus(modo: Modo, semLeituraMs: Long, economia: Boolean, onCli
                 .clickable(interactionSource = toque, indication = null, onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
+            // o disco inteiro é o botão: só o ícone e o estado
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                // medalhão do ícone
                 Box(
-                    Modifier.size(70.dp).clip(CircleShape).background(Brush.linearGradient(listOf(claro, cor, escuroCor))),
+                    Modifier.size(84.dp).clip(CircleShape).background(Brush.linearGradient(listOf(claro, cor, escuroCor))),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
                         when (modo) { Modo.OFFLINE -> PwIcones.Power; Modo.DISPONIVEL -> PwIcones.Radio; Modo.EM_CORRIDA -> PwIcones.Route },
-                        null, tint = if (modo == Modo.DISPONIVEL) Color(0xFF052E1B) else c.sobreOuro, modifier = Modifier.size(34.dp),
+                        null, tint = if (modo == Modo.DISPONIVEL) Color(0xFF052E1B) else c.sobreOuro, modifier = Modifier.size(42.dp),
                     )
                 }
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(14.dp))
                 Text(
-                    when (modo) { Modo.OFFLINE -> "OFFLINE"; Modo.DISPONIVEL -> "DISPONÍVEL"; Modo.EM_CORRIDA -> "EM CORRIDA" },
-                    style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 19.sp, letterSpacing = 1.2.sp),
-                    color = c.texto, maxLines = 1,
-                )
-                Spacer(Modifier.height(3.dp))
-                Text(
-                    when (modo) {
-                        Modo.OFFLINE -> "Toque para ficar disponível"
-                        Modo.DISPONIVEL -> if (semLeituraMs > 5 * 60_000) "Sem GPS há ${semLeituraMs / 60_000} min" else "Toque para sair"
-                        Modo.EM_CORRIDA -> "GPS a cada ${Intervalos.corridaMs(economia) / 1000} s"
-                    },
-                    color = c.texto2, fontSize = 12.sp, fontFamily = Archivo, maxLines = 1,
+                    when (modo) { Modo.OFFLINE -> "OFFLINE"; Modo.DISPONIVEL -> "ONLINE"; Modo.EM_CORRIDA -> "EM CORRIDA" },
+                    style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 22.sp, letterSpacing = 1.4.sp),
+                    color = c.texto, maxLines = 1, softWrap = false,
                 )
             }
         }

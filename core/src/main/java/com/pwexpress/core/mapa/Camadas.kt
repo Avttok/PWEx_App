@@ -144,8 +144,6 @@ private fun carregarIcones(ctx: Context, s: Style) {
         val id = res.getIdentifier("poi_$n", "drawable", ctx.packageName)
         if (id != 0) BitmapFactory.decodeResource(res, id)?.let { s.addImage("poi_$n", it, true) }
     }
-    val placa = res.getIdentifier("placa_rua", "drawable", ctx.packageName)
-    if (placa != 0) BitmapFactory.decodeResource(res, placa)?.let { s.addImage("placa_rua", it, false) }
 }
 
 /** Estabelecimentos com ícone por tipo (na cor do tema) + rótulos coloridos (cidade, bairro, vila, rua). */
@@ -196,21 +194,11 @@ internal fun aplicarEstiloPw(ctx: Context, s: Style, escuro: Boolean, corTema: S
     }
 }
 
-/** Nomes de rua: na rua (como sempre), em placas azuis, ou ocultos. */
-internal fun aplicarModoRuas(s: Style, modo: ModoRuas, corRua: String) {
+/** Nomes de rua escritos na rua (como o estilo desenha) ou ocultos. Só mexe nas camadas de rua. */
+internal fun aplicarModoRuas(s: Style, modo: ModoRuas, @Suppress("UNUSED_PARAMETER") corRua: String) {
+    val v = if (modo == ModoRuas.OCULTA) Property.NONE else Property.VISIBLE
     s.layers.filterIsInstance<SymbolLayer>().filter { it.sourceLayer == "transportation_name" }.forEach { l ->
-        if (modo == ModoRuas.OCULTA) { l.setProperties(PropertyFactory.visibility(Property.NONE)); return@forEach }
-        val placa = modo == ModoRuas.PLACA
-        l.setProperties(
-            PropertyFactory.visibility(Property.VISIBLE),
-            PropertyFactory.symbolPlacement(if (placa) Property.SYMBOL_PLACEMENT_POINT else Property.SYMBOL_PLACEMENT_LINE),
-            PropertyFactory.iconImage(if (placa) "placa_rua" else ""),
-            PropertyFactory.iconTextFit(if (placa) Property.ICON_TEXT_FIT_BOTH else Property.ICON_TEXT_FIT_NONE),
-            PropertyFactory.iconTextFitPadding(arrayOf(3f, 6f, 3f, 6f)),
-            PropertyFactory.symbolSpacing(if (placa) 400f else 250f),
-            PropertyFactory.textColor(if (placa) "#FFFFFF" else corRua),
-            PropertyFactory.textHaloWidth(if (placa) 0f else 1.2f),
-        )
+        runCatching { l.setProperties(PropertyFactory.visibility(v)) }
     }
 }
 

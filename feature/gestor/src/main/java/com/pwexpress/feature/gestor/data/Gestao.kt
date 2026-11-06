@@ -66,6 +66,7 @@ object Gestao {
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
     private var voltas = 0
+    private var ultimoTeste: Boolean? = null
 
     /** Recarrega tudo (o app chama a cada poucos segundos enquanto o painel está aberto). */
     suspend fun atualizar() = mutex.withLock {
@@ -78,10 +79,14 @@ object Gestao {
                 val equipe = async { rpc.chamar("listar_equipe", JsonObject(emptyMap())).exigirOk().lista() }
                 val pos = async { rpc.rest("GET", "/rest/v1/motoboys?select=id,status,lat,lng,posicao_em,modo_teste,modo_economia,bateria,precisao_m").exigirOk().lista() }
                 // trilhas pesam mais: a cada 5 voltas (~30 s)
-                val trilha = if (voltas++ % 5 == 0 || !_dados.value.carregado) async {
+                // percursos de teste e reais são separados: só os do modo atual (troca de modo recarrega na hora)
+                val teste = com.pwexpress.core.designsystem.TemaApp.modoTeste.value
+                val trocouModo = teste != ultimoTeste
+                ultimoTeste = teste
+                val trilha = if (voltas++ % 5 == 0 || !_dados.value.carregado || trocouModo) async {
                     val desde12h = Instant.now().minusSeconds(12L * 3600).toString()
                     runCatching {
-                        rpc.rest("GET", "/rest/v1/localizacoes?select=motoboy_id,sessao_id,status,lat,lng,registrado_em,corrida_id&registrado_em=gte.${enc(desde12h)}&order=registrado_em.asc&limit=8000").exigirOk().lista()
+                        rpc.rest("GET", "/rest/v1/localizacoes?select=motoboy_id,sessao_id,status,lat,lng,registrado_em,corrida_id&teste=eq.$teste&registrado_em=gte.${enc(desde12h)}&order=registrado_em.asc&limit=8000").exigirOk().lista()
                             .mapNotNull { o -> val la = o.dbl("lat"); val lo = o.dbl("lng"); if (la == null || lo == null) null else o.str("motoboy_id")!! to PontoTrilha(o.str("sessao_id"), o.str("status") ?: "", la, lo, iso(o.str("registrado_em")) ?: 0, o.str("corrida_id")) }
                             .groupBy({ it.first }, { it.second })
                     }.getOrNull()
@@ -136,9 +141,9 @@ object Gestao {
         PwCore.rpc.chamar("confirmar_pagamento", buildJsonObject { put("p_corrida", id); put("p_metodo", metodo) }).exigirOk(::traduzir); Unit
     }
 
-    /** Chaves PIX cadastradas (usuário → "chave · titular"). */
+    /** Chave PIX principal de cada um (usuário → "chave · titular"): para onde vai o repasse. */
     suspend fun chavesPix(): Map<String, String> = runCatching {
-        PwCore.rpc.rest("GET", "/rest/v1/dados_recebimento?select=usuario_id,chave,titular").exigirOk().lista()
+        PwCore.rpc.rest("GET", "/rest/v1/chaves_pix?principal=is.true&select=usuario_id,tipo_chave,chave,titular").exigirOk().lista()
             .associate { it.str("usuario_id")!! to "${it.str("chave")} · ${it.str("titular")}" }
     }.getOrDefault(emptyMap())
 
@@ -166,6 +171,33 @@ object Gestao {
         val arquivos = r?.strs("arquivos").orEmpty()
         if (arquivos.isNotEmpty()) runCatching { PwCore.rpc.removerArquivos("comprovantes", arquivos) }
         Unit
+    }
+
+    /** Quanto a limpeza de histórico apagaria (corridas finalizadas e pontos de percurso). */
+    suspend fun previaHistorico(teste: Boolean, motoboy: String?, ateMs: Long?): Pair<Int, Int>? = runCatching {
+        val r = PwCore.rpc.chamar("previa_historico", buildJsonObject {
+            put("p_teste", teste)
+            put("p_motoboy", motoboy?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("p_ate", ateMs?.let { JsonPrimitive(Instant.ofEpochMilli(it).toString()) } ?: JsonNull)
+        }).exigirOk(::traduzir).objeto()
+        (r?.int("corridas") ?: 0) to (r?.int("pings") ?: 0)
+    }.getOrNull()
+
+    /** Apaga de uma vez o histórico (de todos ou de um motoboy) do modo teste ou do real. Devolve (corridas, pontos). */
+    suspend fun apagarHistorico(senha: String, teste: Boolean, corridas: Boolean, percursos: Boolean, motoboy: String?, ateMs: Long?): Result<Pair<Int, Int>> = acao {
+        val r = PwCore.rpc.chamar("apagar_historico", buildJsonObject {
+            put("p_senha", senha); put("p_teste", teste); put("p_corridas", corridas); put("p_percursos", percursos)
+            put("p_motoboy", motoboy?.let { JsonPrimitive(it) } ?: JsonNull)
+            put("p_ate", ateMs?.let { JsonPrimitive(Instant.ofEpochMilli(it).toString()) } ?: JsonNull)
+            put("p_motivo", "Limpeza de histórico pelo app")
+        }).exigirOk(::traduzir).objeto()
+        r?.str("erro")?.let { e ->
+            val rest = r.int("restantes")
+            throw ErroServidor(e, if (e == "senha_incorreta" && rest != null) "Senha incorreta. Restam $rest tentativa${if (rest == 1) "" else "s"}." else traduzir(e) ?: e)
+        }
+        val arquivos = r?.strs("arquivos").orEmpty()
+        if (arquivos.isNotEmpty()) runCatching { PwCore.rpc.removerArquivos("comprovantes", arquivos) }
+        (r?.int("corridas") ?: 0) to (r?.int("pings") ?: 0)
     }
 
     suspend fun eventos(corridaId: String): List<EventoG> = runCatching {
@@ -301,6 +333,8 @@ object Gestao {
         "datas_demais" to "No máximo 60 corridas por repetição.",
         "corrida_nao_esta_planejada" to "Essa corrida não está mais planejada.",
         "senha_incorreta" to "Senha incorreta.",
+        "sem_permissao" to "Você não pode mexer no histórico dessa conta.",
+        "nada_para_excluir" to "Escolha o que apagar.",
         "muitas_tentativas" to "Muitas senhas erradas. Ficou bloqueado por 15 minutos.",
         "cancele_as_corridas_em_andamento" to "Há corrida aceita, em andamento ou reservada. Cancele antes de apagar.",
         "servidor_sem_chave" to "Falta configurar a chave secreta do Supabase na Vercel (SUPABASE_SECRET_KEY).",

@@ -171,6 +171,9 @@ fun MapaG(onCorrida: (String) -> Unit) {
     var comPings by rememberSaveable { mutableStateOf(true) }
     var destaque by remember(seguindo) { mutableStateOf<Int?>(null) }
     val modoRuas by com.pwexpress.core.mapa.Estabelecimentos.ruas.collectAsState()
+    val iconesLigados by com.pwexpress.core.mapa.Estabelecimentos.visiveis.collectAsState()
+    val comIcones = modulo("estabelecimentos")
+    val rotulos = com.pwexpress.core.mapa.Estabelecimentos.rotulos(modoRuas, iconesLigados && comIcones)
     val comTrilhas = modulo("trilhas_mapa")
 
     val ordem = mapOf("em_corrida" to 0, "disponivel" to 1)
@@ -227,9 +230,13 @@ fun MapaG(onCorrida: (String) -> Unit) {
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 PwPilula(calor.rotulo, PwIcones.Flame, { calor = Calor.entries[(calor.ordinal + 1) % Calor.entries.size] }, ligada = calor != Calor.DESLIGADO)
                 if (comTrilhas) PwPilula("Pings", PwIcones.Route, { comPings = !comPings }, ligada = comPings)
-                PwPilula("Ruas: ${modoRuas.rotulo}", PwIcones.MapPin, {
-                    com.pwexpress.core.mapa.Estabelecimentos.definirRuas(com.pwexpress.core.mapa.ModoRuas.entries[(modoRuas.ordinal + 1) % com.pwexpress.core.mapa.ModoRuas.entries.size])
-                })
+                if (comIcones) PwPilula(rotulos.rotulo, PwIcones.MapPin, {
+                    val r = com.pwexpress.core.mapa.Rotulos.entries
+                    com.pwexpress.core.mapa.Estabelecimentos.definirRotulos(r[(rotulos.ordinal + 1) % r.size])
+                }, ligada = rotulos != com.pwexpress.core.mapa.Rotulos.NADA)
+                else PwPilula("Ruas: ${modoRuas.rotulo}", PwIcones.MapPin, {
+                    com.pwexpress.core.mapa.Estabelecimentos.definirRuas(if (modoRuas == com.pwexpress.core.mapa.ModoRuas.RUA) com.pwexpress.core.mapa.ModoRuas.OCULTA else com.pwexpress.core.mapa.ModoRuas.RUA)
+                }, ligada = modoRuas == com.pwexpress.core.mapa.ModoRuas.RUA)
             }
             if (comTrilhas) { Spacer(Modifier.height(8.dp)); LegendaPercurso(teste) }
             if (!dados.carregado) PwCarregando()
@@ -320,6 +327,7 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
     var selecionando by remember { mutableStateOf(false) }
     val marcadas = remember { mutableStateListOf<String>() }
     var excluindo by remember { mutableStateOf(false) }
+    var limpando by remember { mutableStateOf(false) }
     val podeApagar = modulo("excluir_corridas")
 
     val todas = dados.corridas.filter { it.teste == teste }
@@ -346,6 +354,7 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
                 PwBotaoIcone(PwIcones.Trash2, "Apagar selecionadas", { if (marcadas.isNotEmpty()) excluindo = true }, tamanho = 38.dp, habilitado = marcadas.isNotEmpty(), cor = c.vermelho)
                 PwBotaoIcone(PwIcones.X, "Cancelar seleção", { selecionando = false; marcadas.clear() }, tamanho = 38.dp)
             } else {
+                if (podeApagar) PwBotaoIcone(PwIcones.History, "Apagar histórico", { limpando = true }, tamanho = 38.dp)
                 if (podeApagar) PwBotaoIcone(PwIcones.ListChecks, "Selecionar para apagar", { selecionando = true; marcadas.clear() }, tamanho = 38.dp)
                 PwBotaoIcone(PwIcones.Plus, "Nova corrida", onNova, ativo = true, tamanho = 38.dp)
             }
@@ -371,6 +380,7 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
             PwBotaoPerigo("Apagar ${marcadas.size}", onClick = { excluindo = true }, cheio = true, modifier = Modifier.fillMaxWidth())
         }
     }
+    if (limpando) DialogoApagarHistorico(teste, onFechar = { limpando = false })
     if (excluindo) {
         DialogoExcluirCorridas(dados.corridas.filter { it.id in marcadas }, onFechar = { excluindo = false }, onExcluidas = { excluindo = false; selecionando = false; marcadas.clear() })
     }

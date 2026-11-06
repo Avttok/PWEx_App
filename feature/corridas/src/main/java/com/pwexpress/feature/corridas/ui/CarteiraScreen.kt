@@ -137,6 +137,9 @@ fun CarteiraScreen(modifier: Modifier = Modifier) {
             }
         }
 
+        // ---------------------------------------------------- para onde o dinheiro vai
+        CartaoChavesPix()
+
         // ---------------------------------------------------- extrato
         PwRotulo("Extrato")
         when {
@@ -144,10 +147,6 @@ fun CarteiraScreen(modifier: Modifier = Modifier) {
             noPeriodo.isEmpty() -> PwVazio("Nenhuma corrida concluída neste período.", icone = PwIcones.Wallet)
             else -> noPeriodo.forEach { LinhaExtrato(it) }
         }
-        Text(
-            "Recebimentos direto na sua chave PIX chegam em breve.",
-            color = c.texto3, fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-        )
     }
 }
 

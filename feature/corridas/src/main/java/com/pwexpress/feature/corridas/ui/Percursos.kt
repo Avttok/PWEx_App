@@ -66,14 +66,14 @@ fun MeusPercursos() {
     var dia by remember { mutableIntStateOf(0) }
     var regs by remember { mutableStateOf<List<RegistroPercurso>?>(null) }
     var destaque by remember(dia) { mutableStateOf<Int?>(null) }
-    LaunchedEffect(dia, eu?.id) {
+    LaunchedEffect(dia, eu?.id, teste) {
         val id = eu?.id ?: return@LaunchedEffect
         regs = null
         val zona = ZoneId.systemDefault()
         val ini = LocalDate.now(zona).minusDays(dia.toLong()).atStartOfDay(zona).toInstant()
         val fim = ini.plusSeconds(86_400)
         regs = runCatching {
-            val r = PwCore.rpc.rest("GET", "/rest/v1/localizacoes?select=lat,lng,status,corrida_id,registrado_em&motoboy_id=eq.$id&registrado_em=gte.$ini&registrado_em=lt.$fim&order=registrado_em.asc&limit=8000")
+            val r = PwCore.rpc.rest("GET", "/rest/v1/localizacoes?select=lat,lng,status,corrida_id,registrado_em&motoboy_id=eq.$id&teste=eq.$teste&registrado_em=gte.$ini&registrado_em=lt.$fim&order=registrado_em.asc&limit=8000")
             if (!r.ok) emptyList() else separarRegistros(Json.parseToJsonElement(r.corpo).jsonArray.mapNotNull { e ->
                 val o = e.jsonObject
                 fun t(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content

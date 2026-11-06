@@ -26,6 +26,7 @@ import org.maplibre.android.style.layers.CircleLayer
 import org.maplibre.android.style.layers.LineLayer
 import org.maplibre.android.style.layers.Property
 import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.layers.SymbolLayer
 import org.maplibre.android.style.sources.GeoJsonSource
 import org.maplibre.geojson.Feature
 import org.maplibre.geojson.FeatureCollection
@@ -91,7 +92,7 @@ fun PwMapa(
             m.uiSettings.isRotateGesturesEnabled = false
             m.uiSettings.isTiltGesturesEnabled = false
             m.setStyle(Style.Builder().fromUri(if (escuro) ESTILO_ESCURO else ESTILO_CLARO)) { s ->
-                criarCamadas(s)
+                criarCamadas(s, escuro)
                 estilo = s
             }
         }
@@ -144,7 +145,8 @@ fun PwMapa(
     AndroidView(factory = { mapView }, modifier = modifier)
 }
 
-private fun criarCamadas(s: Style) {
+private fun criarCamadas(s: Style, escuro: Boolean) {
+    adicionarEstabelecimentos(s, escuro)
     s.addSource(GeoJsonSource("rota"))
     s.addSource(GeoJsonSource("paradas"))
     s.addSource(GeoJsonSource("eu"))
@@ -189,5 +191,45 @@ private fun criarCamadas(s: Style) {
             PropertyFactory.circleStrokeColor("#0A0A0A"),
             PropertyFactory.circleStrokeWidth(3f),
         ),
+    )
+}
+
+/**
+ * Nomes de estabelecimentos (comércio, restaurantes, postos…), a partir do zoom de bairro.
+ * Os estilos limpos não mostram, mas os dados estão nos mesmos mapas (camada "poi").
+ */
+private fun adicionarEstabelecimentos(s: Style, escuro: Boolean) {
+    if (s.getSource("openmaptiles") == null) return
+    s.addLayer(
+        CircleLayer("pwex-poi-ponto", "openmaptiles").apply {
+            sourceLayer = "poi"
+            minZoom = 15f
+            setFilter(Expression.has("name"))
+            setProperties(
+                PropertyFactory.circleRadius(3f),
+                PropertyFactory.circleColor(if (escuro) "#D4AF37" else "#B8901F"),
+                PropertyFactory.circleStrokeColor(if (escuro) "#0B0B0D" else "#FFFFFF"),
+                PropertyFactory.circleStrokeWidth(1.2f),
+            )
+        },
+    )
+    s.addLayer(
+        SymbolLayer("pwex-poi", "openmaptiles").apply {
+            sourceLayer = "poi"
+            minZoom = 15f
+            setFilter(Expression.has("name"))
+            setProperties(
+                PropertyFactory.textField(Expression.coalesce(Expression.get("name:pt"), Expression.get("name"))),
+                PropertyFactory.textFont(arrayOf("Noto Sans Regular")),
+                PropertyFactory.textSize(11.5f),
+                PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
+                PropertyFactory.textOffset(arrayOf(0f, 0.5f)),
+                PropertyFactory.textMaxWidth(9f),
+                PropertyFactory.textOptional(true),
+                PropertyFactory.textColor(if (escuro) "#E9C766" else "#6B5410"),
+                PropertyFactory.textHaloColor(if (escuro) "#0B0B0D" else "#FFFFFF"),
+                PropertyFactory.textHaloWidth(1.4f),
+            )
+        },
     )
 }

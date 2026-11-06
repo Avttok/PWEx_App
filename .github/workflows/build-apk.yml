@@ -43,12 +43,11 @@ jobs:
 
       # Cria uma "Release" com o APK anexado: fácil de baixar direto no celular.
       - name: Publicar release
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
-          name: "Motoboy · build ${{ github.run_number }}"
+          name: "PW Express · build ${{ github.run_number }}"
           prerelease: true
           files: saida/*.apk
-          body: |
-            App do motoboy PW Express (candidata a versão estável).
-            Commit: ${{ github.sha }}
+          body_path: NOTAS_DA_VERSAO.md

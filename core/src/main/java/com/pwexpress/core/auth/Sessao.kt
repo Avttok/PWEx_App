@@ -34,5 +34,17 @@ class SessaoStore(context: Context) {
         putString("email", s.email)
     }
 
+    /** "Permanecer conectado" (padrão: sim). Fica fora do limpar() para lembrar a escolha. */
+    var permanecer: Boolean
+        get() = escolhas.getBoolean("permanecer", true)
+        set(v) = escolhas.edit { putBoolean("permanecer", v) }
+
+    /** Quando entrou (para expirar sessões sem "Permanecer conectado"). */
+    var entrouEm: Long
+        get() = escolhas.getLong("entrou_em", 0L)
+        set(v) = escolhas.edit { putLong("entrou_em", v) }
+
+    private val escolhas = context.getSharedPreferences("pwex_login", Context.MODE_PRIVATE)
+
     fun limpar() = prefs.edit { clear() }
 }

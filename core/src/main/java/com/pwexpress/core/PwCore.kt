@@ -2,6 +2,7 @@ package com.pwexpress.core
 
 import android.content.Context
 import com.pwexpress.core.auth.AuthRepository
+import com.pwexpress.core.auth.ContasSalvas
 import com.pwexpress.core.auth.SessaoStore
 import com.pwexpress.core.config.PwConfig
 import com.pwexpress.core.network.SupabaseHttp
@@ -20,7 +21,8 @@ object PwCore {
         if (::http.isInitialized) return
         val app = context.applicationContext
         http = SupabaseHttp(PwConfig.supabaseUrl, PwConfig.supabaseKey)
-        auth = AuthRepository(http, SessaoStore(app))
+        auth = AuthRepository(http, SessaoStore(app), ContasSalvas(app))
+        auth.aplicarPermanencia()
         rpc = SupabaseRpc(http, auth)
     }
 }

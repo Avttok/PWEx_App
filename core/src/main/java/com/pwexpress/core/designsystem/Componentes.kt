@@ -288,3 +288,44 @@ fun PwLinhaInfo(icone: ImageVector?, rotulo: String, valor: String, destaque: Bo
 
 @Composable
 fun PwEspaco(altura: Dp) = Spacer(Modifier.height(altura))
+
+/**
+ * Valor em dinheiro com degradê, que diminui sozinho para nunca quebrar a linha
+ * (ex.: R$ 10.500,00 cabe onde cabia R$ 15,00).
+ */
+@Composable
+fun PwValor(texto: String, modifier: Modifier = Modifier, tamanhoMax: Int = 44, cor: Color? = null) {
+    val c = Pw.cores
+    val tamanho = when {
+        texto.length <= 8 -> tamanhoMax
+        texto.length <= 10 -> (tamanhoMax * 0.85f).toInt()
+        texto.length <= 12 -> (tamanhoMax * 0.72f).toInt()
+        texto.length <= 14 -> (tamanhoMax * 0.62f).toInt()
+        else -> (tamanhoMax * 0.52f).toInt()
+    }
+    Text(
+        texto,
+        modifier = modifier,
+        maxLines = 1,
+        softWrap = false,
+        style = if (cor != null) {
+            TextStyle(color = cor, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = tamanho.sp, letterSpacing = (-0.5).sp)
+        } else {
+            TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = tamanho.sp, letterSpacing = (-0.5).sp)
+        },
+    )
+}
+
+/** Faixa no topo avisando que o modo teste está ligado. */
+@Composable
+fun PwFaixaTeste(modifier: Modifier = Modifier) {
+    val c = Pw.cores
+    Row(
+        modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(c.gradOuro).padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(PwIcones.FlaskConical, null, tint = c.sobreOuro, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("MODO TESTE · só corridas e ganhos de teste", color = c.sobreOuro, fontWeight = FontWeight.Bold, fontSize = 12.sp, fontFamily = Archivo, letterSpacing = 0.5.sp)
+    }
+}

@@ -18,20 +18,33 @@ import java.io.IOException
 class AuthErro(mensagem: String) : Exception(mensagem)
 
 /** Login por e-mail/senha no Supabase Auth, com renovação automática do token. */
-class AuthRepository(private val http: SupabaseHttp, private val store: SessaoStore) {
+class AuthRepository(
+    private val http: SupabaseHttp,
+    private val store: SessaoStore,
+    val contas: ContasSalvas,
+) {
 
     private val mutex = Mutex()
     private val _sessao = MutableStateFlow(store.ler())
     val sessao: StateFlow<Sessao?> = _sessao.asStateFlow()
 
-    suspend fun entrar(email: String, senha: String): Result<Unit> = try {
+    /** Marcado no login: mantém a sessão entre aberturas do app e guarda o acesso de um toque. */
+    var permanecerConectado: Boolean
+        get() = store.permanecer
+        set(v) { store.permanecer = v }
+
+    suspend fun entrar(email: String, senha: String, permanecer: Boolean = true): Result<Unit> = try {
         val corpo = buildJsonObject {
             put("email", email.trim())
             put("password", senha)
         }.toString()
         val r = http.post("/auth/v1/token?grant_type=password", corpo)
         if (r.ok) {
-            guardar(parseSessao(r.corpo))
+            val sessao = parseSessao(r.corpo)
+            store.permanecer = permanecer
+            store.entrouEm = System.currentTimeMillis()
+            guardar(sessao)
+            contas.lembrar(sessao.email.ifBlank { email }, if (permanecer) sessao.refreshToken else null)
             Result.success(Unit)
         } else {
             Result.failure(AuthErro(mensagemErro(r)))
@@ -40,6 +53,38 @@ class AuthRepository(private val http: SupabaseHttp, private val store: SessaoSt
         Result.failure(AuthErro("Sem conexão com o servidor. Verifique a internet."))
     } catch (e: Exception) {
         Result.failure(AuthErro("Erro inesperado: ${e.message}"))
+    }
+
+    /** Entra com um toque usando o acesso salvo de uma conta ("Logar com"). */
+    suspend fun entrarComContaSalva(conta: ContaSalva): Result<Unit> = try {
+        val token = conta.refreshToken ?: throw AuthErro("Digite a senha desta conta.")
+        val r = http.post("/auth/v1/token?grant_type=refresh_token", buildJsonObject { put("refresh_token", token) }.toString())
+        if (r.ok) {
+            val sessao = parseSessao(r.corpo)
+            store.permanecer = true
+            store.entrouEm = System.currentTimeMillis()
+            guardar(sessao)
+            contas.lembrar(sessao.email.ifBlank { conta.email }, sessao.refreshToken)
+            Result.success(Unit)
+        } else {
+            contas.esquecerToken(conta.email) // acesso expirou: pede a senha
+            Result.failure(AuthErro("O acesso salvo expirou. Digite a senha."))
+        }
+    } catch (e: IOException) {
+        Result.failure(AuthErro("Sem conexão com o servidor. Verifique a internet."))
+    }
+
+    /**
+     * Sem "Permanecer conectado", a sessão expira 12 h depois do login (um turno).
+     * Não desloga a cada reinício do app porque o Android reinicia o rastreamento em segundo plano.
+     * Chamado no início do processo (Application.onCreate).
+     */
+    fun aplicarPermanencia() {
+        val expirou = System.currentTimeMillis() - store.entrouEm > 12 * 60 * 60 * 1000L
+        if (!store.permanecer && expirou && _sessao.value != null) {
+            store.limpar()
+            _sessao.value = null
+        }
     }
 
     /**
@@ -54,7 +99,10 @@ class AuthRepository(private val http: SupabaseHttp, private val store: SessaoSt
         val corpo = buildJsonObject { put("refresh_token", atual.refreshToken) }.toString()
         val r = http.post("/auth/v1/token?grant_type=refresh_token", corpo)
         when {
-            r.ok -> parseSessao(r.corpo).also { guardar(it) }.accessToken
+            r.ok -> parseSessao(r.corpo).also {
+                guardar(it)
+                contas.atualizarToken(it.email.ifBlank { atual.email }, it.refreshToken)
+            }.accessToken
             r.codigo in 400..499 -> { sair(); null } // sessão revogada
             else -> atual.accessToken                // servidor instável: tenta com o atual
         }

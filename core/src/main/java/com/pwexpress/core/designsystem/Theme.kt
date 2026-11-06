@@ -116,6 +116,11 @@ object TemaApp {
     private val _pref = MutableStateFlow(PreferenciaTema.SISTEMA)
     val preferencia: StateFlow<PreferenciaTema> = _pref.asStateFlow()
 
+    /** Com o modo teste ligado, o app inteiro troca o dourado por violeta (fica claro que é teste). */
+    private val _modoTeste = MutableStateFlow(false)
+    val modoTeste: StateFlow<Boolean> = _modoTeste.asStateFlow()
+    fun definirModoTeste(ligado: Boolean) { _modoTeste.value = ligado }
+
     fun init(context: Context) {
         ctx = context.applicationContext
         val salvo = ctx!!.getSharedPreferences("pwex_tema", Context.MODE_PRIVATE).getString("tema", null)
@@ -173,7 +178,16 @@ fun PwTheme(content: @Composable () -> Unit) {
         PreferenciaTema.CLARO -> false
         PreferenciaTema.ESCURO -> true
     }
-    val p = if (escuro) Noturno else Claro
+    val teste by TemaApp.modoTeste.collectAsState()
+    val base = if (escuro) Noturno else Claro
+    val p = if (!teste) base else base.copy(
+        ouro = if (escuro) Color(0xFFA78BFA) else Color(0xFF7C3AED),
+        ouroClaro = if (escuro) Color(0xFFD4C6FF) else Color(0xFFA78BFA),
+        ouroEscuro = if (escuro) Color(0xFF6D28D9) else Color(0xFF5B21B6),
+        sobreOuro = Color(0xFFFFFFFF),
+        brilho1 = Color(if (escuro) 0x33A78BFA else 0x407C3AED),
+        brilho2 = Color(if (escuro) 0x14A78BFA else 0x1F7C3AED),
+    )
     val esquema = if (escuro) {
         darkColorScheme(
             primary = p.ouro, onPrimary = p.sobreOuro, secondary = p.ouroClaro, onSecondary = p.sobreOuro,

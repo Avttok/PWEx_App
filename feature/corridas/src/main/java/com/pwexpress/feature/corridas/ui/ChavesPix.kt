@@ -159,7 +159,7 @@ private fun JanelaNovaChave(onFechar: () -> Unit, onSalva: () -> Unit) {
         // o tipo reconhecido aparece embaixo do campo
         when {
             chave.isBlank() -> Text("O tipo é reconhecido sozinho.", color = c.texto3, fontSize = 12.5.sp)
-            leitura.erro != null -> Text(leitura.erro, color = c.vermelho, fontSize = 12.5.sp)
+            leitura.erro != null -> Text(leitura.erro.orEmpty(), color = c.vermelho, fontSize = 12.5.sp)
             leitura.ambiguo -> {
                 Text("Serve como CPF e como celular. Qual é?", color = c.texto2, fontSize = 12.5.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

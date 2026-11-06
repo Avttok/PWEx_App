@@ -51,6 +51,7 @@ import com.pwexpress.core.designsystem.PwSelosCargo
 import com.pwexpress.core.designsystem.PwToast
 import com.pwexpress.core.designsystem.TipoAviso
 import androidx.compose.ui.draw.scale
+import androidx.compose.animation.core.animateFloat
 import com.pwexpress.core.designsystem.PwErro
 import com.pwexpress.core.designsystem.PwIcones
 import com.pwexpress.core.designsystem.TemaApp
@@ -224,7 +225,7 @@ private fun CoracaoBatendo() {
     val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "coracao")
     val escala by t.animateFloat(
         1f, 1.18f,
-        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(800), androidx.compose.animation.core.RepeatMode.Reverse),
+        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween<Float>(800), androidx.compose.animation.core.RepeatMode.Reverse),
         label = "batida",
     )
     Icon(PwIcones.Heart, "com amor", tint = Pw.cores.ouro, modifier = Modifier.size(12.dp).scale(escala))

@@ -14,6 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.ExperimentalTextApi
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -138,6 +139,7 @@ object TemaApp {
 
 // ------------------------------------------------------------------ tipografia (Archivo variável)
 
+@OptIn(ExperimentalTextApi::class)
 private fun archivo(peso: Int, largura: Float = 100f) = Font(
     R.font.archivo,
     weight = FontWeight(peso),

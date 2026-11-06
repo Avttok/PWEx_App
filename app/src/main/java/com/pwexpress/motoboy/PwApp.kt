@@ -11,7 +11,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 class PwApp : Application() {
@@ -43,7 +42,12 @@ class PwApp : Application() {
         }
         // configurações do servidor (core:perfil) → ritmo do GPS (feature:tracking)
         escopo.launch {
-            Perfis.perfil.filterNotNull().collect { p ->
+            Perfis.perfil.collect { p ->
+                // modo teste: o app inteiro fica violeta
+                TemaApp.definirModoTeste(p?.modoTeste == true)
+                if (p == null) return@collect
+                // "Logar com": mantém nome e foto atualizados na conta salva
+                PwCore.auth.sessao.value?.email?.let { PwCore.auth.contas.atualizarPerfil(it, p.nome, p.fotoUrl) }
                 Tracking.aplicarConfiguracoes(
                     corridaS = p.numero("intervalo_corrida_s", 45.0),
                     economiaS = p.numero("intervalo_economia_s", 90.0),

@@ -14,6 +14,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import com.pwexpress.core.designsystem.PwFaixaTeste
+import com.pwexpress.motoboy.ui.PrimeiraConfiguracao
+import com.pwexpress.motoboy.ui.lerPreparo
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -46,13 +50,21 @@ class MainActivity : ComponentActivity() {
             PwTheme {
                 PwFundo {
                     val sessao by PwCore.auth.sessao.collectAsState()
+                    val scope = rememberCoroutineScope()
+                    val ciclo = LocalLifecycleOwner.current
                     val oferta by Corridas.oferta.collectAsState()
                     val ativa by Corridas.ativa.collectAsState()
                     val info by Tracking.info.collectAsState()
                     val perfil by Perfis.perfil.collectAsState()
                     var noPerfil by remember { mutableStateOf(false) }
-                    val scope = rememberCoroutineScope()
-                    val ciclo = LocalLifecycleOwner.current
+                    val ctx = LocalContext.current
+                    var preparado by remember { mutableStateOf(lerPreparo(ctx).completo) }
+                    // se algo for desligado depois, a tela de preparo volta
+                    LaunchedEffect(Unit) {
+                        ciclo.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                            preparado = lerPreparo(ctx).completo
+                        }
+                    }
 
                     // Reserva caso o push falhe: com o app aberto e disponível, consulta a cada 10 s.
                     LaunchedEffect(sessao != null, info.modo) {
@@ -73,6 +85,10 @@ class MainActivity : ComponentActivity() {
                     val conteudo = Modifier.safeDrawingPadding()
                     when {
                         s == null -> LoginScreen(conteudo)
+                        !preparado -> PrimeiraConfiguracao(
+                            onPronto = { preparado = true },
+                            modifier = conteudo,
+                        )
                         o != null -> OfertaScreen(o, onFim = { }, modifier = conteudo)
                         noPerfil -> PerfilScreen(
                             email = s.email,
@@ -95,6 +111,7 @@ class MainActivity : ComponentActivity() {
                             saudacao = NomePerfil(s.email).substringBefore(" "),
                             acoesTopo = { AvatarPerfil(s.email, onClick = { noPerfil = true }) },
                             extras = {
+                                if (perfil?.modoTeste == true) PwFaixaTeste()
                                 CartaoGanhos()
                                 CartaoOfertas()
                             },

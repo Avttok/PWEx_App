@@ -18,6 +18,8 @@ object Alarme {
     // Mudou o som ou a vibração? Troque o id do canal: o Android não atualiza canais existentes.
     private const val CANAL_OFERTA = "pwex_ofertas_v1"
     private const val CANAL_AVISOS = "pwex_avisos"
+    private const val CANAL_SILENCIOSO = "pwex_silencioso"
+    private const val NOTIF_VOLTOU = 2003
     const val NOTIF_OFERTA = 2001
     private const val NOTIF_AVISO = 2002
 
@@ -41,6 +43,33 @@ object Alarme {
         nm.createNotificationChannel(
             NotificationChannel(CANAL_AVISOS, "Avisos de corrida", NotificationManager.IMPORTANCE_HIGH)
         )
+        nm.createNotificationChannel(
+            NotificationChannel(CANAL_SILENCIOSO, "Avisos silenciosos", NotificationManager.IMPORTANCE_LOW).apply {
+                description = "Informativos que não tocam nem acendem a tela"
+                setSound(null, null)
+                enableVibration(false)
+            }
+        )
+    }
+
+    /** Aviso discreto: sem som, sem vibrar, sem acender a tela. */
+    fun avisarSilencioso(ctx: Context, texto: String) {
+        criarCanais(ctx)
+        val abrir = ctx.packageManager.getLaunchIntentForPackage(ctx.packageName)?.let {
+            PendingIntent.getActivity(ctx, 12, it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        }
+        val n = NotificationCompat.Builder(ctx, CANAL_SILENCIOSO)
+            .setSmallIcon(R.drawable.ic_notif_corrida)
+            .setColor(0xFFD4AF37.toInt())
+            .setContentTitle("PW Express")
+            .setContentText(texto)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .setOnlyAlertOnce(true)
+            .setAutoCancel(true)
+            .setContentIntent(abrir)
+            .build()
+        ctx.getSystemService(NotificationManager::class.java)?.notify(NOTIF_VOLTOU, n)
     }
 
     fun mostrarOferta(ctx: Context) {

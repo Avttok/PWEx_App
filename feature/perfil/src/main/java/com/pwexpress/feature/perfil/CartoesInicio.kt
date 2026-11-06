@@ -36,6 +36,7 @@ import com.pwexpress.core.designsystem.PwCartao
 import com.pwexpress.core.designsystem.PwIcones
 import com.pwexpress.core.designsystem.PwRotulo
 import com.pwexpress.core.designsystem.PwSelo
+import com.pwexpress.core.designsystem.PwValor
 import com.pwexpress.core.perfil.Perfis
 import java.text.NumberFormat
 import java.util.Locale
@@ -73,7 +74,7 @@ fun NomePerfil(email: String): String {
     return perfil?.nome?.ifBlank { null } ?: email.substringBefore("@")
 }
 
-/** Ganhos do dia, semana e mês (só corridas reais concluídas). */
+/** Ganhos do dia, semana e mês. No modo teste, mostra só os ganhos das corridas de teste. */
 @Composable
 fun CartaoGanhos() {
     val c = Pw.cores
@@ -83,14 +84,11 @@ fun CartaoGanhos() {
 
     PwCartao(destaque = true) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            PwRotulo("Seus ganhos", Modifier.weight(1f))
+            PwRotulo(if (perfil?.modoTeste == true) "Ganhos de teste" else "Seus ganhos", Modifier.weight(1f))
             if (perfil?.modoTeste == true) PwSelo("modo teste", c.violeta, icone = PwIcones.FlaskConical)
         }
         Spacer(Modifier.height(4.dp))
-        Text(
-            moeda(ganhos?.hoje ?: 0.0),
-            style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 38.sp, letterSpacing = (-0.8).sp),
-        )
+        PwValor(moeda(ganhos?.hoje ?: 0.0), tamanhoMax = 38)
         Text(
             "hoje · ${ganhos?.corridasHoje ?: 0} corrida${if ((ganhos?.corridasHoje ?: 0) == 1) "" else "s"}",
             color = c.texto2, fontFamily = Archivo, fontSize = 13.sp,
@@ -110,7 +108,10 @@ private fun Mini(rotulo: String, valor: String, modifier: Modifier) {
     Column(modifier.clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).padding(12.dp)) {
         PwRotulo(rotulo)
         Spacer(Modifier.width(2.dp))
-        Text(valor, color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+        Text(
+            valor, color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
+            fontSize = (if (valor.length > 12) 13 else if (valor.length > 10) 15 else 17).sp,
+        )
     }
 }
 

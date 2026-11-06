@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.sp
 import com.pwexpress.core.designsystem.Archivo
 import com.pwexpress.core.designsystem.ArchivoLargo
 import com.pwexpress.core.designsystem.Pw
+import com.pwexpress.core.designsystem.PwValor
 import com.pwexpress.core.designsystem.PwBotaoOuro
 import com.pwexpress.core.designsystem.PwBotaoVidro
 import com.pwexpress.core.designsystem.PwCartao
@@ -123,10 +124,7 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PwCartao(destaque = true) {
                 PwRotulo("Você recebe")
-                Text(
-                    moeda(corrida.valorMotoboy),
-                    style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 46.sp, letterSpacing = (-1).sp),
-                )
+                PwValor(moeda(corrida.valorMotoboy), tamanhoMax = 46)
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     Info("Até a coleta", km(oferta.distanciaM))

@@ -17,7 +17,7 @@ android {
         targetSdk = 36
         // No GitHub Actions cada build ganha um número maior, assim o APK novo instala por cima do antigo.
         versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
-        versionName = "0.2.${System.getenv("GITHUB_RUN_NUMBER") ?: "0"}"
+        versionName = "0.9.${System.getenv("GITHUB_RUN_NUMBER") ?: "0"}"
         // aparelhos reais (ARM) + emulador (x86_64): APK menor sem as outras arquiteturas do mapa
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64") }
     }

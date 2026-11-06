@@ -20,6 +20,7 @@ class FcmService : FirebaseMessagingService() {
                 Alarme.mostrarOferta(applicationContext)
                 runBlocking { withTimeoutOrNull(8_000) { Corridas.sincronizarAgora() } }
             }
+            "corrida_voltou" -> Alarme.avisarSilencioso(applicationContext, "Uma corrida que você recusou voltou ao lançamento")
             "cancelada" -> {
                 Alarme.pararOferta(applicationContext)
                 Alarme.avisar(applicationContext, "Corrida cancelada", "O gestor cancelou a corrida.")

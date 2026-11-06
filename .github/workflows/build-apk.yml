@@ -50,5 +50,5 @@ jobs:
           prerelease: true
           files: saida/*.apk
           body: |
-            APK de teste do app do motoboy (piloto do GPS).
+            App do motoboy PW Express (candidata a versão estável).
             Commit: ${{ github.sha }}

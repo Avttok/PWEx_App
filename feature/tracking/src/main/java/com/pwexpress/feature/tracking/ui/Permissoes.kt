@@ -11,7 +11,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 
-internal data class EstadoPermissoes(
+data class EstadoPermissoes(
     val localizacao: Boolean,
     val notificacoes: Boolean,
     val segundoPlano: Boolean,
@@ -21,7 +21,7 @@ internal data class EstadoPermissoes(
     val tudoOk: Boolean get() = basicasOk && segundoPlano && semRestricaoBateria
 }
 
-internal object Permissoes {
+object Permissoes {
 
     fun basicas(): Array<String> = buildList {
         add(Manifest.permission.ACCESS_FINE_LOCATION)

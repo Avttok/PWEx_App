@@ -58,6 +58,8 @@ import com.pwexpress.core.designsystem.PwIcones
 import com.pwexpress.core.designsystem.PwPonto
 import com.pwexpress.core.designsystem.PwRotulo
 import com.pwexpress.core.designsystem.PwSelo
+import com.pwexpress.core.designsystem.PwValor
+import androidx.compose.foundation.clickable
 import com.pwexpress.core.mapa.PinoMapa
 import com.pwexpress.core.mapa.PwMapa
 import com.pwexpress.feature.corridas.data.Corrida
@@ -89,6 +91,7 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
     var erro by remember { mutableStateOf<String?>(null) }
     var comprovanteAberto by remember { mutableStateOf(false) }
     var posicao by remember { mutableStateOf<Posicao?>(null) }
+    var minimizado by remember { mutableStateOf(false) }
 
     // posição ao vivo enquanto a tela está aberta
     LaunchedEffect(Unit) {
@@ -126,30 +129,63 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
 
     Column(modifier.fillMaxSize()) {
         // ---------------------------------------------------------- mapa
-        Box(Modifier.fillMaxWidth().height(300.dp)) {
+        Box(Modifier.fillMaxWidth().then(if (minimizado) Modifier.weight(1f) else Modifier.height(320.dp))) {
             PwMapa(
                 paradas = pinos,
                 rota = corrida.rotaPlanejada,
                 minhaPosicao = posicao?.let { it.lat to it.lng },
                 modifier = Modifier.fillMaxSize(),
             )
-            // barra de vidro sobre o mapa
+            // barra de vidro sobre o mapa: corrida + selo de teste à esquerda, valor à direita
             Row(
-                Modifier.padding(12.dp).clip(RoundedCornerShape(18.dp)).background(c.vidroForte).border(1.dp, c.borda, RoundedCornerShape(18.dp))
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().padding(12.dp)
+                    .clip(RoundedCornerShape(18.dp)).background(c.vidroForte).border(1.dp, c.borda, RoundedCornerShape(18.dp))
                     .padding(horizontal = 14.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column {
-                    Text("CORRIDA #${corrida.numero}", style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 15.sp, letterSpacing = 1.sp))
-                    corrida.empresaNome?.let { Text(it, color = c.texto2, fontSize = 12.sp, fontFamily = Archivo) }
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "CORRIDA #${corrida.numero}", maxLines = 1, softWrap = false,
+                            style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 15.sp, letterSpacing = 1.sp),
+                        )
+                        if (corrida.teste) {
+                            Spacer(Modifier.width(8.dp))
+                            PwSelo("TESTE", c.violeta, icone = PwIcones.FlaskConical)
+                        }
+                    }
+                    corrida.empresaNome?.let { Text(it, color = c.texto2, fontSize = 12.sp, fontFamily = Archivo, maxLines = 1) }
                 }
-                Spacer(Modifier.width(14.dp))
-                Text(moeda(corrida.valorMotoboy), color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 18.sp)
-                if (corrida.teste) {
-                    Spacer(Modifier.width(8.dp))
-                    PwSelo("TESTE", c.violeta, icone = PwIcones.FlaskConical)
+                Spacer(Modifier.width(10.dp))
+                PwValor(moeda(corrida.valorMotoboy), tamanhoMax = 22, cor = c.texto)
+            }
+            // navegação externa, sempre à mão
+            if (parada != null) {
+                Row(Modifier.align(Alignment.BottomEnd).padding(12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    BotaoMapa("Maps", PwIcones.Navigation) { abrirMaps(ctx, parada) }
+                    BotaoMapa("Waze", PwIcones.Route) { abrirWaze(ctx, parada) }
                 }
             }
+        }
+
+        // ---------------------------------------------------------- versão minimizada: só o essencial
+        if (minimizado && parada != null) {
+            val coleta = parada.tipo == TipoParada.COLETA
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        PwRotulo("${parada.ordem + 1}/${corrida.paradas.size} · ${if (coleta) "Coleta" else "Entrega"}")
+                        Text(parada.endereco, color = c.texto, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    IndicadorDistancia(distancia, noLocal, corrida.exigirNoLocal)
+                    Spacer(Modifier.width(8.dp))
+                    BotaoMapa("", PwIcones.Maximize2) { minimizado = false }
+                }
+                erro?.let { Text(it, color = c.vermelho) }
+                BotaoAcao(corrida, parada, enviando, noLocal, podeIgnorar, onAvancar = { a, i -> avancar(a, i) }, onComprovante = { comprovanteAberto = true })
+            }
+            return@Column
         }
 
         // ---------------------------------------------------------- etapas
@@ -160,55 +196,22 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         PwRotulo("Parada ${parada.ordem + 1} de ${corrida.paradas.size} · ${if (coleta) "Coleta" else "Entrega"}", Modifier.weight(1f))
                         IndicadorDistancia(distancia, noLocal, corrida.exigirNoLocal)
+                        Spacer(Modifier.width(6.dp))
+                        BotaoMapa("", PwIcones.EyeOff) { minimizado = true }
                     }
                     Spacer(Modifier.height(6.dp))
                     Text(parada.endereco, style = MaterialTheme.typography.titleLarge, color = c.texto)
                     parada.contatoNome?.let { Text("Contato: $it", color = c.texto2) }
                     parada.instrucoes?.let { Text(it, color = c.ouro) }
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        PwBotaoVidro("Maps", onClick = { abrirMaps(ctx, parada) }, icone = PwIcones.Navigation, modifier = Modifier.weight(1f))
-                        PwBotaoVidro("Waze", onClick = { abrirWaze(ctx, parada) }, icone = PwIcones.Route, modifier = Modifier.weight(1f))
-                        parada.contatoTelefone?.let { tel -> PwBotaoVidro("Ligar", onClick = { ligar(ctx, tel) }, icone = PwIcones.Phone) }
+                    parada.contatoTelefone?.let { tel ->
+                        Spacer(Modifier.height(10.dp))
+                        PwBotaoVidro("Ligar para $tel", onClick = { ligar(ctx, tel) }, icone = PwIcones.Phone)
                     }
                 }
 
                 erro?.let { Text(it, color = c.vermelho) }
-
-                val (rotulo, icone, acao) = when {
-                    parada.status != StatusParada.CHEGOU -> Triple("Cheguei no local", PwIcones.MapPin, { avancar("chegou") })
-                    coleta -> Triple("Coletado", PwIcones.PackageCheck, { avancar("concluir") })
-                    corrida.precisaComprovante -> Triple("Finalizar entrega", PwIcones.Check, { comprovanteAberto = true })
-                    else -> Triple("Entregue", PwIcones.CircleCheck, { avancar("concluir") })
-                }
-                PwBotaoOuro(
-                    when {
-                        enviando -> "Enviando…"
-                        !noLocal -> "Aproxime-se do endereço"
-                        else -> rotulo
-                    },
-                    onClick = acao,
-                    icone = if (noLocal) icone else PwIcones.MapPinned,
-                    habilitado = !enviando && noLocal,
-                    altura = 64.dp,
-                    tamanhoTexto = 19,
-                )
-                if (podeIgnorar && !noLocal) {
-                    PwBotaoVidro(
-                        "Ignorar localização (teste)",
-                        onClick = {
-                            if (parada.status != StatusParada.CHEGOU) avancar("chegou", ignorar = true)
-                            else if (corrida.precisaComprovante && !coleta) comprovanteAberto = true
-                            else avancar("concluir", ignorar = true)
-                        },
-                        icone = PwIcones.FlaskConical,
-                        cor = c.violeta,
-                        habilitado = !enviando,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                }
+                BotaoAcao(corrida, parada, enviando, noLocal, podeIgnorar, onAvancar = { a, i -> avancar(a, i) }, onComprovante = { comprovanteAberto = true })
             }
-
             PwCartao {
                 PwRotulo("Trajeto")
                 Spacer(Modifier.height(6.dp))
@@ -242,6 +245,73 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
 }
 
 private val Corrida.precisaComprovante get() = exigeNome || exigeFoto || exigeAssinatura || exigeCodigo
+
+/** Ação principal da parada (+ "ignorar localização" do admin em corrida de teste). */
+@Composable
+private fun BotaoAcao(
+    corrida: Corrida,
+    parada: Parada,
+    enviando: Boolean,
+    noLocal: Boolean,
+    podeIgnorar: Boolean,
+    onAvancar: (acao: String, ignorar: Boolean) -> Unit,
+    onComprovante: () -> Unit,
+) {
+    val c = Pw.cores
+    val coleta = parada.tipo == TipoParada.COLETA
+    val (rotulo, icone, acao) = when {
+        parada.status != StatusParada.CHEGOU -> Triple("Cheguei no local", PwIcones.MapPin, { onAvancar("chegou", false) })
+        coleta -> Triple("Coletado", PwIcones.PackageCheck, { onAvancar("concluir", false) })
+        corrida.precisaComprovante -> Triple("Finalizar entrega", PwIcones.Check, onComprovante)
+        else -> Triple("Entregue", PwIcones.CircleCheck, { onAvancar("concluir", false) })
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        PwBotaoOuro(
+            when {
+                enviando -> "Enviando…"
+                !noLocal -> "Aproxime-se do endereço"
+                else -> rotulo
+            },
+            onClick = acao,
+            icone = if (noLocal) icone else PwIcones.MapPinned,
+            habilitado = !enviando && noLocal,
+            altura = 64.dp,
+            tamanhoTexto = 19,
+        )
+        if (podeIgnorar && !noLocal) {
+            PwBotaoVidro(
+                "Ignorar localização (teste)",
+                onClick = {
+                    if (parada.status != StatusParada.CHEGOU) onAvancar("chegou", true)
+                    else if (corrida.precisaComprovante && !coleta) onComprovante()
+                    else onAvancar("concluir", true)
+                },
+                icone = PwIcones.FlaskConical,
+                cor = c.violeta,
+                habilitado = !enviando,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
+}
+
+/** Botão redondo de vidro sobre o mapa. */
+@Composable
+private fun BotaoMapa(texto: String, icone: ImageVector, onClick: () -> Unit) {
+    val c = Pw.cores
+    val forma = RoundedCornerShape(99.dp)
+    Row(
+        Modifier.clip(forma).background(c.vidroForte).border(1.dp, c.bordaForte, forma).clickable(onClick = onClick)
+            .padding(horizontal = if (texto.isEmpty()) 10.dp else 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icone, texto.ifEmpty { null }, tint = c.ouro, modifier = Modifier.size(18.dp))
+        if (texto.isNotEmpty()) {
+            Spacer(Modifier.width(6.dp))
+            Text(texto, color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, fontFamily = Archivo)
+        }
+    }
+}
 
 @Composable
 private fun IndicadorDistancia(distancia: Float?, noLocal: Boolean, exige: Boolean) {

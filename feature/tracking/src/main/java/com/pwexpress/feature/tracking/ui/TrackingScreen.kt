@@ -124,7 +124,7 @@ fun TrackingScreen(
 
         // ---------------------------------------------------------- estado
         PwCartao(destaque = info.modo != Modo.OFFLINE) {
-            PwRotulo("Seu estado")
+            PwRotulo("Status")
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PwPonto(corDo(info.modo), 14.dp)
@@ -135,12 +135,16 @@ fun TrackingScreen(
             Text(descricaoDo(info.modo, info.economia), style = MaterialTheme.typography.bodyMedium, color = c.texto2)
             Spacer(Modifier.height(16.dp))
             if (info.modo == Modo.EM_CORRIDA) {
-                Text("Conclua a corrida para mudar de estado.", style = MaterialTheme.typography.bodyMedium, color = c.ouro)
+                Text("Conclua a corrida para mudar o status.", style = MaterialTheme.typography.bodyMedium, color = c.ouro)
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    BotaoModo("Offline", PwIcones.Power, info.modo == Modo.OFFLINE, c.texto3, Modifier.weight(1f)) { escolher(Modo.OFFLINE) }
-                    BotaoModo("Disponível", PwIcones.Radio, info.modo == Modo.DISPONIVEL, c.verde, Modifier.weight(1f)) { escolher(Modo.DISPONIVEL) }
-                }
+                val offline = info.modo == Modo.OFFLINE
+                BotaoModo(
+                    rotulo = if (offline) "Ficar disponível" else "Ficar offline",
+                    icone = if (offline) PwIcones.Radio else PwIcones.Power,
+                    destaque = offline,
+                    cor = if (offline) c.verde else c.texto2,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { escolher(if (offline) Modo.DISPONIVEL else Modo.OFFLINE) }
             }
             aviso?.let {
                 Spacer(Modifier.height(10.dp))
@@ -156,10 +160,7 @@ fun TrackingScreen(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(PwIcones.BatteryLow, null, tint = c.ouro, modifier = Modifier.size(22.dp))
                 Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text("Economia de bateria", style = MaterialTheme.typography.titleMedium, color = c.texto)
-                    Text("Em corrida: posição a cada ${Intervalos.corridaMs(info.economia) / 1000} s", style = MaterialTheme.typography.bodyMedium, color = c.texto2)
-                }
+                Text("Economia de bateria", style = MaterialTheme.typography.titleMedium, color = c.texto, modifier = Modifier.weight(1f))
                 Switch(
                     checked = info.economia,
                     onCheckedChange = { Tracking.definirEconomia(it) },
@@ -214,12 +215,13 @@ fun TrackingScreen(
 }
 
 @Composable
-private fun BotaoModo(rotulo: String, icone: ImageVector, selecionado: Boolean, cor: Color, modifier: Modifier, onClick: () -> Unit) {
+private fun BotaoModo(rotulo: String, icone: ImageVector, destaque: Boolean, cor: Color, modifier: Modifier, onClick: () -> Unit) {
+    val selecionado = destaque
     val c = Pw.cores
     val forma = RoundedCornerShape(16.dp)
     Row(
         modifier
-            .height(56.dp)
+            .height(60.dp)
             .clip(forma)
             .background(if (selecionado) Brush.linearGradient(listOf(cor.copy(alpha = 0.32f), cor.copy(alpha = 0.10f))) else Brush.linearGradient(listOf(c.vidroSutil, c.vidroSutil)))
             .border(1.dp, if (selecionado) cor else c.borda, forma)
@@ -259,8 +261,8 @@ private fun corDo(m: Modo): Color = when (m) {
 }
 
 private fun descricaoDo(m: Modo, economia: Boolean): String = when (m) {
-    Modo.OFFLINE -> "Fora de serviço. Nenhuma localização é enviada."
-    Modo.DISPONIVEL -> "Aguardando corridas. Elas chegam com som e tela cheia."
+    Modo.OFFLINE -> "Fora de serviço, você não receberá nenhuma corrida."
+    Modo.DISPONIVEL -> "Aguardando corridas..."
     Modo.EM_CORRIDA -> "Rastreamento ao vivo a cada ${Intervalos.corridaMs(economia) / 1000} s."
 }
 

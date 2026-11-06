@@ -91,6 +91,9 @@ class MainActivity : ComponentActivity() {
                     val ciclo = LocalLifecycleOwner.current
                     val ctx = LocalContext.current
                     var preparado by remember { mutableStateOf(lerPreparo(ctx).completo) }
+                    // depois de entrar, espera o perfil (papéis) antes de decidir o lado do app
+                    var esperouPerfil by remember { mutableStateOf(false) }
+                    LaunchedEffect(sessao?.email) { esperouPerfil = false; delay(8_000); esperouPerfil = true }
 
                     LaunchedEffect(abrirAba.value) { abrirAba.value?.let { if (it == "planejadas") { aba = "planejadas"; painel = Painel.MOTOBOY }; abrirAba.value = null } }
 
@@ -138,6 +141,12 @@ class MainActivity : ComponentActivity() {
 
                     when {
                         s == null -> LoginScreen(conteudo)
+                        p == null && !esperouPerfil -> Box(conteudo.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            androidx.compose.foundation.layout.Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                com.pwexpress.core.designsystem.PwSeloLogo(140.dp)
+                                com.pwexpress.core.designsystem.PwCarregando(texto = "Carregando sua conta…")
+                            }
+                        }
                         noPerfil -> PerfilScreen(
                             email = s.email,
                             versao = "${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",

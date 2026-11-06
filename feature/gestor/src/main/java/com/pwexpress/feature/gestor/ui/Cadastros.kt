@@ -68,6 +68,7 @@ import com.pwexpress.core.designsystem.PwPagina
 import com.pwexpress.core.designsystem.PwPasso
 import com.pwexpress.core.designsystem.PwRotulo
 import com.pwexpress.core.designsystem.PwSegmentado
+import com.pwexpress.core.designsystem.numeroBr
 import com.pwexpress.core.designsystem.PwSelecao
 import com.pwexpress.core.designsystem.PwSelo
 import com.pwexpress.core.designsystem.PwVazio

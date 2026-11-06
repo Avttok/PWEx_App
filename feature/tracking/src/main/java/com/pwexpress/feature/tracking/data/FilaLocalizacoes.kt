@@ -27,7 +27,10 @@ internal data class PontoGps(
 ) {
     fun toJson(): JsonObject = buildJsonObject {
         put("id_local", idLocal)
-        sessaoId?.let { put("sessao_id", it) }
+        sessaoId?.let {
+            put("sessao_id", it)
+            if (status == Modo.EM_CORRIDA) put("corrida_id", it) // em corrida, a sessão é a própria corrida
+        }
         put("status", status.api)
         put("lat", lat)
         put("lng", lng)

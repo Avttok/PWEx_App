@@ -36,4 +36,17 @@ class SupabaseHttp(private val baseUrl: String, private val apiKey: String) {
                 HttpResposta(r.code, r.body?.string().orEmpty())
             }
         }
+
+    /** Envia bytes (ex.: foto) para o Storage. Lança IOException sem conexão. */
+    suspend fun postBytes(caminho: String, bytes: ByteArray, tipo: String, bearer: String): HttpResposta =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder()
+                .url(baseUrl + caminho)
+                .post(bytes.toRequestBody(tipo.toMediaType()))
+                .header("apikey", apiKey)
+                .header("Authorization", "Bearer $bearer")
+                .header("x-upsert", "true")
+                .build()
+            client.newCall(req).execute().use { r -> HttpResposta(r.code, r.body?.string().orEmpty()) }
+        }
 }

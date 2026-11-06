@@ -53,7 +53,12 @@ import java.util.Date
 import java.util.Locale
 
 @Composable
-fun TrackingScreen(email: String, onSair: () -> Unit, modifier: Modifier = Modifier) {
+fun TrackingScreen(
+    email: String,
+    onSair: () -> Unit,
+    modifier: Modifier = Modifier,
+    extras: @Composable () -> Unit = {},
+) {
     val ctx = LocalContext.current
     val info by Tracking.info.collectAsState()
     var perms by remember { mutableStateOf(Permissoes.ler(ctx)) }
@@ -123,24 +128,27 @@ fun TrackingScreen(email: String, onSair: () -> Unit, modifier: Modifier = Modif
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(16.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Modo.entries.forEach { m ->
-                    BotaoModo(m, selecionado = info.modo == m, modifier = Modifier.weight(1f)) { escolher(m) }
-                }
-            }
             if (info.modo == Modo.EM_CORRIDA) {
-                Spacer(Modifier.height(8.dp))
                 Text(
-                    "Piloto: \"Em corrida\" é ligado manualmente. Na próxima fase, ele liga sozinho ao aceitar uma corrida.",
+                    "Conclua a corrida para mudar de estado.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = PwCores.OuroClaro,
                 )
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(Modo.OFFLINE, Modo.DISPONIVEL).forEach { m ->
+                        BotaoModo(m, selecionado = info.modo == m, modifier = Modifier.weight(1f)) { escolher(m) }
+                    }
+                }
             }
             aviso?.let {
                 Spacer(Modifier.height(10.dp))
                 Text(it, color = MaterialTheme.colorScheme.error)
             }
         }
+
+        // ---------------------------------------------------------- outros módulos (ex.: ofertas)
+        extras()
 
         // ---------------------------------------------------------- economia
         PwCartao {
@@ -262,7 +270,7 @@ private fun corDo(m: Modo): Color = when (m) {
 
 private fun descricaoDo(m: Modo, economia: Boolean): String = when (m) {
     Modo.OFFLINE -> "Fora de serviço. Nenhuma localização é enviada."
-    Modo.DISPONIVEL -> "Aguardando corridas. Sinal leve a cada 3 min ou a cada 300 m."
+    Modo.DISPONIVEL -> "Aguardando corridas. Elas chegam com som e tela cheia."
     Modo.EM_CORRIDA -> "Rastreamento ao vivo a cada ${Intervalos.corridaMs(economia) / 1000} s."
 }
 

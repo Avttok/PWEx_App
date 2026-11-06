@@ -4,6 +4,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -59,6 +60,8 @@ dependencies {
     implementation(project(":core"))
     implementation(project(":feature:auth"))
     implementation(project(":feature:tracking"))
+    implementation(project(":feature:corridas"))
     implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }

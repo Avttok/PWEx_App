@@ -62,14 +62,38 @@ object Tracking {
 
     // ---------------------------------------------------------------- ações da tela
 
+    /** Escolha manual do motoboy (Offline / Disponível). Bloqueada durante uma corrida. */
     fun definirModo(modo: Modo) {
         if (modo == prefs.modo) return
+        if (prefs.modo == Modo.EM_CORRIDA || modo == Modo.EM_CORRIDA) return
         prefs.modo = modo
         prefs.sessaoId = if (modo == Modo.EM_CORRIDA) UUID.randomUUID().toString() else null
         prefs.statusPendente = true
         _info.update { it.copy(modo = modo, erro = null) }
         if (modo == Modo.OFFLINE) pararServico() else iniciarServico()
         sincronizarAgora()
+    }
+
+    /** Chamado quando uma corrida é aceita: liga o GPS de alta precisão vinculado a ela. */
+    fun entrarEmCorrida(corridaId: String) {
+        if (prefs.modo == Modo.EM_CORRIDA && prefs.sessaoId == corridaId) return
+        prefs.modo = Modo.EM_CORRIDA
+        prefs.sessaoId = corridaId
+        prefs.statusPendente = true
+        _info.update { it.copy(modo = Modo.EM_CORRIDA, erro = null) }
+        iniciarServico()
+        sincronizarAgora()
+    }
+
+    /** Corrida concluída ou cancelada: volta a ficar disponível. */
+    fun sairDaCorrida() {
+        if (prefs.modo != Modo.EM_CORRIDA) return
+        sincronizarAgora() // envia os últimos pontos ainda vinculados à corrida
+        prefs.modo = Modo.DISPONIVEL
+        prefs.sessaoId = null
+        prefs.statusPendente = true
+        _info.update { it.copy(modo = Modo.DISPONIVEL) }
+        iniciarServico()
     }
 
     fun definirEconomia(ativo: Boolean) {

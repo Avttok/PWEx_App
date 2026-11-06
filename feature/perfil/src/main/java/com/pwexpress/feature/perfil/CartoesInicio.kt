@@ -74,29 +74,33 @@ fun NomePerfil(email: String): String {
     return perfil?.nome?.ifBlank { null } ?: email.substringBefore("@")
 }
 
-/** Ganhos do dia, semana e mês. No modo teste, mostra só os ganhos das corridas de teste. */
+/** Seus ganhos (Início): hoje em destaque, corridas e km do dia, semana e mês. Toque abre a Carteira. */
 @Composable
-fun CartaoGanhos() {
+fun CartaoGanhos(onCarteira: (() -> Unit)? = null) {
     val c = Pw.cores
     val ganhos by Perfis.ganhos.collectAsState()
     val perfil by Perfis.perfil.collectAsState()
     LaunchedEffect(Unit) { Perfis.carregar() }
+    val g = ganhos
 
-    PwCartao(destaque = true) {
+    PwCartao(destaque = true, modifier = if (onCarteira != null) Modifier.clickable(onClick = onCarteira) else Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PwRotulo(if (perfil?.modoTeste == true) "Ganhos de teste" else "Seus ganhos", Modifier.weight(1f))
-            if (perfil?.modoTeste == true) androidx.compose.material3.Icon(PwIcones.FlaskConical, "Modo teste", tint = c.ouro, modifier = Modifier.size(18.dp))
+            if (onCarteira != null) {
+                Text("Carteira", color = c.ouro, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, fontFamily = Archivo)
+                androidx.compose.material3.Icon(PwIcones.ChevronRight, null, tint = c.ouro, modifier = Modifier.size(16.dp))
+            }
         }
         Spacer(Modifier.height(4.dp))
-        PwValor(moeda(ganhos?.hoje ?: 0.0), tamanhoMax = 38)
+        PwValor(moeda(g?.hoje ?: 0.0), Modifier.fillMaxWidth(), tamanhoMax = 40)
         Text(
-            "hoje · ${ganhos?.corridasHoje ?: 0} corrida${if ((ganhos?.corridasHoje ?: 0) == 1) "" else "s"}",
+            "hoje · ${g?.corridasHoje ?: 0} corrida${if ((g?.corridasHoje ?: 0) == 1) "" else "s"} · ${"%.1f".format(br, g?.kmHoje ?: 0.0)} km",
             color = c.texto2, fontFamily = Archivo, fontSize = 13.sp,
         )
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Mini("Semana", moeda(ganhos?.semana ?: 0.0), Modifier.weight(1f))
-            Mini("Mês", moeda(ganhos?.mes ?: 0.0), Modifier.weight(1f))
+            Mini("Semana · ${g?.corridasSemana ?: 0}", moeda(g?.semana ?: 0.0), Modifier.weight(1f))
+            Mini("Mês · ${g?.corridasMes ?: 0}", moeda(g?.mes ?: 0.0), Modifier.weight(1f))
         }
     }
 }
@@ -106,7 +110,7 @@ private fun Mini(rotulo: String, valor: String, modifier: Modifier) {
     val c = Pw.cores
     val forma = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
     Column(modifier.clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).padding(12.dp)) {
-        PwRotulo(rotulo)
+        PwRotulo(rotulo, linhas = 1)
         Spacer(Modifier.width(2.dp))
         com.pwexpress.core.designsystem.TextoAjustado(valor, androidx.compose.ui.text.TextStyle(color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold), 17, minimo = 11)
     }

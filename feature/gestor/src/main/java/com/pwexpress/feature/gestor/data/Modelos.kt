@@ -45,6 +45,7 @@ data class ParadaG(
 
 data class CorridaG(
     val id: String, val numero: Long, val teste: Boolean, val status: String,
+    val urgente: Boolean = false,
     val empresaId: String?, val clienteNome: String?, val criadaPor: String?,
     val motoboyId: String?, val motoboyNomeArquivado: String?,
     val valor: Double?, val valorBase: Double?, val fatorEntrega: Double, val fatorColeta: Double,
@@ -102,6 +103,7 @@ fun JsonObject.paraParadaG() = ParadaG(
 
 fun JsonObject.paraCorridaG() = CorridaG(
     id = str("id")!!, numero = long("numero") ?: 0, teste = bool("teste"), status = str("status").orEmpty(),
+    urgente = bool("urgente"),
     empresaId = str("empresa_id"), clienteNome = str("cliente_nome"), criadaPor = str("criada_por"),
     motoboyId = str("motoboy_id"), motoboyNomeArquivado = str("motoboy_nome_arquivado"),
     valor = dbl("valor"), valorBase = dbl("valor_base"), fatorEntrega = dbl("fator_entrega") ?: 0.0, fatorColeta = dbl("fator_coleta") ?: 0.0,

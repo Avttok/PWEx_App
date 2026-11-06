@@ -142,7 +142,7 @@ object Tracking {
     internal fun registrarPonto(p: PontoGps) {
         fila.inserir(p)
         _info.update {
-            it.copy(ultimaLeitura = p.registradoEm, ultimaPrecisao = p.precisao, naFila = fila.total())
+            it.copy(ultimaLeitura = p.registradoEm, ultimaPrecisao = p.precisao, naFila = fila.total(), ultimaPosicao = p.lat to p.lng)
         }
         sincronizarAgora()
     }

@@ -90,10 +90,11 @@ fun relativoTexto(ms: Long, agora: Long = System.currentTimeMillis()): String {
 
 /** Corridas com hora marcada: as livres para reservar e as minhas reservas. */
 @Composable
-fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {}) {
+fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {}, comPlanejadas: Boolean = true) {
     val c = Pw.cores
     val lista by Corridas.planejadas.collectAsState()
-    var aba by remember { mutableIntStateOf(0) }
+    val historico by Corridas.historico.collectAsState()
+    var aba by remember { mutableIntStateOf(if (comPlanejadas) 0 else 2) }
     var carregando by remember { mutableStateOf(true) }
     var erro by remember { mutableStateOf<String?>(null) }
     var agora by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -101,7 +102,9 @@ fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {})
     var desistindo by remember { mutableStateOf<Corrida?>(null) }
     val escopo = rememberCoroutineScope()
 
+    LaunchedEffect(aba) { if (aba == 2) Corridas.carregarHistorico().onFailure { erro = it.message } }
     LaunchedEffect(Unit) {
+        if (!comPlanejadas) return@LaunchedEffect
         while (true) {
             Corridas.carregarPlanejadas().onFailure { erro = it.message }.onSuccess { erro = null }
             carregando = false
@@ -122,12 +125,21 @@ fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {})
     }
 
     PwPagina(modifier) {
-        PwCabeca(PwIcones.CalendarClock, "Corridas", "Com hora marcada: reserve e inicie no horário")
-        PwSegmentado(
-            listOf("Livres" to PwIcones.CalendarClock, "Minhas reservas" to PwIcones.CalendarCheck),
+        PwCabeca(PwIcones.Route, "Corridas", if (aba == 2) "As corridas que você já fez" else "Com hora marcada: reserve e inicie no horário")
+        if (comPlanejadas) PwSegmentado(
+            listOf("Livres" to PwIcones.CalendarClock, "Reservas" to PwIcones.CalendarCheck, "Histórico" to PwIcones.History),
             aba, { aba = it },
         )
         PwErro(erro)
+        if (aba == 2) {
+            val h = historico
+            when {
+                h == null -> PwCarregando(texto = "Buscando suas corridas…")
+                h.isEmpty() -> PwVazio("Você ainda não fez nenhuma corrida${if (com.pwexpress.core.designsystem.TemaApp.modoTeste.value) " de teste" else ""}.", icone = PwIcones.History)
+                else -> h.forEach { CartaoFeita(it) }
+            }
+            return@PwPagina
+        }
         when {
             carregando && lista.isEmpty() -> PwCarregando(texto = "Buscando corridas planejadas…")
             mostrar.isEmpty() -> PwVazio(

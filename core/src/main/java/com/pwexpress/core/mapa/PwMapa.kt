@@ -104,6 +104,8 @@ fun PwMapa(
     margemBaixo: Int = 0,
     /** Ao mudar, a câmera desliza até este ponto (mantendo o zoom). */
     irPara: Pair<Double, Double>? = null,
+    /** Círculo (centro, raio em metros): o raio de disponibilidade do motoboy. */
+    circulo: Pair<Pair<Double, Double>, Double>? = null,
 ) {
     val ctx = LocalContext.current
     val escuro = Pw.cores.escuro
@@ -203,6 +205,16 @@ fun PwMapa(
     }
 
     // dados
+    LaunchedEffect(estilo, circulo) {
+        val s = estilo ?: return@LaunchedEffect
+        val anel = circulo?.let { (c, m) -> pontosDoCirculo(c.first, c.second, m) }
+        (s.getSource("circulo") as? GeoJsonSource)?.setGeoJson(
+            FeatureCollection.fromFeatures(
+                anel?.let { listOf(Feature.fromGeometry(org.maplibre.geojson.Polygon.fromLngLats(listOf(it.map { p -> Point.fromLngLat(p.second, p.first) })))) } ?: emptyList(),
+            ),
+        )
+    }
+
     LaunchedEffect(estilo, paradas, rota, minhaPosicao, marcadores, seguir, trilhas, enquadrar) {
         val s = estilo ?: return@LaunchedEffect
         val m = mapa ?: return@LaunchedEffect
@@ -271,7 +283,8 @@ fun PwMapa(
 
         if (!enquadrou) {
             val pontos = (pinos.map { LatLng(it.lat, it.lng) } + listOfNotNull(eu?.let { LatLng(it.first, it.second) }) +
-                validos.map { LatLng(it.lat, it.lng) }).distinct()
+                validos.map { LatLng(it.lat, it.lng) } +
+                (circulo?.let { (c, m) -> pontosDoCirculo(c.first, c.second, m).filterIndexed { i, _ -> i % 8 == 0 }.map { LatLng(it.first, it.second) } } ?: emptyList())).distinct()
             when {
                 pontos.size >= 2 -> {
                     val p = (56 * densidade).toInt()
@@ -295,8 +308,27 @@ fun PwMapa(
     AndroidView(factory = { mapView }, modifier = modifier)
 }
 
+/** Polígono de um círculo na superfície (64 pontos), para desenhar raios em metros. */
+fun pontosDoCirculo(lat: Double, lng: Double, metros: Double, n: Int = 64): List<Pair<Double, Double>> {
+    val r = metros / 6_371_000.0
+    val la = Math.toRadians(lat); val lo = Math.toRadians(lng)
+    return (0..n).map { i ->
+        val b = 2 * Math.PI * i / n
+        val la2 = Math.asin(Math.sin(la) * Math.cos(r) + Math.cos(la) * Math.sin(r) * Math.cos(b))
+        val lo2 = lo + Math.atan2(Math.sin(b) * Math.sin(r) * Math.cos(la), Math.cos(r) - Math.sin(la) * Math.sin(la2))
+        Math.toDegrees(la2) to Math.toDegrees(lo2)
+    }
+}
+
 private fun criarCamadas(s: Style, escuro: Boolean, ouro: String, ouroTexto: String) {
     adicionarEstabelecimentos(s, escuro, ouro, ouroTexto)
+    s.addSource(GeoJsonSource("circulo"))
+    s.addLayer(org.maplibre.android.style.layers.FillLayer("circulo-fundo", "circulo").withProperties(
+        PropertyFactory.fillColor(ouro), PropertyFactory.fillOpacity(0.12f),
+    ))
+    s.addLayer(LineLayer("circulo-borda", "circulo").withProperties(
+        PropertyFactory.lineColor(ouro), PropertyFactory.lineWidth(2.5f), PropertyFactory.lineDasharray(arrayOf(2f, 1.5f)),
+    ))
     s.addSource(GeoJsonSource("marcadores"))
     s.addSource(GeoJsonSource("trilhas"))
     s.addSource(GeoJsonSource("rota"))

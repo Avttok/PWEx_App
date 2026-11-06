@@ -22,6 +22,8 @@ val GRUPOS_CONFIG = listOf(
 
 val PARAMETROS = listOf(
     Param("oferta_segundos", "despacho", "Tempo para aceitar", "Quanto tempo cada motoboy tem para aceitar a corrida antes dela passar ao próximo.", null, "numero", false, 30.0, "s", 10.0, 180.0, 1.0, emptyList()),
+    Param("raio_motoboy_max_km", "despacho", "Raio máximo do motoboy", "Até quanto cada motoboy pode escolher no raio de disponibilidade dele. Corridas urgentes ignoram o raio.", null, "numero", false, 100.0, "km", 1.0, 500.0, 5.0, emptyList()),
+    Param("offline_auto_min", "despacho", "Offline automático", "Disponível sem enviar posição há esse tempo vira offline sozinho; volta quando a posição chegar. 0 = desligado.", null, "numero", false, 30.0, "min", 0.0, 240.0, 5.0, emptyList()),
     Param("posicao_max_min", "despacho", "Posição recente", "Só entra na cascata quem enviou posição dentro desse tempo.", null, "numero", false, 15.0, "min", 1.0, 120.0, 1.0, emptyList()),
     Param("raio_max_despacho_km", "despacho", "Distância máxima até a coleta", "Motoboys mais longe que isso não recebem a corrida. 0 = sem limite.", null, "numero", false, 0.0, "km", 0.0, 200.0, 1.0, emptyList()),
     Param("favoritos_primeiro", "despacho", "Favoritos da empresa primeiro", "Na cascata, oferecer antes aos motoboys favoritos do cliente.", null, "booleano", true, 0.0, null, null, null, 1.0, emptyList()),

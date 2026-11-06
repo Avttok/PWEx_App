@@ -92,6 +92,19 @@ object Corridas {
         Unit
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
+    // ------------------------------------------------------------------ histórico e carteira
+
+    private val _historico = MutableStateFlow<List<CorridaFeita>?>(null)
+    /** Corridas que eu fiz (concluídas e canceladas), do modo atual. null = ainda não carregou. */
+    val historico: StateFlow<List<CorridaFeita>?> = _historico.asStateFlow()
+
+    suspend fun carregarHistorico(dias: Int = 120): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar("minhas_corridas", buildJsonObject { put("p_dias", dias) })
+        if (!r.ok) throw Exception(traduzir(r))
+        _historico.value = (r.json() as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonObject)?.paraCorridaFeita() }.orEmpty()
+        Unit
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
     suspend fun reservar(corridaId: String): Result<Unit> = acaoPlanejada("reservar_corrida", buildJsonObject { put("p_corrida", corridaId) })
     suspend fun cancelarReserva(corridaId: String, motivo: String?): Result<Unit> =
         acaoPlanejada("cancelar_reserva", buildJsonObject { put("p_corrida", corridaId); motivo?.let { put("p_motivo", it) } })

@@ -166,7 +166,14 @@ fun JanelaConta(
                     }
                 }
                 PwErro(erro)
-                if (painel == Painel.GESTOR) ItemMenu(PwIcones.Settings2, "Configurações", onClick = onConfiguracoes)
+                if (painel == Painel.MOTOBOY && perfil?.motoboy == true) {
+                    val info by com.pwexpress.feature.tracking.Tracking.info.collectAsState()
+                    ItemMenu(PwIcones.BatteryLow, "Economia de bateria", subtitulo = if (info.economia) "GPS a cada ${com.pwexpress.feature.tracking.Intervalos.corridaMs(true) / 1000} s em corrida" else null,
+                        onClick = { com.pwexpress.feature.tracking.Tracking.definirEconomia(!info.economia) }) {
+                        Interruptor(info.economia) { com.pwexpress.feature.tracking.Tracking.definirEconomia(it) }
+                    }
+                }
+                ItemMenu(PwIcones.Settings2, "Configurações", subtitulo = if (painel == Painel.GESTOR) "Do sistema inteiro" else "Raio, aparelho e GPS", onClick = onConfiguracoes)
                 if (perfil?.dev == true) ItemMenu(PwIcones.CodeXml, "Console Dev", cor = c.dev, onClick = onDev)
                 if (podeTrocar) {
                     if (painel == Painel.MOTOBOY) ItemMenu(PwIcones.ShieldCheck, "Painel do gestor", onClick = { onTrocar(Painel.GESTOR) })

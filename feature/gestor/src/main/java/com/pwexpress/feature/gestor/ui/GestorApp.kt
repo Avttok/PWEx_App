@@ -73,6 +73,22 @@ fun GestorApp(
     fun voltar() { if (pilha.isNotEmpty()) pilha.removeAt(pilha.lastIndex) }
     BackHandler(enabled = pilha.isNotEmpty()) { voltar() }
 
+    // corrida em andamento sem posição do motoboy há 30 min: avisa uma vez por corrida
+    val avisadas = remember { mutableSetOf<String>() }
+    LaunchedEffect(dados) {
+        val limite = System.currentTimeMillis() - 30 * 60_000
+        dados.corridas.filter { it.status == Status.ACEITA || it.status == Status.EM_ANDAMENTO }.forEach { cor ->
+            val id = cor.motoboyId ?: return@forEach
+            val t = dados.posicao(id)?.posicaoEm ?: 0L
+            if (t < limite && avisadas.add(cor.id)) {
+                val min = if (t > 0) ((System.currentTimeMillis() - t) / 60_000) else null
+                com.pwexpress.core.designsystem.PwToast.mostrar(
+                    "${dados.membro(id)?.nome ?: "O motoboy"} está na corrida ${cor.numeroExibicao} e mandou a localização pela última vez ${min?.let { "há $it min" } ?: "há muito tempo"}.",
+                    com.pwexpress.core.designsystem.TipoAviso.AVISO, "Motoboy sem sinal",
+                )
+            } else if (t >= limite) avisadas.remove(cor.id)
+        }
+    }
     val comCarteira = modulo("carteira")
     val planejadas = dados.corridas.count { it.teste == teste && it.status in Status.PLANEJADAS }
     val semMotoboy = dados.corridas.count { it.teste == teste && it.status == Status.SEM_MOTOBOY }

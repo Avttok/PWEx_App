@@ -34,6 +34,12 @@ data class Perfil(
     val corTema: String = "ouro",
     /** Módulos ligados para esta conta (o Dev liga/desliga no console). */
     val modulos: Map<String, Boolean> = emptyMap(),
+    /** Raio de disponibilidade (null = sem limite). */
+    val raioKm: Double? = null,
+    /** "posicao" (de onde o motoboy estiver) ou "fixo" (de um ponto escolhido). */
+    val raioModo: String = "posicao",
+    val raioLat: Double? = null,
+    val raioLng: Double? = null,
 ) {
     /** O módulo está valendo para esta conta? (sem registro = ligado; o Dev sempre vê) */
     fun modulo(chave: String): Boolean = dev || modulos[chave] != false
@@ -48,7 +54,10 @@ data class Perfil(
         (configuracoes[chave] as? JsonPrimitive)?.booleanOrNull ?: padrao
 }
 
-data class Ganhos(val hoje: Double, val semana: Double, val mes: Double, val corridasHoje: Int)
+data class Ganhos(
+    val hoje: Double, val semana: Double, val mes: Double, val corridasHoje: Int,
+    val total: Double = 0.0, val corridasSemana: Int = 0, val corridasMes: Int = 0, val kmHoje: Double = 0.0, val kmMes: Double = 0.0,
+)
 
 object Perfis {
 
@@ -69,6 +78,8 @@ object Perfis {
                 _ganhos.value = Ganhos(
                     hoje = o.num("hoje"), semana = o.num("semana"), mes = o.num("mes"),
                     corridasHoje = o.num("corridas_hoje").toInt(),
+                    total = o.num("total"), corridasSemana = o.num("corridas_semana").toInt(), corridasMes = o.num("corridas_mes").toInt(),
+                    kmHoje = o.num("km_hoje"), kmMes = o.num("km_mes"),
                 )
             }
         }
@@ -112,6 +123,22 @@ object Perfis {
         carregar()
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
+    /** Raio de disponibilidade: 0/null = sem limite. Modo "posicao" ou "fixo" (com o ponto). */
+    suspend fun definirRaio(km: Double?, modo: String, lat: Double?, lng: Double?): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar("definir_meu_raio", buildJsonObject {
+            put("p_km", km ?: 0.0); put("p_modo", modo)
+            lat?.let { put("p_lat", it) }; lng?.let { put("p_lng", it) }
+        })
+        if (!r.ok) error(
+            when {
+                r.corpo.contains("raio_invalido") -> "Raio fora do permitido."
+                r.corpo.contains("escolha_o_ponto") -> "Escolha o ponto no mapa."
+                else -> "Erro (${r.codigo})."
+            },
+        )
+        _perfil.value = _perfil.value?.copy(raioKm = km?.takeIf { it > 0 }, raioModo = modo, raioLat = lat, raioLng = lng)
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
     /** Dev: troca entre o tema dourado e o vermelho (vale no site também). */
     suspend fun definirCorTema(cor: String): Result<Unit> = runCatching {
         val r = PwCore.rpc.chamar("definir_cor_tema", buildJsonObject { put("p_cor", cor) })
@@ -142,6 +169,10 @@ object Perfis {
             dev = bool("dev"),
             corTema = txt("cor_tema") ?: "ouro",
             modulos = (o["modulos"] as? JsonObject)?.mapValues { (it.value as? JsonPrimitive)?.booleanOrNull ?: true } ?: emptyMap(),
+            raioKm = (o["raio"] as? JsonObject)?.let { (it["km"] as? JsonPrimitive)?.doubleOrNull },
+            raioModo = (o["raio"] as? JsonObject)?.let { (it["modo"] as? JsonPrimitive)?.takeIf { p -> p !is JsonNull }?.content } ?: "posicao",
+            raioLat = (o["raio"] as? JsonObject)?.let { (it["lat"] as? JsonPrimitive)?.doubleOrNull },
+            raioLng = (o["raio"] as? JsonObject)?.let { (it["lng"] as? JsonPrimitive)?.doubleOrNull },
         )
     }
 }

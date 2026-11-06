@@ -146,6 +146,7 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
     var exAss by remember { mutableStateOf(cfg.logico("padrao_exige_assinatura", false)) }
     var exCod by remember { mutableStateOf(cfg.logico("padrao_exige_codigo", false)) }
     var direto by remember { mutableStateOf(false) }
+    var urgente by remember { mutableStateOf(false) }
     var motoboyId by remember { mutableStateOf<String?>(null) }
     var obs by remember { mutableStateOf("") }
     var erro by remember { mutableStateOf<String?>(null) }
@@ -203,6 +204,7 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
             put("aplicar_acrescimo", acrescimoLigado)
             put("teste", teste)
             put("modo_despacho", if (direto) "direto" else "cascata")
+            put("urgente", !direto && !planejar && urgente)
             put("motoboy_id", if (direto) JsonPrimitive(motoboyId) else JsonNull)
             put("exige_foto", exFoto); put("exige_assinatura", exAss); put("exige_nome", exNome); put("exige_codigo", exCod)
             put("exigir_no_local", noLocal); put("raio_chegada_m", raio.toInt())
@@ -367,6 +369,11 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
                 !direto -> "Vai para o mais próximo da coleta" + if (favoritos.isNotEmpty() && cfg.logico("favoritos_primeiro", true)) ", favoritos do cliente primeiro." else "."
                 else -> "Só esse motoboy recebe a corrida."
             })
+            if (!direto && !planejar) {
+                Espaco(4)
+                PwInterruptor("Urgente", urgente, { urgente = it }, icone = PwIcones.Zap, cor = c.vermelho,
+                    descricao = if (urgente) "Vai para o mais próximo mesmo fora do raio que ele escolheu." else "Respeita o raio de disponibilidade de cada motoboy.")
+            }
             if (direto) {
                 Espaco(8)
                 PwSelecao("Motoboy", compativeis.sortedByDescending { it.id in favoritos }.map { m -> m.id to ((if (m.id in favoritos) "★ " else "") + m.nome + " · " + (rotuloMotoboy[dados.posicao(m.id)?.status] ?: "Offline")) }, motoboyId, { motoboyId = it })
@@ -396,7 +403,7 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
 
     if (escolhendoHora) SeletorDataHora("Começa em", inicio, onFechar = { escolhendoHora = false }, onEscolher = { inicio = it; escolhendoHora = false })
     marcando?.let { p ->
-        SeletorNoMapa(p.lat?.let { la -> p.lng?.let { lo -> la to lo } } ?: paradas.firstNotNullOfOrNull { q -> q.lat?.let { la -> q.lng?.let { lo -> la to lo } } }, onFechar = { marcando = null }, titulo = if (p.coleta) "Local da coleta" else "Local da entrega") { la, lo ->
+        com.pwexpress.core.mapa.PwSeletorMapa(p.lat?.let { la -> p.lng?.let { lo -> la to lo } } ?: paradas.firstNotNullOfOrNull { q -> q.lat?.let { la -> q.lng?.let { lo -> la to lo } } }, onFechar = { marcando = null }, titulo = if (p.coleta) "Local da coleta" else "Local da entrega") { la, lo ->
             marcando = null
             p.lat = la; p.lng = lo; p.endereco = "Buscando endereço…"
             escopo.launch { p.endereco = Geo.enderecoDoPonto(la, lo) }
@@ -484,49 +491,6 @@ private fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) -
                         }
                     }
                 }
-            }
-        }
-    }
-}
-
-/**
- * Escolher um ponto em tela cheia: arraste o mapa até o alfinete do centro ficar no lugar certo
- * (ou toque no mapa para pular até lá) e confirme.
- */
-@Composable
-internal fun SeletorNoMapa(inicial: Pair<Double, Double>?, onFechar: () -> Unit, titulo: String = "Marcar no mapa", onEscolher: (Double, Double) -> Unit) {
-    val c = Pw.cores
-    var centro by remember { mutableStateOf(inicial) }
-    var irPara by remember { mutableStateOf<Pair<Double, Double>?>(null) }
-    androidx.compose.ui.window.Dialog(onDismissRequest = onFechar, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Box(Modifier.fillMaxSize().background(c.fundo)) {
-            PwMapa(
-                paradas = emptyList(), rota = null, minhaPosicao = null, modifier = Modifier.fillMaxSize(),
-                inicio = inicial, zoomInicio = 16.0, irPara = irPara,
-                onToque = { la, lo -> irPara = la to lo },
-                onCentro = { la, lo -> centro = la to lo },
-            )
-            // alfinete fixo no centro
-            Column(Modifier.align(Alignment.Center).padding(bottom = 54.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.size(40.dp).clip(CircleShape).background(c.gradOuro).border(3.dp, c.fundo, CircleShape), contentAlignment = Alignment.Center) {
-                    Icon(PwIcones.MapPin, null, tint = c.sobreOuro, modifier = Modifier.size(22.dp))
-                }
-                Box(Modifier.size(width = 3.dp, height = 14.dp).background(c.ouro))
-            }
-            Row(
-                Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(12.dp).clip(RoundedCornerShape(20.dp)).background(c.fundo2.copy(alpha = 0.95f))
-                    .border(1.dp, c.bordaForte, RoundedCornerShape(20.dp)).padding(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PwBotaoIcone(PwIcones.ArrowLeft, "Voltar", onFechar)
-                Spacer(Modifier.width(12.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(titulo, color = c.texto, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1)
-                    Text("Arraste o mapa até o alfinete ficar no lugar", color = c.texto3, fontSize = 12.5.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                }
-            }
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(16.dp)) {
-                PwBotaoOuro("Usar este ponto", onClick = { centro?.let { onEscolher(it.first, it.second) } }, habilitado = centro != null, icone = PwIcones.Check)
             }
         }
     }

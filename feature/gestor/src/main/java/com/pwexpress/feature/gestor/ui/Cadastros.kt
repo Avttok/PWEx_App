@@ -256,7 +256,7 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
         if (e != null) PwBotaoPerigo("Excluir empresa", onClick = { excluir = true }, modifier = Modifier.fillMaxWidth())
     }
     if (marcarMapa) {
-        SeletorNoMapa(lat?.let { la -> lng?.let { lo -> la to lo } }, onFechar = { marcarMapa = false }, titulo = "Coleta padrão") { la, lo ->
+        com.pwexpress.core.mapa.PwSeletorMapa(lat?.let { la -> lng?.let { lo -> la to lo } }, onFechar = { marcarMapa = false }, titulo = "Coleta padrão") { la, lo ->
             marcarMapa = false
             lat = la; lng = lo
             escopo.launch { if (endereco.isBlank()) endereco = Geo.enderecoDoPonto(la, lo) }

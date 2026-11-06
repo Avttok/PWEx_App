@@ -81,6 +81,7 @@ class MainActivity : ComponentActivity() {
                     val info by Tracking.info.collectAsState()
                     val perfil by Perfis.perfil.collectAsState()
                     var noPerfil by remember { mutableStateOf(false) }
+                    var naConfig by remember { mutableStateOf(false) }
                     var conta by remember { mutableStateOf(false) }
                     var aba by rememberSaveable { mutableStateOf("inicio") }
                     var painel by remember { mutableStateOf(runCatching { Painel.valueOf(prefs.getString("painel", "MOTOBOY")!!) }.getOrDefault(Painel.MOTOBOY)) }
@@ -92,7 +93,7 @@ class MainActivity : ComponentActivity() {
                     var esperouPerfil by remember { mutableStateOf(false) }
                     LaunchedEffect(sessao?.email) { esperouPerfil = false; delay(8_000); esperouPerfil = true }
 
-                    LaunchedEffect(abrirAba.value) { abrirAba.value?.let { if (it == "planejadas") { aba = "corridas"; painel = Painel.MOTOBOY }; abrirAba.value = null } }
+                    LaunchedEffect(abrirAba.value) { abrirAba.value?.let { if (it == "planejadas") { aba = "corridas"; painel = Painel.MOTOBOY; naConfig = false }; abrirAba.value = null } }
 
                     // se algo for desligado depois, a tela de preparo volta
                     LaunchedEffect(Unit) { ciclo.repeatOnLifecycle(Lifecycle.State.RESUMED) { preparado = lerPreparo(ctx).completo } }
@@ -111,6 +112,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     BackHandler(enabled = noPerfil) { noPerfil = false }
+                    BackHandler(enabled = naConfig && !noPerfil) { naConfig = false }
                     BackHandler(enabled = !noPerfil && aba != "inicio" && painel == Painel.MOTOBOY) { aba = "inicio" }
 
                     val s = sessao
@@ -163,30 +165,33 @@ class MainActivity : ComponentActivity() {
                         o != null -> OfertaScreen(o, onFim = { }, modifier = conteudo)
                         !preparado -> PrimeiraConfiguracao(onPronto = { preparado = true }, modifier = conteudo)
                         a != null -> CorridaScreen(a, admin = p?.admin == true, modifier = conteudo)
+                        naConfig && efetivo == Painel.MOTOBOY -> com.pwexpress.motoboy.ui.ConfigMotoApp(onVoltar = { naConfig = false }, modifier = conteudo)
                         else -> Box(conteudo.fillMaxSize()) {
                             val comPlanejadas = p?.modulo("corridas_planejadas") != false
-                            val abaMotoboy = if (aba == "corridas" && comPlanejadas) "corridas" else "inicio"
+                            val comCarteira = p?.modulo("carteira") != false
+                            val abaMotoboy = when { aba == "corridas" -> "corridas"; aba == "carteira" && comCarteira -> "carteira"; else -> "inicio" }
                             androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
                                 PwTopo { AcoesTopo(efetivo, podeTrocar, ::trocar) { conta = true } }
                                 Box(Modifier.weight(1f).padding(bottom = 86.dp)) {
                                     when (abaMotoboy) {
-                                        "corridas" -> PlanejadasScreen(onIniciada = { aba = "inicio" })
+                                        "corridas" -> PlanejadasScreen(onIniciada = { aba = "inicio" }, comPlanejadas = comPlanejadas)
+                                        "carteira" -> com.pwexpress.feature.corridas.ui.CarteiraScreen()
                                         else -> TrackingScreen(
                                             saudacao = NomePerfil(s.email).substringBefore(" "),
-                                            extras = {
-                                                CartaoGanhos()
-                                                CartaoOfertas()
-                                            },
+                                            extras = { CartaoGanhos(onCarteira = if (comCarteira) ({ aba = "carteira" }) else null) },
+                                            chips = { com.pwexpress.feature.tracking.ui.ChipInicio(PwIcones.Radar, com.pwexpress.motoboy.ui.textoRaio(p?.raioKm, p?.raioModo ?: "posicao")) { naConfig = true } },
+                                            onConfiguracoes = { naConfig = true },
                                         )
                                     }
                                 }
                             }
                             val reservas = planejadas.count { it.minha }
                             val livres = planejadas.count { !it.minha && it.status == "agendada" }
-                            if (comPlanejadas) PwBarraAbas(
-                                listOf(
+                            PwBarraAbas(
+                                listOfNotNull(
                                     PwAba("inicio", "Início", PwIcones.House),
-                                    PwAba("corridas", "Corridas", PwIcones.CalendarClock, livres + reservas),
+                                    PwAba("corridas", "Corridas", PwIcones.Route, if (comPlanejadas) livres + reservas else 0),
+                                    if (comCarteira) PwAba("carteira", "Carteira", PwIcones.Wallet) else null,
                                 ),
                                 abaMotoboy, { aba = it },
                                 Modifier.align(Alignment.BottomCenter),
@@ -199,7 +204,7 @@ class MainActivity : ComponentActivity() {
                             s.email, efetivo, podeTrocar,
                             onFechar = { conta = false },
                             onPerfil = { conta = false; noPerfil = true },
-                            onConfiguracoes = { conta = false; GestorNav.abrirConfiguracoes() },
+                            onConfiguracoes = { conta = false; if (efetivo == Painel.GESTOR) GestorNav.abrirConfiguracoes() else naConfig = true },
                             onTrocar = ::trocar, onSair = ::sair,
                             onDev = { conta = false; if (efetivo != Painel.GESTOR) trocar(Painel.GESTOR); GestorNav.abrirDev() },
                         )

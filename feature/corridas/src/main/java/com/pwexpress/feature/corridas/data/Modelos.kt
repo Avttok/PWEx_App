@@ -145,3 +145,27 @@ internal fun JsonElement.paraOferta(): Oferta {
 internal fun instante(iso: String): Long? = runCatching { java.time.OffsetDateTime.parse(iso).toInstant().toEpochMilli() }
     .recoverCatching { java.time.OffsetDateTime.parse(iso.replace(" ", "T")).toInstant().toEpochMilli() }
     .getOrNull()
+
+
+/** Uma corrida que o motoboy fez (histórico e carteira). Sem percentuais: só o que ele recebeu. */
+data class CorridaFeita(
+    val id: String, val numero: Long?, val teste: Boolean, val status: String, val valor: Double?, val distanciaM: Int?,
+    val quando: Long?, val aceitaEm: Long?, val concluidaEm: Long?, val empresa: String?, val coleta: String?, val entrega: String?, val paradas: Int,
+) {
+    val concluida get() = status == "concluida"
+    val numeroExibicao: String get() = numero?.let { if (teste) "T$it" else "#$it" } ?: "—"
+}
+
+internal fun JsonObject.paraCorridaFeita(): CorridaFeita? {
+    fun s(k: String) = (this[k] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
+    fun t(k: String) = s(k)?.let { instante(it) }
+    val ps = (this["paradas"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+    fun end(o: JsonObject) = (o["endereco"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+    fun tipo(o: JsonObject) = (o["tipo"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+    return CorridaFeita(
+        id = s("id") ?: return null, numero = s("numero")?.toLongOrNull(), teste = s("teste") == "true", status = s("status") ?: "",
+        valor = s("valor_motoboy")?.toDoubleOrNull(), distanciaM = s("distancia_m")?.toDoubleOrNull()?.toInt(),
+        quando = t("quando"), aceitaEm = t("aceita_em"), concluidaEm = t("concluida_em"), empresa = s("empresa_nome"),
+        coleta = ps.firstOrNull { tipo(it) == "coleta" }?.let(::end), entrega = ps.lastOrNull { tipo(it) == "entrega" }?.let(::end), paradas = ps.size,
+    )
+}

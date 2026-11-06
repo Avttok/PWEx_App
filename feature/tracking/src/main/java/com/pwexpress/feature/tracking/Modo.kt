@@ -42,4 +42,6 @@ data class TrackingInfo(
     val naFila: Int = 0,
     val enviando: Boolean = false,
     val erro: String? = null,
+    /** Última posição lida (para o mapa do raio). */
+    val ultimaPosicao: Pair<Double, Double>? = null,
 )

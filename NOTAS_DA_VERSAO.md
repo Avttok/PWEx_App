@@ -1,6 +1,8 @@
-• Telas alinhadas: nada mais cortado ou quebrando no meio (valores, etiquetas, botões)
-• Menu da conta só na foto: perfil, tema claro/noturno, modo teste, configurações e sair
-• Modo teste com o selo violeta na foto, igual ao site
-• Motoboy: abas Início e Corridas
-• Gestor: mapa em tela cheia com lista, seguir motoboy, trilhas e botão de estabelecimentos
-• Gestor: Financeiro virou aba; marcar local no mapa agora em tela cheia, fácil de arrastar
+• Logo nova: o PW com o entregador, sem o círculo. Dourada, violeta no teste e vermelha para o Dev
+• Cargo Dev com tema vermelho, selo </> e o Console Dev (módulos liga/desliga, sistema, aparelhos, registro)
+• Ícones de cargo: Dev </>, Gestor escudo, Motoboy moto
+• Avisos rápidos (toasts) ao salvar, trocar de modo e mais
+• Temas consistentes: trocar de tema ou modo teste não muda mais nenhum tamanho
+• Nomes de estabelecimentos no mapa seguem a cor do tema
+• Textos: MotoApp, corrida Express, Carteira e “corrida” no lugar de “oferta”
+• Um projeto de irmão para irmão ❤ (no menu da foto)

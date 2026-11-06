@@ -1,8 +1,8 @@
-• Logo nova: o PW com o entregador, sem o círculo. Dourada, violeta no teste e vermelha para o Dev
-• Cargo Dev com tema vermelho, selo </> e o Console Dev (módulos liga/desliga, sistema, aparelhos, registro)
-• Ícones de cargo: Dev </>, Gestor escudo, Motoboy moto
-• Avisos rápidos (toasts) ao salvar, trocar de modo e mais
-• Temas consistentes: trocar de tema ou modo teste não muda mais nenhum tamanho
-• Nomes de estabelecimentos no mapa seguem a cor do tema
-• Textos: MotoApp, corrida Express, Carteira e “corrida” no lugar de “oferta”
-• Um projeto de irmão para irmão ❤ (no menu da foto)
+• Início novo: botão grande e redondo para ficar disponível/offline
+• Carteira: seus ganhos por dia, semana e mês, gráfico e extrato de cada corrida
+• Corridas: aba Histórico com tudo o que você já fez
+• Configurações no menu da foto: raio, aparelho, corridas novas e envio de localização
+• Raio de disponibilidade: escolha até onde vai buscar corridas (de onde estiver ou de um ponto fixo), com o círculo no mapa
+• Economia de bateria agora é um botão no menu da foto
+• Sem posição por 30 min, você fica offline sozinho; ao voltar o sinal, volta a ficar disponível
+• Gestor: corrida urgente (ignora o raio) e aviso quando um motoboy em corrida fica 30 min sem sinal

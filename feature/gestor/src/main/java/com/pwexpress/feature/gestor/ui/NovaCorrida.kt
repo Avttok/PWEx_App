@@ -506,7 +506,7 @@ internal fun SeletorNoMapa(inicial: Pair<Double, Double>?, onFechar: () -> Unit,
                 onCentro = { la, lo -> centro = la to lo },
             )
             // alfinete fixo no centro
-            Column(Modifier.align(Alignment.Center).padding(bottom = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            Column(Modifier.align(Alignment.Center).padding(bottom = 54.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Box(Modifier.size(40.dp).clip(CircleShape).background(c.gradOuro).border(3.dp, c.fundo, CircleShape), contentAlignment = Alignment.Center) {
                     Icon(PwIcones.MapPin, null, tint = c.sobreOuro, modifier = Modifier.size(22.dp))
                 }

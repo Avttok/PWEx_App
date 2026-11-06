@@ -69,8 +69,8 @@ fun JanelaAtualizacao() {
             }
             when (val e = estado) {
                 is EstadoAtualizacao.Disponivel -> {
-                    Titulo("Nova versão disponível")
-                    Text("Build ${e.versao.build} · você tem a ${Atualizador.versaoInstalada}", color = c.texto2, fontFamily = Archivo)
+                    Titulo("Há uma nova versão disponível")
+                    Text("Leva só um minuto e o app continua de onde parou.", color = c.texto2, fontFamily = Archivo, textAlign = TextAlign.Center)
                     Notas(e.versao.notas)
                     Instalar(ctx)
                     PwBotaoOuro("Atualizar agora", onClick = { Atualizador.baixar() }, icone = PwIcones.Download, altura = 58.dp)
@@ -86,7 +86,7 @@ fun JanelaAtualizacao() {
                 }
                 is EstadoAtualizacao.Instalando -> {
                     Titulo("Instalando…")
-                    Text("Confirme no aviso do Android. O app reinicia sozinho na versão ${e.versao.build}.", color = c.texto2, textAlign = TextAlign.Center)
+                    Text("Confirme no aviso do Android. O app reabre sozinho já atualizado.", color = c.texto2, textAlign = TextAlign.Center)
                     Barra(1f)
                 }
                 is EstadoAtualizacao.Erro -> {
@@ -98,8 +98,8 @@ fun JanelaAtualizacao() {
                 }
                 EstadoAtualizacao.Verificando -> { Titulo("Procurando atualização…"); Barra(null) }
                 EstadoAtualizacao.EmDia -> {
-                    Titulo("Você está em dia")
-                    Text("Esta é a versão mais nova (build ${Atualizador.versaoInstalada}).", color = c.texto2, textAlign = TextAlign.Center)
+                    Titulo("O app está em dia")
+                    Text("Você já tem tudo o que há de novo.", color = c.texto2, textAlign = TextAlign.Center)
                     PwBotaoOuro("Ótimo", onClick = { Atualizador.fecharJanela() }, icone = PwIcones.Check)
                 }
                 EstadoAtualizacao.Ocioso -> PwBotaoVidro("Fechar", onClick = { Atualizador.fecharJanela() }, modifier = Modifier.fillMaxWidth())

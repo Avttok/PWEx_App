@@ -203,7 +203,10 @@ fun PwTheme(content: @Composable () -> Unit) {
             surfaceVariant = p.vidroForte, onSurfaceVariant = p.texto2, outline = p.borda, error = p.vermelho,
         )
     }
-    CompositionLocalProvider(LocalPw provides p) {
+    // fonte do sistema muito grande quebrava os layouts: acompanha o ajuste do celular só até 1,15×
+    val densidade = androidx.compose.ui.platform.LocalDensity.current
+    val limitada = androidx.compose.ui.unit.Density(densidade.density, densidade.fontScale.coerceAtMost(1.15f))
+    CompositionLocalProvider(LocalPw provides p, androidx.compose.ui.platform.LocalDensity provides limitada) {
         MaterialTheme(colorScheme = esquema, typography = tipografia, content = content)
     }
 }

@@ -43,6 +43,7 @@ import androidx.compose.ui.res.painterResource
 import com.pwexpress.core.R
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -139,7 +140,7 @@ fun PwBotaoOuro(
             Icon(icone, null, tint = c.sobreOuro, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(10.dp))
         }
-        Text(texto, color = c.sobreOuro, fontWeight = FontWeight.ExtraBold, fontSize = tamanhoTexto.sp, fontFamily = Archivo)
+        Text(texto, color = c.sobreOuro, fontWeight = FontWeight.ExtraBold, fontSize = tamanhoTexto.sp, fontFamily = Archivo, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -168,34 +169,32 @@ fun PwBotaoVidro(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icone != null) {
-            Icon(icone, null, tint = tinta, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
+            Icon(icone, texto.ifEmpty { null }, tint = tinta, modifier = Modifier.size(18.dp))
+            if (texto.isNotEmpty()) Spacer(Modifier.width(8.dp))
         }
-        Text(texto, color = tinta, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, fontFamily = Archivo)
+        if (texto.isNotEmpty()) Text(texto, color = tinta, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, fontFamily = Archivo, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
 /** Botão só de ícone (quadrado de vidro). */
 @Composable
-fun PwBotaoIcone(icone: ImageVector, descricao: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun PwBotaoIcone(icone: ImageVector, descricao: String, onClick: () -> Unit, modifier: Modifier = Modifier, ativo: Boolean = false, tamanho: Dp = 42.dp, habilitado: Boolean = true, cor: Color? = null) {
     val c = Pw.cores
-    val forma = RoundedCornerShape(13.dp)
+    val forma = RoundedCornerShape(tamanho * 0.31f)
     Box(
-        modifier.size(42.dp).clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).clickable(onClick = onClick),
+        modifier.size(tamanho).alpha(if (habilitado) 1f else 0.4f).clip(forma)
+            .then(if (ativo) Modifier.background(c.gradOuro) else Modifier.background(c.vidroForte))
+            .border(1.dp, if (ativo) Color.Transparent else c.borda, forma).clickable(enabled = habilitado, onClick = onClick),
         contentAlignment = Alignment.Center,
-    ) { Icon(icone, descricao, tint = c.texto2, modifier = Modifier.size(19.dp)) }
+    ) { Icon(icone, descricao, tint = if (ativo) c.sobreOuro else cor ?: c.texto2, modifier = Modifier.size(tamanho * 0.45f)) }
 }
 
-/** Alterna claro / noturno / sistema. */
+/** Alterna claro ↔ noturno. */
 @Composable
 fun BotaoTema(modifier: Modifier = Modifier) {
-    val pref by TemaApp.preferencia.collectAsState()
-    val (icone, rotulo) = when (pref) {
-        PreferenciaTema.SISTEMA -> PwIcones.Monitor to "Tema automático"
-        PreferenciaTema.CLARO -> PwIcones.Sun to "Tema claro"
-        PreferenciaTema.ESCURO -> PwIcones.Moon to "Tema noturno"
-    }
-    PwBotaoIcone(icone, rotulo, onClick = { TemaApp.alternar() }, modifier = modifier)
+    val escuro = Pw.cores.escuro
+    PwBotaoIcone(if (escuro) PwIcones.Moon else PwIcones.Sun, if (escuro) "Tema noturno" else "Tema claro",
+        onClick = { TemaApp.definir(if (escuro) PreferenciaTema.CLARO else PreferenciaTema.ESCURO) }, modifier = modifier)
 }
 
 // ------------------------------------------------------------------ marca e detalhes
@@ -265,8 +264,8 @@ fun PwCabeca(icone: ImageVector, titulo: String, subtitulo: String? = null, modi
         PwAzulejo(icone)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(titulo, style = MaterialTheme.typography.headlineSmall, color = Pw.cores.texto)
-            if (subtitulo != null) Text(subtitulo, style = MaterialTheme.typography.bodyMedium, color = Pw.cores.texto2)
+            Text(titulo, style = MaterialTheme.typography.headlineSmall, color = Pw.cores.texto, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitulo != null) Text(subtitulo, style = MaterialTheme.typography.bodyMedium, color = Pw.cores.texto2, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         acoes()
     }
@@ -278,22 +277,22 @@ fun PwPonto(cor: Color, tamanho: Dp = 12.dp) {
 }
 
 @Composable
-fun PwRotulo(texto: String, modifier: Modifier = Modifier) {
-    Text(texto.uppercase(), modifier = modifier, style = MaterialTheme.typography.labelSmall, color = Pw.cores.texto3)
+fun PwRotulo(texto: String, modifier: Modifier = Modifier, linhas: Int = 2) {
+    Text(texto.uppercase(), modifier = modifier, style = MaterialTheme.typography.labelSmall, color = Pw.cores.texto3, maxLines = linhas, overflow = TextOverflow.Ellipsis)
 }
 
 /** Selo arredondado colorido (status, "TESTE"…). */
 @Composable
 fun PwSelo(texto: String, cor: Color, modifier: Modifier = Modifier, icone: ImageVector? = null) {
     Row(
-        modifier.clip(RoundedCornerShape(99.dp)).background(cor.copy(alpha = 0.15f)).padding(horizontal = 10.dp, vertical = 4.dp),
+        modifier.clip(RoundedCornerShape(99.dp)).background(cor.copy(alpha = 0.15f)).padding(horizontal = 9.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (icone != null) {
             Icon(icone, null, tint = cor, modifier = Modifier.size(12.dp))
             Spacer(Modifier.width(4.dp))
         }
-        Text(texto, color = cor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = Archivo)
+        Text(texto, color = cor, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, fontFamily = Archivo, maxLines = 1, softWrap = false)
     }
 }
 
@@ -306,8 +305,9 @@ fun PwLinhaInfo(icone: ImageVector?, rotulo: String, valor: String, destaque: Bo
             Icon(icone, null, tint = c.texto3, modifier = Modifier.size(16.dp))
             Spacer(Modifier.width(10.dp))
         }
-        Text(rotulo, Modifier.weight(1f), color = c.texto2, style = MaterialTheme.typography.bodyMedium)
-        Text(valor, color = if (destaque) c.ouro else c.texto, fontWeight = FontWeight.SemiBold, fontFamily = Archivo)
+        Text(rotulo, Modifier.weight(1f), color = c.texto2, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Spacer(Modifier.width(8.dp))
+        Text(valor, color = if (destaque) c.ouro else c.texto, fontWeight = FontWeight.SemiBold, fontFamily = Archivo, maxLines = 1)
     }
 }
 
@@ -321,23 +321,11 @@ fun PwEspaco(altura: Dp) = Spacer(Modifier.height(altura))
 @Composable
 fun PwValor(texto: String, modifier: Modifier = Modifier, tamanhoMax: Int = 44, cor: Color? = null) {
     val c = Pw.cores
-    val tamanho = when {
-        texto.length <= 8 -> tamanhoMax
-        texto.length <= 10 -> (tamanhoMax * 0.85f).toInt()
-        texto.length <= 12 -> (tamanhoMax * 0.72f).toInt()
-        texto.length <= 14 -> (tamanhoMax * 0.62f).toInt()
-        else -> (tamanhoMax * 0.52f).toInt()
-    }
-    Text(
+    TextoAjustado(
         texto,
-        modifier = modifier,
-        maxLines = 1,
-        softWrap = false,
-        style = if (cor != null) {
-            TextStyle(color = cor, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = tamanho.sp, letterSpacing = (-0.5).sp)
-        } else {
-            TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = tamanho.sp, letterSpacing = (-0.5).sp)
-        },
+        if (cor != null) TextStyle(color = cor, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, letterSpacing = (-0.5).sp)
+        else TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, letterSpacing = (-0.5).sp),
+        tamanhoMax, modifier, minimo = 14,
     )
 }
 

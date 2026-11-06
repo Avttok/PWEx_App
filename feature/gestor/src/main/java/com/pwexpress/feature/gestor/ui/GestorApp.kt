@@ -3,7 +3,6 @@ package com.pwexpress.feature.gestor.ui
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,15 +36,20 @@ sealed interface TelaG {
     data object Configuracoes : TelaG
 }
 
+/** Pedidos de navegação vindos de fora do painel (ex.: "Configurações" no menu da foto). */
+object GestorNav {
+    internal val pedido = kotlinx.coroutines.flow.MutableStateFlow<TelaG?>(null)
+    fun abrirConfiguracoes() { pedido.value = TelaG.Configuracoes }
+}
+
 /**
  * Painel do gestor no app: tudo o que o site faz.
- * `topo` é o cabeçalho do app (logo + menu da foto); `mais` traz os itens de conta (tema, modo teste, sair…).
+ * `topo` é o cabeçalho do app (logo + foto, que abre o menu da conta).
  */
 @Composable
 fun GestorApp(
     modifier: Modifier = Modifier,
     topo: @Composable () -> Unit,
-    mais: @Composable ColumnScope.() -> Unit,
     meuId: String?,
 ) {
     var aba by rememberSaveable { mutableStateOf("mapa") }
@@ -61,7 +65,9 @@ fun GestorApp(
         }
     }
 
-    fun abrir(t: TelaG) { pilha.add(t) }
+    fun abrir(t: TelaG) { if (pilha.lastOrNull() != t) pilha.add(t) }
+    val pedido by GestorNav.pedido.collectAsState()
+    LaunchedEffect(pedido) { pedido?.let { abrir(it); GestorNav.pedido.value = null } }
     fun voltar() { if (pilha.isNotEmpty()) pilha.removeAt(pilha.lastIndex) }
     BackHandler(enabled = pilha.isNotEmpty()) { voltar() }
 
@@ -85,7 +91,7 @@ fun GestorApp(
                         "corridas" -> CorridasG(onAbrir = { abrir(TelaG.Corrida(it)) }, onNova = { abrir(TelaG.NovaCorrida) })
                         "empresas" -> EmpresasG(onAbrir = { abrir(TelaG.Empresa(it)) })
                         "equipe" -> EquipeG(onAbrir = { abrir(TelaG.Membro(it)) })
-                        else -> MaisG(onFinanceiro = { abrir(TelaG.Financeiro) }, onConfig = { abrir(TelaG.Configuracoes) }, conteudo = mais)
+                        else -> FinanceiroG(onVoltar = null)
                     }
                 }
             }
@@ -97,7 +103,7 @@ fun GestorApp(
                     PwAba("corridas", "Corridas", PwIcones.Route, planejadas + semMotoboy),
                     PwAba("empresas", "Empresas", PwIcones.Building2),
                     PwAba("equipe", "Equipe", PwIcones.Users),
-                    PwAba("mais", "Mais", PwIcones.Menu),
+                    PwAba("financeiro", "Financeiro", PwIcones.Wallet),
                 ),
                 aba, { aba = it },
                 Modifier.align(Alignment.BottomCenter),

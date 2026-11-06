@@ -1,6 +1,12 @@
 package com.pwexpress.core.mapa
 
+import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import org.maplibre.android.camera.CameraPosition
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,14 +48,37 @@ data class PinoMapa(val lat: Double, val lng: Double, val coleta: Boolean, val a
 /** Marcador livre (ex.: motoboy no mapa do gestor): cor em hex e rótulo curto. */
 data class MarcadorMapa(val id: String, val lat: Double, val lng: Double, val cor: String, val rotulo: String)
 
+/** Linha de trajeto (trilha real do motoboy). */
+data class TrilhaMapa(val pontos: List<Pair<Double, Double>>)
+
 private fun Color.hex(): String = String.format("#%06X", 0xFFFFFF and toArgb())
 
 private const val ESTILO_CLARO = "https://tiles.openfreemap.org/styles/positron"
 private const val ESTILO_ESCURO = "https://tiles.openfreemap.org/styles/dark"
 
+/** Centro padrão (Santa Catarina), igual ao site. */
+val CENTRO_PADRAO = -27.2 to -49.5
+
+/** Coordenada utilizável (descarta 0,0 e valores fora do mundo). */
+fun coordenadaValida(lat: Double?, lng: Double?): Boolean =
+    lat != null && lng != null && lat in -85.0..85.0 && lng in -180.0..180.0 && !(kotlin.math.abs(lat) < 0.001 && kotlin.math.abs(lng) < 0.001)
+
+/** Mostrar/ocultar nomes de estabelecimentos em todos os mapas (lembrado no aparelho, como no site). */
+object Estabelecimentos {
+    private val _visiveis = MutableStateFlow(true)
+    val visiveis: StateFlow<Boolean> = _visiveis.asStateFlow()
+    private var prefs: android.content.SharedPreferences? = null
+    fun init(ctx: Context) {
+        if (prefs != null) return
+        prefs = ctx.applicationContext.getSharedPreferences("pwex_mapa", Context.MODE_PRIVATE)
+        _visiveis.value = prefs!!.getBoolean("estabelecimentos", true)
+    }
+    fun definir(v: Boolean) { _visiveis.value = v; prefs?.edit()?.putBoolean("estabelecimentos", v)?.apply() }
+}
+
 /**
  * Mapa do app (MapLibre + OpenStreetMap). Tema claro/noturno automático,
- * rota planejada em dourado, paradas e a posição do motoboy.
+ * rota planejada em dourado, paradas, motoboys e a posição do motoboy.
  */
 @Composable
 fun PwMapa(
@@ -61,16 +90,43 @@ fun PwMapa(
     onToque: ((Double, Double) -> Unit)? = null,
     /** Mude este valor para o mapa enquadrar tudo de novo. */
     enquadrar: Any? = null,
+    /** Toque num marcador (devolve o id). */
+    onMarcador: ((String) -> Unit)? = null,
+    /** Id do marcador que a câmera acompanha (fica destacado). */
+    seguir: String? = null,
+    trilhas: List<TrilhaMapa> = emptyList(),
+    /** Centro da câmera quando ela para (para escolher um ponto arrastando o mapa). */
+    onCentro: ((Double, Double) -> Unit)? = null,
+    /** Onde a câmera começa quando não há nada para enquadrar. */
+    inicio: Pair<Double, Double>? = null,
+    zoomInicio: Double = 7.0,
+    /** Espaço (dp) coberto por painéis em baixo: o enquadramento e o seguir desviam dele. */
+    margemBaixo: Int = 0,
+    /** Ao mudar, a câmera desliza até este ponto (mantendo o zoom). */
+    irPara: Pair<Double, Double>? = null,
 ) {
     val ctx = LocalContext.current
     val escuro = Pw.cores.escuro
     val ouro = Pw.cores.ouro.hex()
     val toque by rememberUpdatedState(onToque)
+    val toqueMarcador by rememberUpdatedState(onMarcador)
+    val centro by rememberUpdatedState(onCentro)
     val ciclo = LocalLifecycleOwner.current
+    remember { Estabelecimentos.init(ctx) }
+    val comLocais by Estabelecimentos.visiveis.collectAsState()
+    val densidade = ctx.resources.displayMetrics.density
+    val margemPx = margemBaixo * densidade
 
     val mapView = remember {
         MapLibre.getInstance(ctx.applicationContext)
-        MapView(ctx).apply { onCreate(null) }
+        MapView(ctx).apply {
+            onCreate(null)
+            // dentro de telas que rolam: o dedo no mapa move o mapa, não a página
+            setOnTouchListener { v, e ->
+                if (e.actionMasked == android.view.MotionEvent.ACTION_DOWN) v.parent?.requestDisallowInterceptTouchEvent(true)
+                false
+            }
+        }
     }
     var mapa by remember { mutableStateOf<MapLibreMap?>(null) }
     var estilo by remember { mutableStateOf<Style?>(null) }
@@ -96,18 +152,34 @@ fun PwMapa(
         }
     }
 
-    // estilo (recarrega ao trocar o tema)
-    LaunchedEffect(enquadrar) { enquadrou = false }
+    var ultimoEnquadrar by remember { mutableStateOf<Any?>(enquadrar) }
 
+    // estilo (recarrega ao trocar o tema)
     LaunchedEffect(escuro, ouro) {
         estilo = null
         enquadrou = false
         mapView.getMapAsync { m ->
+            val primeira = mapa == null
             mapa = m
-            m.uiSettings.isCompassEnabled = false
-            m.uiSettings.isRotateGesturesEnabled = false
-            m.uiSettings.isTiltGesturesEnabled = false
-            m.addOnMapClickListener { p -> toque?.let { it(p.latitude, p.longitude); true } ?: false }
+            if (primeira) {
+                m.uiSettings.isCompassEnabled = false
+                m.uiSettings.isRotateGesturesEnabled = false
+                m.uiSettings.isTiltGesturesEnabled = false
+                m.uiSettings.isLogoEnabled = false
+                val (la, lo) = inicio ?: CENTRO_PADRAO
+                m.moveCamera(CameraUpdateFactory.newLatLngZoom(LatLng(la, lo), if (inicio != null) zoomInicio.coerceAtLeast(13.0) else zoomInicio))
+                m.addOnMapClickListener { p ->
+                    val cb = toqueMarcador
+                    if (cb != null) {
+                        val tela = m.projection.toScreenLocation(p)
+                        val raio = 22 * densidade
+                        val achados = m.queryRenderedFeatures(android.graphics.RectF(tela.x - raio, tela.y - raio, tela.x + raio, tela.y + raio), "marcadores")
+                        achados.firstOrNull()?.getStringProperty("id")?.let { cb(it); return@addOnMapClickListener true }
+                    }
+                    toque?.let { it(p.latitude, p.longitude); true } ?: false
+                }
+                m.addOnCameraIdleListener { centro?.let { cb -> m.cameraPosition.target?.let { t -> cb(t.latitude, t.longitude) } } }
+            }
             m.setStyle(Style.Builder().fromUri(if (escuro) ESTILO_ESCURO else ESTILO_CLARO)) { s ->
                 criarCamadas(s, escuro, ouro)
                 estilo = s
@@ -115,10 +187,27 @@ fun PwMapa(
         }
     }
 
+    LaunchedEffect(mapa, irPara) {
+        val m = mapa ?: return@LaunchedEffect
+        val p = irPara ?: return@LaunchedEffect
+        m.easeCamera(CameraUpdateFactory.newLatLng(LatLng(p.first, p.second)), 400)
+    }
+
+    // estabelecimentos: liga/desliga
+    LaunchedEffect(estilo, comLocais) {
+        val s = estilo ?: return@LaunchedEffect
+        val v = if (comLocais) Property.VISIBLE else Property.NONE
+        listOf("pwex-poi-ponto", "pwex-poi").forEach { s.getLayer(it)?.setProperties(PropertyFactory.visibility(v)) }
+    }
+
     // dados
-    LaunchedEffect(estilo, paradas, rota, minhaPosicao, marcadores) {
+    LaunchedEffect(estilo, paradas, rota, minhaPosicao, marcadores, seguir, trilhas, enquadrar) {
         val s = estilo ?: return@LaunchedEffect
         val m = mapa ?: return@LaunchedEffect
+        if (enquadrar != ultimoEnquadrar) { ultimoEnquadrar = enquadrar; enquadrou = false }
+        val validos = marcadores.filter { coordenadaValida(it.lat, it.lng) }
+        val pinos = paradas.filter { coordenadaValida(it.lat, it.lng) }
+        val eu = minhaPosicao?.takeIf { coordenadaValida(it.first, it.second) }
 
         val linha = rota?.let { decodificarPolyline(it) }.orEmpty()
         (s.getSource("rota") as? GeoJsonSource)?.setGeoJson(
@@ -127,10 +216,15 @@ fun PwMapa(
                 else emptyList(),
             ),
         )
+        (s.getSource("trilhas") as? GeoJsonSource)?.setGeoJson(
+            FeatureCollection.fromFeatures(
+                trilhas.filter { it.pontos.size >= 2 }.map { t -> Feature.fromGeometry(LineString.fromLngLats(t.pontos.map { Point.fromLngLat(it.second, it.first) })) },
+            ),
+        )
 
         (s.getSource("paradas") as? GeoJsonSource)?.setGeoJson(
             FeatureCollection.fromFeatures(
-                paradas.map { p ->
+                pinos.map { p ->
                     Feature.fromGeometry(Point.fromLngLat(p.lng, p.lat)).apply {
                         addStringProperty("cor", if (p.coleta) ouro else "#111114")
                         addNumberProperty("raio", if (p.atual) 11 else 7)
@@ -141,31 +235,56 @@ fun PwMapa(
         )
 
         (s.getSource("eu") as? GeoJsonSource)?.setGeoJson(
-            FeatureCollection.fromFeatures(
-                minhaPosicao?.let { listOf(Feature.fromGeometry(Point.fromLngLat(it.second, it.first))) } ?: emptyList(),
-            ),
+            FeatureCollection.fromFeatures(eu?.let { listOf(Feature.fromGeometry(Point.fromLngLat(it.second, it.first))) } ?: emptyList()),
         )
 
         (s.getSource("marcadores") as? GeoJsonSource)?.setGeoJson(
             FeatureCollection.fromFeatures(
-                marcadores.map { mk ->
+                validos.map { mk ->
                     Feature.fromGeometry(Point.fromLngLat(mk.lng, mk.lat)).apply {
+                        addStringProperty("id", mk.id)
                         addStringProperty("cor", mk.cor)
                         addStringProperty("rotulo", mk.rotulo)
+                        addStringProperty("inicial", mk.rotulo.trim().take(1).uppercase())
+                        addNumberProperty("raio", if (mk.id == seguir) 17 else 13)
+                        addNumberProperty("borda", if (mk.id == seguir) 4 else 3)
                     }
                 },
             ),
         )
 
+        // seguir: a câmera vai até o motoboy a cada nova posição
+        val alvo = seguir?.let { id -> validos.firstOrNull { it.id == id } }
+        if (alvo != null) {
+            val zoom = maxOf(m.cameraPosition.zoom, 15.0)
+            m.easeCamera(
+                CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.Builder().target(LatLng(alvo.lat, alvo.lng)).zoom(zoom).padding(0.0, 0.0, 0.0, margemPx.toDouble()).build(),
+                ),
+                800,
+            )
+            enquadrou = true
+            return@LaunchedEffect
+        }
+
         if (!enquadrou) {
-            val pontos = paradas.map { LatLng(it.lat, it.lng) } + listOfNotNull(minhaPosicao?.let { LatLng(it.first, it.second) }) +
-                marcadores.map { LatLng(it.lat, it.lng) }
+            val pontos = (pinos.map { LatLng(it.lat, it.lng) } + listOfNotNull(eu?.let { LatLng(it.first, it.second) }) +
+                validos.map { LatLng(it.lat, it.lng) }).distinct()
             when {
-                pontos.size >= 2 -> m.easeCamera(
-                    CameraUpdateFactory.newLatLngBounds(LatLngBounds.Builder().includes(pontos).build(), 120),
+                pontos.size >= 2 -> {
+                    val p = (56 * densidade).toInt()
+                    val cam = m.getCameraForLatLngBounds(
+                        LatLngBounds.Builder().includes(pontos).build(),
+                        intArrayOf(p, p, p, p + margemPx.toInt()),
+                    )
+                    if (cam != null) {
+                        m.easeCamera(CameraUpdateFactory.newCameraPosition(CameraPosition.Builder(cam).zoom(cam.zoom.coerceAtMost(15.5)).build()), 700)
+                    }
+                }
+                pontos.size == 1 -> m.easeCamera(
+                    CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(pontos[0]).zoom(15.0).padding(0.0, 0.0, 0.0, margemPx.toDouble()).build()),
                     700,
                 )
-                pontos.size == 1 -> m.easeCamera(CameraUpdateFactory.newLatLngZoom(pontos[0], 15.0), 700)
             }
             if (pontos.isNotEmpty()) enquadrou = true
         }
@@ -177,10 +296,23 @@ fun PwMapa(
 private fun criarCamadas(s: Style, escuro: Boolean, ouro: String) {
     adicionarEstabelecimentos(s, escuro)
     s.addSource(GeoJsonSource("marcadores"))
+    s.addSource(GeoJsonSource("trilhas"))
     s.addSource(GeoJsonSource("rota"))
     s.addSource(GeoJsonSource("paradas"))
     s.addSource(GeoJsonSource("eu"))
 
+    s.addLayer(
+        LineLayer("trilhas-contorno", "trilhas").withProperties(
+            PropertyFactory.lineColor("#0A0A0A"), PropertyFactory.lineOpacity(0.5f), PropertyFactory.lineWidth(7f),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND), PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+        ),
+    )
+    s.addLayer(
+        LineLayer("trilhas", "trilhas").withProperties(
+            PropertyFactory.lineColor(ouro), PropertyFactory.lineWidth(4f),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND), PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+        ),
+    )
     s.addLayer(
         LineLayer("rota-contorno", "rota").withProperties(
             PropertyFactory.lineColor("#0A0A0A"),
@@ -224,10 +356,20 @@ private fun criarCamadas(s: Style, escuro: Boolean, ouro: String) {
     )
     s.addLayer(
         CircleLayer("marcadores", "marcadores").withProperties(
-            PropertyFactory.circleRadius(13f),
+            PropertyFactory.circleRadius(Expression.get("raio")),
             PropertyFactory.circleColor(Expression.toColor(Expression.get("cor"))),
-            PropertyFactory.circleStrokeColor(if (escuro) "#0A0A0A" else "#FFFFFF"),
-            PropertyFactory.circleStrokeWidth(3f),
+            PropertyFactory.circleStrokeColor(if (escuro) "#F5F2EA" else "#16130C"),
+            PropertyFactory.circleStrokeWidth(Expression.get("borda")),
+        ),
+    )
+    s.addLayer(
+        SymbolLayer("marcadores-inicial", "marcadores").withProperties(
+            PropertyFactory.textField(Expression.get("inicial")),
+            PropertyFactory.textFont(arrayOf("Noto Sans Bold")),
+            PropertyFactory.textSize(13f),
+            PropertyFactory.textColor("#0B0B0D"),
+            PropertyFactory.textAllowOverlap(true),
+            PropertyFactory.textIgnorePlacement(true),
         ),
     )
     s.addLayer(
@@ -236,7 +378,7 @@ private fun criarCamadas(s: Style, escuro: Boolean, ouro: String) {
             PropertyFactory.textFont(arrayOf("Noto Sans Regular")),
             PropertyFactory.textSize(12f),
             PropertyFactory.textAnchor(Property.TEXT_ANCHOR_TOP),
-            PropertyFactory.textOffset(arrayOf(0f, 1.3f)),
+            PropertyFactory.textOffset(arrayOf(0f, 1.6f)),
             PropertyFactory.textColor(if (escuro) "#F5F2EA" else "#16130C"),
             PropertyFactory.textHaloColor(if (escuro) "#0B0B0D" else "#FFFFFF"),
             PropertyFactory.textHaloWidth(1.6f),

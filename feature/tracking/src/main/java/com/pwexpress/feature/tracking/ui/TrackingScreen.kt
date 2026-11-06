@@ -45,7 +45,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.pwexpress.core.designsystem.Archivo
-import com.pwexpress.core.designsystem.BotaoTema
 import com.pwexpress.core.designsystem.Pw
 import com.pwexpress.core.designsystem.PwBotaoVidro
 import com.pwexpress.core.designsystem.PwCartao
@@ -108,16 +107,9 @@ fun TrackingScreen(
     }
 
     Column(
-        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 12.dp),
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        // ---------------------------------------------------------- topo
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PwLogo(tamanho = 22, modifier = Modifier.weight(1f))
-            BotaoTema()
-            Spacer(Modifier.width(8.dp))
-            acoesTopo()
-        }
         if (saudacao.isNotBlank()) {
             Text("Olá, $saudacao", style = MaterialTheme.typography.headlineMedium, color = c.texto)
         }

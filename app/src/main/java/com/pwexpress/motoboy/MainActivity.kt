@@ -30,11 +30,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.pwexpress.core.PwCore
 import com.pwexpress.core.designsystem.PwAba
 import com.pwexpress.core.designsystem.PwBarraAbas
-import com.pwexpress.core.designsystem.PwCabeca
-import com.pwexpress.core.designsystem.PwFaixaTeste
 import com.pwexpress.core.designsystem.PwFundo
 import com.pwexpress.core.designsystem.PwIcones
-import com.pwexpress.core.designsystem.PwPagina
 import com.pwexpress.core.designsystem.PwTheme
 import com.pwexpress.core.designsystem.PwTopo
 import com.pwexpress.core.perfil.Perfis
@@ -47,6 +44,7 @@ import com.pwexpress.feature.corridas.ui.OfertaScreen
 import com.pwexpress.feature.corridas.ui.PlanejadasScreen
 import com.pwexpress.feature.gestor.data.Gestao
 import com.pwexpress.feature.gestor.ui.GestorApp
+import com.pwexpress.feature.gestor.ui.GestorNav
 import com.pwexpress.feature.perfil.CartaoGanhos
 import com.pwexpress.feature.perfil.Linha
 import com.pwexpress.feature.perfil.NomePerfil
@@ -55,7 +53,6 @@ import com.pwexpress.feature.tracking.Modo
 import com.pwexpress.feature.tracking.Tracking
 import com.pwexpress.feature.tracking.ui.TrackingScreen
 import com.pwexpress.motoboy.ui.AcoesTopo
-import com.pwexpress.motoboy.ui.ItensConta
 import com.pwexpress.motoboy.ui.JanelaAtualizacao
 import com.pwexpress.motoboy.ui.JanelaConta
 import com.pwexpress.motoboy.ui.Painel
@@ -95,7 +92,7 @@ class MainActivity : ComponentActivity() {
                     var esperouPerfil by remember { mutableStateOf(false) }
                     LaunchedEffect(sessao?.email) { esperouPerfil = false; delay(8_000); esperouPerfil = true }
 
-                    LaunchedEffect(abrirAba.value) { abrirAba.value?.let { if (it == "planejadas") { aba = "planejadas"; painel = Painel.MOTOBOY }; abrirAba.value = null } }
+                    LaunchedEffect(abrirAba.value) { abrirAba.value?.let { if (it == "planejadas") { aba = "corridas"; painel = Painel.MOTOBOY }; abrirAba.value = null } }
 
                     // se algo for desligado depois, a tela de preparo volta
                     LaunchedEffect(Unit) { ciclo.repeatOnLifecycle(Lifecycle.State.RESUMED) { preparado = lerPreparo(ctx).completo } }
@@ -149,7 +146,6 @@ class MainActivity : ComponentActivity() {
                         }
                         noPerfil -> PerfilScreen(
                             email = s.email,
-                            versao = "${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE})",
                             onVoltar = { noPerfil = false },
                             onSair = ::sair,
                             modifier = conteudo,
@@ -162,30 +158,26 @@ class MainActivity : ComponentActivity() {
                         efetivo == Painel.GESTOR -> GestorApp(
                             modifier = conteudo,
                             topo = { PwTopo { AcoesTopo(efetivo, podeTrocar, ::trocar) { conta = true } } },
-                            mais = { ItensConta(s.email, efetivo, podeTrocar, onPerfil = { noPerfil = true }, onTrocar = ::trocar, onSair = ::sair) },
                             meuId = p?.id,
                         )
                         o != null -> OfertaScreen(o, onFim = { }, modifier = conteudo)
                         !preparado -> PrimeiraConfiguracao(onPronto = { preparado = true }, modifier = conteudo)
                         a != null -> CorridaScreen(a, admin = p?.admin == true, modifier = conteudo)
                         else -> Box(conteudo.fillMaxSize()) {
-                            val abaMotoboy = aba
-                            Box(Modifier.fillMaxSize().padding(bottom = 86.dp)) {
-                                when (abaMotoboy) {
-                                    "planejadas" -> PlanejadasScreen(onIniciada = { aba = "inicio" })
-                                    "conta" -> PwPagina {
-                                        PwCabeca(PwIcones.UserRound, "Conta", "Perfil, tema, atualização e mais")
-                                        ItensConta(s.email, efetivo, podeTrocar, onPerfil = { noPerfil = true }, onTrocar = ::trocar, onSair = ::sair)
+                            val abaMotoboy = if (aba == "corridas") "corridas" else "inicio"
+                            androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
+                                PwTopo { AcoesTopo(efetivo, podeTrocar, ::trocar) { conta = true } }
+                                Box(Modifier.weight(1f).padding(bottom = 86.dp)) {
+                                    when (abaMotoboy) {
+                                        "corridas" -> PlanejadasScreen(onIniciada = { aba = "inicio" })
+                                        else -> TrackingScreen(
+                                            saudacao = NomePerfil(s.email).substringBefore(" "),
+                                            extras = {
+                                                CartaoGanhos()
+                                                CartaoOfertas()
+                                            },
+                                        )
                                     }
-                                    else -> TrackingScreen(
-                                        saudacao = NomePerfil(s.email).substringBefore(" "),
-                                        acoesTopo = { AcoesTopo(efetivo, podeTrocar, ::trocar) { conta = true } },
-                                        extras = {
-                                            if (p?.modoTeste == true) PwFaixaTeste()
-                                            CartaoGanhos()
-                                            CartaoOfertas()
-                                        },
-                                    )
                                 }
                             }
                             val reservas = planejadas.count { it.minha }
@@ -193,8 +185,7 @@ class MainActivity : ComponentActivity() {
                             PwBarraAbas(
                                 listOf(
                                     PwAba("inicio", "Início", PwIcones.House),
-                                    PwAba("planejadas", "Planejadas", PwIcones.CalendarClock, livres + reservas),
-                                    PwAba("conta", "Conta", PwIcones.UserRound),
+                                    PwAba("corridas", "Corridas", PwIcones.CalendarClock, livres + reservas),
                                 ),
                                 abaMotoboy, { aba = it },
                                 Modifier.align(Alignment.BottomCenter),
@@ -203,7 +194,13 @@ class MainActivity : ComponentActivity() {
                     }
 
                     if (conta && s != null) {
-                        JanelaConta(s.email, efetivo, podeTrocar, onFechar = { conta = false }, onPerfil = { conta = false; noPerfil = true }, onTrocar = ::trocar, onSair = ::sair)
+                        JanelaConta(
+                            s.email, efetivo, podeTrocar,
+                            onFechar = { conta = false },
+                            onPerfil = { conta = false; noPerfil = true },
+                            onConfiguracoes = { conta = false; GestorNav.abrirConfiguracoes() },
+                            onTrocar = ::trocar, onSair = ::sair,
+                        )
                     }
                     JanelaAtualizacao()
                 }

@@ -74,7 +74,7 @@ import java.io.ByteArrayOutputStream
 @Composable
 fun PerfilScreen(
     email: String,
-    versao: String,
+    versao: String = "",
     onVoltar: () -> Unit,
     onSair: () -> Unit,
     modifier: Modifier = Modifier,
@@ -114,10 +114,7 @@ fun PerfilScreen(
     }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PwBotaoVidro("Voltar", onClick = onVoltar, icone = PwIcones.ChevronLeft)
-        }
-        PwCabeca(PwIcones.UserRound, "Meu perfil", email)
+        com.pwexpress.core.designsystem.PwCabecalho("Editar perfil", onVoltar, subtitulo = email)
 
         // ---------------------------------------------------------- foto e nome
         PwCartao(destaque = true) {
@@ -146,54 +143,16 @@ fun PerfilScreen(
                 }
             }
             Spacer(Modifier.height(14.dp))
-            OutlinedTextField(nome, { nome = it.take(60) }, label = { Text("Nome de exibição") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Text("É o nome que aparece para o gestor no mapa e nas corridas.", color = c.texto3, style = MaterialTheme.typography.bodyMedium)
+            com.pwexpress.core.designsystem.PwCampo(nome, { nome = it.take(60) }, "Nome de exibição")
+            Text("Aparece no mapa, nas corridas e no site (é a mesma conta).", color = c.texto3, style = MaterialTheme.typography.bodyMedium)
             msg?.let { (ok, texto) -> Text(texto, color = if (ok) c.verde else c.vermelho, modifier = Modifier.padding(top = 6.dp)) }
             Spacer(Modifier.height(10.dp))
             val mudou = novaFoto != null || (nome.trim().isNotEmpty() && nome.trim() != perfil?.nome)
             PwBotaoOuro(if (salvando) "Salvando…" else "Salvar", onClick = { salvar() }, icone = PwIcones.Check, habilitado = mudou && !salvando)
         }
 
-        // ---------------------------------------------------------- aparência
-        PwCartao {
-            PwRotulo("Aparência")
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OpcaoTema("Automático", PwIcones.Monitor, tema == PreferenciaTema.SISTEMA, Modifier.weight(1f)) { TemaApp.definir(PreferenciaTema.SISTEMA) }
-                OpcaoTema("Claro", PwIcones.Sun, tema == PreferenciaTema.CLARO, Modifier.weight(1f)) { TemaApp.definir(PreferenciaTema.CLARO) }
-                OpcaoTema("Noturno", PwIcones.Moon, tema == PreferenciaTema.ESCURO, Modifier.weight(1f)) { TemaApp.definir(PreferenciaTema.ESCURO) }
-            }
-        }
-
-        // ---------------------------------------------------------- administrador
+        // ---------------------------------------------------------- diagnóstico (administrador)
         if (perfil?.admin == true) {
-            PwCartao(cor = c.violeta.copy(alpha = 0.6f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(PwIcones.FlaskConical, null, tint = c.violeta, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Modo teste", fontWeight = FontWeight.SemiBold, color = c.texto)
-                        Text(
-                            if (perfil?.modoTeste == true) "Ligado: você recebe só corridas de teste." else "Desligado: você recebe só corridas reais.",
-                            color = c.texto2, style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                    Switch(
-                        checked = perfil?.modoTeste == true,
-                        enabled = !trocandoModo,
-                        onCheckedChange = { ligado ->
-                            trocandoModo = true
-                            scope.launch {
-                                Perfis.definirModoTeste(ligado).onFailure { msg = false to (it.message ?: "Erro") }
-                                trocandoModo = false
-                            }
-                        },
-                        colors = SwitchDefaults.colors(checkedThumbColor = c.fundo, checkedTrackColor = c.violeta),
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                PwSelo("Conta gestor + motoboy", c.violeta, icone = PwIcones.ShieldCheck)
-            }
             PwCartao {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(PwIcones.Bug, null, tint = c.ouro, modifier = Modifier.size(18.dp))
@@ -201,14 +160,11 @@ fun PerfilScreen(
                     PwRotulo("Diagnóstico")
                 }
                 Spacer(Modifier.height(8.dp))
-                Linha("Versão do app", versao)
                 perfil?.configuracoes?.forEach { (k, v) -> Linha(k, v.toString().trim('"')) }
                 diagnostico()
             }
         }
 
-        PwBotaoVidro("Sair da conta", onClick = onSair, icone = PwIcones.LogOut, cor = c.vermelho, modifier = Modifier.fillMaxWidth())
-        Text("Versão $versao", color = c.texto3, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.align(Alignment.CenterHorizontally))
     }
 }
 

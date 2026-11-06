@@ -31,6 +31,9 @@ import com.pwexpress.core.designsystem.PwIcones
 import com.pwexpress.core.designsystem.PwPaleta
 import com.pwexpress.core.designsystem.PwSelo
 import com.pwexpress.core.designsystem.moedaBr
+import com.pwexpress.core.designsystem.TextoAjustado
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.text.TextStyle
 import com.pwexpress.feature.gestor.data.CorridaG
 import com.pwexpress.feature.gestor.data.Gestao
 import com.pwexpress.feature.gestor.data.Status
@@ -93,45 +96,45 @@ internal fun CartaoCorridaG(corrida: CorridaG, dados: Gestao.Dados, onClick: () 
     val entregas = corrida.paradas.filter { !it.coleta }
     val oferta = dados.ofertas.firstOrNull { it.corridaId == corrida.id }
     Column(
-        Modifier.fillMaxWidth().clip(forma).background(c.vidro)
+        Modifier.fillMaxWidth().clip(forma).background(if (marcado == true) c.ouro.copy(alpha = 0.10f) else c.vidroSutil)
             .border(1.dp, if (marcado == true) c.ouro else c.borda, forma)
-            .clickable(onClick = onClick).padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(7.dp),
+            .clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (marcado != null) {
                 Icon(if (marcado) PwIcones.CircleCheck else PwIcones.Package, null, tint = if (marcado) c.ouro else c.texto3, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(8.dp))
             }
-            Text(corrida.numeroExibicao, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 17.sp, color = c.texto)
+            Text(corrida.numeroExibicao, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 16.sp, color = c.texto, maxLines = 1)
             Spacer(Modifier.width(8.dp))
             PwSelo(Status.rotulo[corrida.status] ?: corrida.status, corStatus(corrida.status, c))
-            if (corrida.teste) { Spacer(Modifier.width(6.dp)); PwSelo("teste", c.violeta, icone = PwIcones.FlaskConical) }
-            Spacer(Modifier.weight(1f))
-            Text(moedaBr(corrida.valor), fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold, color = c.texto, fontSize = 15.sp)
+            Spacer(Modifier.width(8.dp))
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                TextoAjustado(moedaBr(corrida.valor), TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold, color = c.texto), 15, minimo = 11)
+            }
         }
         if (corrida.planejada && corrida.agendadaPara != null) {
             val f2 = RoundedCornerShape(10.dp)
+            val cor = if (corrida.atrasada) c.vermelho else c.azul
             Row(
-                Modifier.fillMaxWidth().clip(f2).background((if (corrida.atrasada) c.vermelho else c.azul).copy(alpha = 0.10f))
-                    .border(1.dp, (if (corrida.atrasada) c.vermelho else c.azul).copy(alpha = 0.3f), f2).padding(horizontal = 10.dp, vertical = 7.dp),
+                Modifier.fillMaxWidth().clip(f2).background(cor.copy(alpha = 0.10f)).border(1.dp, cor.copy(alpha = 0.3f), f2).padding(horizontal = 10.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Icon(if (corrida.atrasada) PwIcones.Alerta else PwIcones.CalendarClock, null, tint = if (corrida.atrasada) c.vermelho else c.azul, modifier = Modifier.size(14.dp))
+                Icon(if (corrida.atrasada) PwIcones.Alerta else PwIcones.CalendarClock, null, tint = cor, modifier = Modifier.size(14.dp))
                 Spacer(Modifier.width(6.dp))
-                Text(quando(corrida.agendadaPara), color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-                Text("  " + if (corrida.atrasada) "atrasada" else relativo(corrida.agendadaPara), color = c.texto2, fontSize = 12.sp)
-                Spacer(Modifier.weight(1f))
-                Text(
-                    if (corrida.motoboyId != null) "Reservada · ${dados.membro(corrida.motoboyId)?.nome ?: "—"}" else "Livre",
-                    color = if (corrida.motoboyId != null) c.texto else c.azul, fontWeight = FontWeight.SemiBold, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                )
+                Column(Modifier.weight(1f)) {
+                    Text(quando(corrida.agendadaPara).replaceFirstChar { it.uppercase() } + "  ·  " + (if (corrida.atrasada) "atrasada" else relativo(corrida.agendadaPara)),
+                        color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(if (corrida.motoboyId != null) "Reservada · ${dados.membro(corrida.motoboyId)?.nome ?: "—"}" else "Livre para reservar",
+                        color = if (corrida.motoboyId != null) c.texto2 else cor, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
         coleta?.let { LinhaEndereco(PwIcones.ArrowUpFromLine, it.endereco, c.ouro) }
         entregas.lastOrNull()?.let { LinhaEndereco(PwIcones.ArrowDownToLine, it.endereco + if (entregas.size > 1) " (+${entregas.size - 1})" else "", c.texto) }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Detalhe(PwIcones.Building2, dados.cliente(corrida))
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Detalhe(PwIcones.Building2, dados.cliente(corrida), modifier = Modifier.weight(1f, fill = false))
             Detalhe(PwIcones.Clock, hora(corrida.criadaEm))
             Detalhe(PwIcones.Ruler, km(corrida.distanciaPlanejadaM))
         }
@@ -148,17 +151,17 @@ internal fun LinhaEndereco(icone: androidx.compose.ui.graphics.vector.ImageVecto
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(icone, null, tint = cor, modifier = Modifier.size(14.dp))
         Spacer(Modifier.width(6.dp))
-        Text(texto, color = c.texto, fontSize = 13.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(texto, color = c.texto, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
 @Composable
-internal fun Detalhe(icone: androidx.compose.ui.graphics.vector.ImageVector, texto: String) {
+internal fun Detalhe(icone: androidx.compose.ui.graphics.vector.ImageVector, texto: String, cor: Color? = null, modifier: Modifier = Modifier) {
     val c = Pw.cores
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Icon(icone, null, tint = c.texto3, modifier = Modifier.size(12.dp))
+    Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+        Icon(icone, null, tint = cor ?: c.texto3, modifier = Modifier.size(12.dp))
         Spacer(Modifier.width(4.dp))
-        Text(texto, color = c.texto3, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(texto, color = cor ?: c.texto3, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = if (cor != null) FontWeight.SemiBold else null)
     }
 }
 
@@ -166,6 +169,11 @@ internal fun Detalhe(icone: androidx.compose.ui.graphics.vector.ImageVector, tex
 internal fun TituloTela(titulo: String, subtitulo: String? = null, icone: androidx.compose.ui.graphics.vector.ImageVector) {
     com.pwexpress.core.designsystem.PwCabeca(icone, titulo, subtitulo)
 }
+
+/** Topo das telas abertas por cima: voltar, título de uma linha e ações em ícone. */
+@Composable
+internal fun Cabecalho(titulo: String, onVoltar: () -> Unit, subtitulo: String? = null, acoes: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit = {}) =
+    com.pwexpress.core.designsystem.PwCabecalho(titulo, onVoltar, subtitulo = subtitulo, acoes = acoes)
 
 @Composable
 internal fun Espaco(h: Int = 4) = Spacer(Modifier.height(h.dp))

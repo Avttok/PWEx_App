@@ -99,9 +99,10 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
             PwLogo(tamanho = 52, soSelo = true)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("NOVA CORRIDA", style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 22.sp, letterSpacing = 1.5.sp))
+                Text("NOVA CORRIDA", maxLines = 1, softWrap = false, style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 20.sp, letterSpacing = 1.sp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(corrida.numeroExibicao + (corrida.empresaNome?.let { " · $it" } ?: ""), color = c.texto2, fontFamily = Archivo)
+                    Text(corrida.numeroExibicao + (corrida.empresaNome?.let { " · $it" } ?: ""), color = c.texto2, fontFamily = Archivo, maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                     if (corrida.teste) {
                         Spacer(Modifier.width(8.dp))
                         PwSelo("TESTE", c.violeta, icone = PwIcones.FlaskConical)

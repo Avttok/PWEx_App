@@ -185,7 +185,7 @@ object Atualizador {
         if (pct == ultimoPct) return
         ultimoPct = pct
         val n = PwNotificacoes.base(ctx, PwNotificacoes.CANAL_ATUALIZACAO)
-            .setContentTitle("Baixando a versão ${v.build}")
+            .setContentTitle("Baixando a atualização do PW Express")
             .setContentText("${lido / 1_048_576} de ${total / 1_048_576} MB · $pct%")
             .setProgress(100, pct, total <= 0)
             .setOngoing(true)

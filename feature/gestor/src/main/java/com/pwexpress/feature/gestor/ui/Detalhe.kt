@@ -52,6 +52,7 @@ import com.pwexpress.core.designsystem.PwRotulo
 import com.pwexpress.core.designsystem.PwSelecao
 import com.pwexpress.core.designsystem.PwSelo
 import com.pwexpress.core.designsystem.moedaBr
+import com.pwexpress.core.designsystem.numeroBr
 import com.pwexpress.core.mapa.PinoMapa
 import com.pwexpress.core.mapa.PwMapa
 import com.pwexpress.feature.gestor.data.CorridaG
@@ -90,14 +91,11 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
     }
 
     PwPagina {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PwBotaoIcone(PwIcones.ArrowLeft, "Voltar", onVoltar)
-            Spacer(Modifier.width(10.dp))
-            Text(if (corrida != null) "Corrida ${corrida.numeroExibicao}" else "Corrida", style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 24.sp), color = c.texto, modifier = Modifier.weight(1f))
-            if (corrida?.teste == true) PwSelo("TESTE", c.violeta, icone = PwIcones.FlaskConical)
-        }
+        Cabecalho(
+            if (corrida != null) "Corrida ${corrida.numeroExibicao}" else "Corrida", onVoltar,
+            subtitulo = corrida?.let { "${dados.cliente(it)} · ${dataHora(it.criadaEm)}" },
+        ) { if (corrida?.teste == true) Icon(PwIcones.FlaskConical, "Corrida de teste", tint = c.violeta, modifier = Modifier.size(20.dp)) }
         if (corrida == null) { if (!dados.carregado) PwCarregando() else PwErro("Essa corrida não existe mais (pode ter sido apagada)."); return@PwPagina }
-        TextoDica("${dados.cliente(corrida)} · criada ${dataHora(corrida.criadaEm)}")
 
         Box(Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(22.dp))) {
             PwMapa(
@@ -116,23 +114,28 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
             }
             dados.nomeMotoboy(corrida)?.let { n ->
                 Espaco(6)
-                Text("${if (corrida.status == Status.RESERVADA) "Reservada para" else "Motoboy"}: $n", color = c.texto, fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(PwIcones.Bike, null, tint = c.texto2, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("${if (corrida.status == Status.RESERVADA) "Reservada para" else "Motoboy"}: $n", color = c.texto, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
             }
             Espaco(10)
+            PwNumero("Valor da corrida", moedaBr(corrida.valor), Modifier.fillMaxWidth(), icone = PwIcones.Wallet, destaque = true)
+            Espaco(8)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PwNumero("Valor", moedaBr(corrida.valor), Modifier.weight(1.3f), destaque = true)
-                PwNumero("Planejado", km(corrida.distanciaPlanejadaM), Modifier.weight(1f))
-                PwNumero("Real", km(corrida.distanciaRealM), Modifier.weight(0.9f))
+                PwNumero("Planejado", km(corrida.distanciaPlanejadaM), Modifier.weight(1f), icone = PwIcones.Ruler)
+                PwNumero("Real", km(corrida.distanciaRealM), Modifier.weight(1f), icone = PwIcones.Route)
             }
             if (corrida.fatorEntrega > 0 || corrida.fatorColeta > 0) {
                 Espaco(6)
-                TextoDica("Base ${moedaBr(corrida.valorBase)}" + (if (corrida.fatorEntrega > 0) " · percurso +${corrida.fatorEntrega}×" else "") + (if (corrida.fatorColeta > 0) " · motoboy longe da coleta +${corrida.fatorColeta}×" else ""))
+                TextoDica("Base ${moedaBr(corrida.valorBase)}" + (if (corrida.fatorEntrega > 0) " · percurso +${numeroBr(corrida.fatorEntrega)}×" else "") + (if (corrida.fatorColeta > 0) " · motoboy longe da coleta +${numeroBr(corrida.fatorColeta)}×" else ""))
             }
             if (corrida.valorMotoboy != null) {
                 Espaco(8)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PwNumero("Motoboy (${corrida.repassePct?.toInt() ?: "—"}%)", moedaBr(corrida.valorMotoboy), Modifier.weight(1f))
-                    PwNumero("Gestão", moedaBr(corrida.valorGestao), Modifier.weight(1f))
+                    PwNumero("Motoboy ${corrida.repassePct?.toInt() ?: "—"}%", moedaBr(corrida.valorMotoboy), Modifier.weight(1f), icone = PwIcones.Bike)
+                    PwNumero("Gestão", moedaBr(corrida.valorGestao), Modifier.weight(1f), icone = PwIcones.Landmark)
                 }
             }
             Espaco(6)
@@ -166,21 +169,21 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
                     }
                     Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("${if (p.coleta) "Coleta" else "Entrega"} · ${rotuloParada(p.status)}", color = c.texto, fontWeight = FontWeight.SemiBold)
+                        Text("${if (p.coleta) "Coleta" else "Entrega"} · ${rotuloParada(p.status)}", color = c.texto, fontWeight = FontWeight.SemiBold, maxLines = 1)
                         Text(p.endereco, color = c.texto2, fontSize = 13.5.sp)
                         listOfNotNull(p.contatoNome, p.contatoTelefone).joinToString(" ").takeIf { it.isNotBlank() }?.let { TextoDica(it) }
                         p.instrucoes?.let { TextoDica(it) }
                         if (p.referencias.isNotEmpty()) TextoDica("Referências: " + p.referencias.joinToString(" · ") { r -> r.nome + (r.distanciaM?.let { " ($it m)" } ?: "") })
                         p.concluidaEm?.let { TextoDica("Concluída às ${hora(it)}") }
-                        p.distanciaChegadaM?.let { TextoDica("Marcado a $it m do endereço" + if (p.localIgnorado) " · localização ignorada (teste)" else "") }
+                        p.distanciaChegadaM?.let { TextoDica("Marcado a ${km(it)} do endereço" + if (p.localIgnorado) " · localização ignorada (teste)" else "") }
                         p.recebedorNome?.let { Text("Recebido por $it", color = c.texto, fontSize = 13.sp) }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             p.fotoPath?.let { Comprovante("Foto", it) }
                             p.assinaturaPath?.let { Comprovante("Assinatura", it) }
                         }
                     }
-                    p.contatoTelefone?.let { tel ->
-                        PwBotaoIcone(PwIcones.Phone, "Ligar", { runCatching { ctx.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$tel"))) } })
+                    p.contatoTelefone?.takeIf { it.isNotBlank() }?.let { tel ->
+                        PwBotaoIcone(PwIcones.Phone, "Ligar", { runCatching { ctx.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:$tel"))) } }, tamanho = 38.dp)
                     }
                 }
             }
@@ -193,8 +196,8 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
                 eventos.forEach { e ->
                     Espaco(6)
                     Row {
-                        Text(hora(e.criadoEm), color = c.texto3, fontSize = 12.sp, modifier = Modifier.width(48.dp))
-                        Text(ROTULO_EVENTO[e.tipo] ?: e.tipo.replace('_', ' '), color = c.texto, fontSize = 13.5.sp)
+                        Text(hora(e.criadoEm), color = c.texto3, fontSize = 12.sp, modifier = Modifier.width(52.dp))
+                        Text(ROTULO_EVENTO[e.tipo] ?: e.tipo.replace('_', ' '), color = c.texto, fontSize = 13.5.sp, modifier = Modifier.weight(1f))
                     }
                 }
             }

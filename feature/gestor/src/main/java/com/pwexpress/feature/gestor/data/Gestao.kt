@@ -43,6 +43,8 @@ object Gestao {
         val empresas: List<EmpresaG> = emptyList(),
         val favoritos: Map<String, List<String>> = emptyMap(),
         val config: Map<String, JsonElement> = emptyMap(),
+        /** Trilhas das últimas 12 h por motoboy (como no mapa do site). */
+        val trilhas: Map<String, List<PontoTrilha>> = emptyMap(),
         val carregado: Boolean = false,
     ) {
         fun membro(id: String?) = equipe.firstOrNull { it.id == id }
@@ -61,6 +63,7 @@ object Gestao {
     private val mutex = Mutex()
 
     private fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
+    private var voltas = 0
 
     /** Recarrega tudo (o app chama a cada poucos segundos enquanto o painel está aberto). */
     suspend fun atualizar() = mutex.withLock {
@@ -71,7 +74,16 @@ object Gestao {
                 val corridas = async { rpc.rest("GET", "/rest/v1/corridas?select=*,paradas(*)&or=(criada_em.gte.${enc(desde)},agendada_para.gte.${enc(desde)})&order=criada_em.desc&limit=400").exigirOk().lista() }
                 val ofertas = async { rpc.rest("GET", "/rest/v1/ofertas?select=id,corrida_id,motoboy_id,status,distancia_m,expira_em&status=eq.pendente").exigirOk().lista() }
                 val equipe = async { rpc.chamar("listar_equipe", JsonObject(emptyMap())).exigirOk().lista() }
-                val pos = async { rpc.rest("GET", "/rest/v1/motoboys?select=id,status,lat,lng,posicao_em,modo_teste,bateria,precisao_m").exigirOk().lista() }
+                val pos = async { rpc.rest("GET", "/rest/v1/motoboys?select=id,status,lat,lng,posicao_em,modo_teste,modo_economia,bateria,precisao_m").exigirOk().lista() }
+                // trilhas pesam mais: a cada 5 voltas (~30 s)
+                val trilha = if (voltas++ % 5 == 0 || !_dados.value.carregado) async {
+                    val desde12h = Instant.now().minusSeconds(12L * 3600).toString()
+                    runCatching {
+                        rpc.rest("GET", "/rest/v1/localizacoes?select=motoboy_id,sessao_id,status,lat,lng&registrado_em=gte.${enc(desde12h)}&order=registrado_em.asc&limit=5000").exigirOk().lista()
+                            .mapNotNull { o -> val la = o.dbl("lat"); val lo = o.dbl("lng"); if (la == null || lo == null) null else o.str("motoboy_id")!! to PontoTrilha(o.str("sessao_id"), o.str("status") ?: "", la, lo) }
+                            .groupBy({ it.first }, { it.second })
+                    }.getOrNull()
+                } else null
                 val empresas = async { rpc.rest("GET", "/rest/v1/empresas?select=*&order=nome").exigirOk().lista() }
                 val fav = async { rpc.rest("GET", "/rest/v1/empresa_favoritos?select=empresa_id,motoboy_id,ordem&order=ordem").exigirOk().lista() }
                 val cfg = async { rpc.rest("GET", "/rest/v1/configuracoes?select=chave,valor").exigirOk().lista() }
@@ -83,6 +95,7 @@ object Gestao {
                     empresas = empresas.await().map { it.paraEmpresaG() },
                     favoritos = fav.await().groupBy({ it.str("empresa_id")!! }, { it.str("motoboy_id")!! }),
                     config = cfg.await().associate { it.str("chave")!! to (it["valor"] ?: JsonNull) },
+                    trilhas = trilha?.await() ?: _dados.value.trilhas,
                     carregado = true,
                 )
             }

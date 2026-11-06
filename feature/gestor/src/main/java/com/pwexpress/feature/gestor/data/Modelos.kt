@@ -70,7 +70,10 @@ data class MembroG(
     val motoboy get() = "motoboy" in papeis
 }
 
-data class PosicaoG(val id: String, val status: String, val lat: Double?, val lng: Double?, val posicaoEm: Long?, val modoTeste: Boolean, val bateria: Int?, val precisaoM: Double?)
+data class PosicaoG(val id: String, val status: String, val lat: Double?, val lng: Double?, val posicaoEm: Long?, val modoTeste: Boolean, val bateria: Int?, val precisaoM: Double?, val economia: Boolean = false)
+
+/** Ponto da trilha (últimas 12 h). */
+data class PontoTrilha(val sessao: String?, val status: String, val lat: Double, val lng: Double)
 
 data class EmpresaG(
     val id: String, val nome: String, val cnpj: String?, val razaoSocial: String?, val nomeFantasia: String?, val situacao: String?,
@@ -119,7 +122,7 @@ fun JsonObject.paraMembroG() = MembroG(
     repassePct = dbl("repasse_pct"), bloqueado = bool("bloqueado"), ultimoAcesso = iso(str("ultimo_acesso")),
 )
 
-fun JsonObject.paraPosicaoG() = PosicaoG(str("id")!!, str("status") ?: "offline", dbl("lat"), dbl("lng"), iso(str("posicao_em")), bool("modo_teste"), int("bateria"), dbl("precisao_m"))
+fun JsonObject.paraPosicaoG() = PosicaoG(str("id")!!, str("status") ?: "offline", dbl("lat"), dbl("lng"), iso(str("posicao_em")), bool("modo_teste"), int("bateria"), dbl("precisao_m"), bool("modo_economia"))
 
 fun JsonObject.paraEmpresaG() = EmpresaG(
     id = str("id")!!, nome = str("nome").orEmpty(), cnpj = str("cnpj"), razaoSocial = str("razao_social"), nomeFantasia = str("nome_fantasia"),

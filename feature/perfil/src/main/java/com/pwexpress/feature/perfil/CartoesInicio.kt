@@ -85,7 +85,7 @@ fun CartaoGanhos() {
     PwCartao(destaque = true) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             PwRotulo(if (perfil?.modoTeste == true) "Ganhos de teste" else "Seus ganhos", Modifier.weight(1f))
-            if (perfil?.modoTeste == true) PwSelo("modo teste", c.violeta, icone = PwIcones.FlaskConical)
+            if (perfil?.modoTeste == true) androidx.compose.material3.Icon(PwIcones.FlaskConical, "Modo teste", tint = c.ouro, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.height(4.dp))
         PwValor(moeda(ganhos?.hoje ?: 0.0), tamanhoMax = 38)
@@ -108,10 +108,7 @@ private fun Mini(rotulo: String, valor: String, modifier: Modifier) {
     Column(modifier.clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).padding(12.dp)) {
         PwRotulo(rotulo)
         Spacer(Modifier.width(2.dp))
-        Text(
-            valor, color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false,
-            fontSize = (if (valor.length > 12) 13 else if (valor.length > 10) 15 else 17).sp,
-        )
+        com.pwexpress.core.designsystem.TextoAjustado(valor, androidx.compose.ui.text.TextStyle(color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold), 17, minimo = 11)
     }
 }
 

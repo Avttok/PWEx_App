@@ -119,4 +119,8 @@ object PwIcones {
     val FileText: ImageVector by lazy { icone("file-text", "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z", "M14 2v5a1 1 0 0 0 1 1h5", "M10 9H8", "M16 13H8", "M16 17H8") }
     val ArrowUp: ImageVector by lazy { icone("arrow-up", "m5 12 7-7 7 7", "M12 19V5") }
     val ArrowDown: ImageVector by lazy { icone("arrow-down", "M12 5v14", "m19 12-7 7-7-7") }
+    val ChevronUp: ImageVector by lazy { icone("chevron-up", "m18 15-6-6-6 6") }
+    val ListChecks: ImageVector by lazy { icone("list-checks", "M13 5h8", "M13 12h8", "M13 19h8", "m3 17 2 2 4-4", "m3 7 2 2 4-4") }
+    val SunMoon: ImageVector by lazy { icone("sun-moon", "M12 2v2", "M14.837 16.385a6 6 0 1 1-7.223-7.222c.624-.147.97.66.715 1.248a4 4 0 0 0 5.26 5.259c.589-.255 1.396.09 1.248.715", "M16 12a4 4 0 0 0-4-4", "m19 5-1.256 1.256", "M20 12h2") }
+    val SignalZero: ImageVector by lazy { icone("signal-zero", "M2 20h.01") }
 }

@@ -129,7 +129,7 @@ fun PwBarraAbas(abas: List<PwAba>, selecionada: String, onSelecionar: (String) -
                     }
                 }
                 Spacer(Modifier.height(3.dp))
-                Text(aba.rotulo, color = cor, fontSize = 11.sp, fontWeight = if (ativa) FontWeight.Bold else FontWeight.Medium, fontFamily = Archivo, maxLines = 1)
+                Text(aba.rotulo, color = cor, fontSize = 11.sp, fontWeight = if (ativa) FontWeight.Bold else FontWeight.Medium, fontFamily = Archivo, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -147,14 +147,14 @@ fun PwSegmentado(opcoes: List<Pair<String, ImageVector?>>, selecionado: Int, onS
             val ativo = i == selecionado
             Row(
                 Modifier.weight(1f).clip(RoundedCornerShape(11.dp)).then(if (ativo) Modifier.background(c.vidroForte) else Modifier)
-                    .clickable { onSelecionar(i) }.padding(vertical = 10.dp, horizontal = 6.dp),
+                    .clickable { onSelecionar(i) }.padding(vertical = 10.dp, horizontal = 4.dp),
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
             ) {
                 if (icone != null) {
-                    Icon(icone, null, tint = if (ativo) c.ouro else c.texto2, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Icon(icone, rotulo.ifEmpty { null }, tint = if (ativo) c.ouro else c.texto2, modifier = Modifier.size(16.dp))
+                    if (rotulo.isNotEmpty()) Spacer(Modifier.width(6.dp))
                 }
-                Text(rotulo, color = if (ativo) c.ouro else c.texto2, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, fontFamily = Archivo, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (rotulo.isNotEmpty()) Text(rotulo, color = if (ativo) c.ouro else c.texto2, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, fontFamily = Archivo, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -176,7 +176,7 @@ fun PwFiltros(opcoes: List<Pair<String, Int>>, selecionado: Int, onSelecionar: (
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(rotulo, color = if (ativo) c.sobreOuro else c.texto2, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, fontFamily = Archivo)
+                Text(rotulo, color = if (ativo) c.sobreOuro else c.texto2, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, fontFamily = Archivo, maxLines = 1, softWrap = false)
                 if (n > 0) {
                     Spacer(Modifier.width(6.dp))
                     Box(Modifier.clip(CircleShape).background(if (ativo) c.sobreOuro.copy(alpha = 0.2f) else c.ouro).padding(horizontal = 6.dp, vertical = 1.dp)) {
@@ -236,8 +236,9 @@ fun PwCampo(
     OutlinedTextField(
         value = valor,
         onValueChange = onMudar,
-        label = { Text(rotulo) },
-        placeholder = dica?.let { { Text(it, color = c.texto3) } },
+        label = { Text(rotulo, fontFamily = Archivo, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+        placeholder = dica?.let { { Text(it, color = c.texto3, fontFamily = Archivo, maxLines = 1, overflow = TextOverflow.Ellipsis) } },
+        textStyle = TextStyle(fontFamily = Archivo, fontSize = 15.sp, color = c.texto),
         singleLine = linhas == 1,
         minLines = linhas,
         enabled = habilitado,
@@ -267,7 +268,7 @@ fun PwInterruptor(titulo: String, ligado: Boolean, onMudar: (Boolean) -> Unit, m
             Spacer(Modifier.width(12.dp))
         }
         Column(Modifier.weight(1f)) {
-            Text(titulo, color = c.texto, fontWeight = FontWeight.SemiBold, fontFamily = Archivo, fontSize = 14.5.sp)
+            Text(titulo, color = c.texto, fontWeight = FontWeight.SemiBold, fontFamily = Archivo, fontSize = 14.5.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (descricao != null) Text(descricao, color = c.texto3, fontSize = 12.5.sp, lineHeight = 17.sp)
         }
         Spacer(Modifier.width(10.dp))
@@ -458,11 +459,15 @@ fun PwNumero(rotulo: String, valor: String, modifier: Modifier = Modifier, icone
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (icone != null) { Icon(icone, null, tint = c.texto3, modifier = Modifier.size(12.dp)); Spacer(Modifier.width(4.dp)) }
-            PwRotulo(rotulo)
+            PwRotulo(rotulo, linhas = 1)
         }
         Spacer(Modifier.height(4.dp))
-        if (destaque) Text(valor, style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 24.sp), maxLines = 1)
-        else Text(valor, color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold, fontSize = 19.sp, maxLines = 1)
+        TextoAjustado(
+            valor,
+            if (destaque) TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black)
+            else TextStyle(color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold),
+            if (destaque) 24 else 19,
+        )
     }
 }
 
@@ -483,4 +488,67 @@ fun Modifier.pwDestaque(ativo: Boolean): Modifier {
 @Composable
 fun PwPagina(modifier: Modifier = Modifier, padding: PaddingValues = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 120.dp), content: @Composable ColumnScope.() -> Unit) {
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(padding), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+}
+
+/** Texto de uma linha que diminui sozinho até caber (valores, números grandes). */
+@Composable
+fun TextoAjustado(texto: String, estilo: TextStyle, maximo: Int, modifier: Modifier = Modifier, minimo: Int = 10) {
+    androidx.compose.foundation.text.BasicText(
+        texto, modifier, style = estilo, maxLines = 1, softWrap = false,
+        autoSize = androidx.compose.foundation.text.TextAutoSize.StepBased(minFontSize = minimo.sp, maxFontSize = maximo.sp, stepSize = 0.5.sp),
+    )
+}
+
+/** Foto da conta (topo e menu): no modo teste ganha o anel brilhante e o selo de frasco, como no site. */
+@Composable
+fun PwAvatarConta(nome: String, foto: String?, teste: Boolean, modifier: Modifier = Modifier, tamanho: Dp = 42.dp, onClick: (() -> Unit)? = null) {
+    val c = Pw.cores
+    Box(modifier) {
+        PwAvatar(
+            nome, foto,
+            if (teste) Modifier.border(2.dp, c.ouro, CircleShape).padding(3.dp) else Modifier,
+            tamanho = tamanho, onClick = onClick,
+        )
+        if (teste) {
+            Box(
+                Modifier.align(Alignment.BottomEnd).size((tamanho.value * 0.42f).coerceAtLeast(16f).dp).clip(CircleShape).background(c.fundo)
+                    .padding(2.dp).clip(CircleShape).background(c.gradOuro),
+                contentAlignment = Alignment.Center,
+            ) { Icon(PwIcones.FlaskConical, "Modo teste", tint = c.sobreOuro, modifier = Modifier.size((tamanho.value * 0.22f).coerceAtLeast(9f).dp)) }
+        }
+    }
+}
+
+/** Cabeçalho das telas abertas por cima (voltar + título de uma linha + ações em ícone). */
+@Composable
+fun PwCabecalho(titulo: String, onVoltar: () -> Unit, modifier: Modifier = Modifier, subtitulo: String? = null, acoes: @Composable RowScope.() -> Unit = {}) {
+    val c = Pw.cores
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        PwBotaoIcone(PwIcones.ArrowLeft, "Voltar", onVoltar)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(titulo, style = androidx.compose.material3.MaterialTheme.typography.headlineSmall, color = c.texto, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitulo != null) Text(subtitulo, color = c.texto2, fontSize = 13.sp, fontFamily = Archivo, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), content = acoes)
+    }
+}
+
+/** Pílula de vidro sobre o mapa (lista, estabelecimentos…). `ligada` pinta de dourado. */
+@Composable
+fun PwPilula(texto: String, icone: ImageVector, onClick: () -> Unit, modifier: Modifier = Modifier, ligada: Boolean = false) {
+    val c = Pw.cores
+    val forma = RoundedCornerShape(99.dp)
+    Row(
+        modifier.clip(forma).then(if (ligada) Modifier.background(c.gradOuro) else Modifier.background(c.vidroForte))
+            .border(1.dp, if (ligada) Color.Transparent else c.bordaForte, forma).clickable(onClick = onClick)
+            .padding(horizontal = if (texto.isEmpty()) 11.dp else 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icone, texto.ifEmpty { null }, tint = if (ligada) c.sobreOuro else c.texto, modifier = Modifier.size(17.dp))
+        if (texto.isNotEmpty()) {
+            Spacer(Modifier.width(7.dp))
+            Text(texto, color = if (ligada) c.sobreOuro else c.texto, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp, fontFamily = Archivo, maxLines = 1, softWrap = false)
+        }
+    }
 }

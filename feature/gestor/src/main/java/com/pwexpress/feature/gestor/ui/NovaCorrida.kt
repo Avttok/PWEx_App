@@ -54,6 +54,12 @@ import com.pwexpress.core.designsystem.PwSegmentado
 import com.pwexpress.core.designsystem.PwSelecao
 import com.pwexpress.core.designsystem.TemaApp
 import com.pwexpress.core.designsystem.moedaBr
+import com.pwexpress.core.designsystem.numeroBr
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import com.pwexpress.core.mapa.PinoMapa
 import com.pwexpress.core.mapa.PwMapa
 import com.pwexpress.feature.gestor.data.EnderecoG
@@ -219,11 +225,7 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
     }
 
     PwPagina {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PwBotaoIcone(PwIcones.ArrowLeft, "Voltar", onVoltar)
-            Spacer(Modifier.width(10.dp))
-            TituloTela("Nova corrida", if (teste) "Modo teste: será uma corrida de teste" else "Paradas, preço e despacho", PwIcones.PackageCheck)
-        }
+        Cabecalho("Nova corrida", onVoltar, subtitulo = if (teste) "Será uma corrida de teste" else "Paradas, preço e despacho")
 
         // ------------------------------------------------ quando
         PwCartao(cor = if (planejar) c.azul.copy(alpha = 0.6f) else null) {
@@ -268,7 +270,7 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
         PwCartao {
             PwRotulo("Cliente")
             Espaco(8)
-            PwSegmentado(listOf("Avulso" to PwIcones.UserRound, "Cliente cadastrado" to PwIcones.Building2), if (cadastrado) 1 else 0, { cadastrado = it == 1; valorManual = null })
+            PwSegmentado(listOf("Avulso" to PwIcones.UserRound, "Cadastrado" to PwIcones.Building2), if (cadastrado) 1 else 0, { cadastrado = it == 1; valorManual = null })
             Espaco(10)
             if (cadastrado) {
                 PwSelecao("Cliente", dados.empresas.map { it.id to (it.nome + if (it.situacao != null && it.situacao != "ATIVA") " (${it.situacao})" else "") }, empresaId, { escolherEmpresa(it) }, vazio = "Escolha o cliente…")
@@ -279,7 +281,7 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
             } else {
                 PwCampo(nomeAvulso, { nomeAvulso = it }, "Nome do cliente (opcional)", dica = "Ex.: Dona Maria · Padaria do Centro")
                 val sugestoes = conhecidos.filter { nomeAvulso.length >= 1 && it.contains(nomeAvulso, true) && !it.equals(nomeAvulso, true) }.take(4)
-                if (sugestoes.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) { sugestoes.forEach { s -> Chip(s) { nomeAvulso = s } } }
+                if (sugestoes.isNotEmpty()) Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { sugestoes.forEach { s -> Chip(s) { nomeAvulso = s } } }
                 Espaco(8)
                 PwSelecao("Modalidade desta corrida", Precos.modalidades, modalidade, { modalidade = it; valorManual = null })
                 Espaco(8)
@@ -312,16 +314,16 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
 
         val pinos = paradas.mapNotNull { p -> p.lat?.let { la -> p.lng?.let { lo -> PinoMapa(la, lo, p.coleta, false, false) } } }
         if (pinos.isNotEmpty()) {
-            Box(Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(22.dp))) {
-                PwMapa(paradas = pinos, rota = rota?.polyline, minhaPosicao = null, modifier = Modifier.fillMaxWidth().height(200.dp), enquadrar = chave)
+            Box(Modifier.fillMaxWidth().height(210.dp).clip(RoundedCornerShape(22.dp)).border(1.dp, c.borda, RoundedCornerShape(22.dp))) {
+                PwMapa(paradas = pinos, rota = rota?.polyline, minhaPosicao = null, modifier = Modifier.fillMaxWidth().height(210.dp), enquadrar = chave)
             }
         }
 
         // ------------------------------------------------ resumo e preço
         PwCartao {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                com.pwexpress.core.designsystem.PwNumero("Distância", if (calculando) "…" else km(rota?.distanciaM), Modifier.weight(1f))
-                com.pwexpress.core.designsystem.PwNumero("Tempo", if (calculando) "…" else duracao(rota?.duracaoS), Modifier.weight(1f))
+                com.pwexpress.core.designsystem.PwNumero("Distância", if (calculando) "…" else km(rota?.distanciaM), Modifier.weight(1f), icone = PwIcones.Ruler)
+                com.pwexpress.core.designsystem.PwNumero("Tempo", if (calculando) "…" else duracao(rota?.duracaoS), Modifier.weight(1f), icone = PwIcones.Clock)
             }
             Espaco(10)
             PwCampo(valorManual ?: (orc.valor?.let { "%.2f".format(it).replace('.', ',') } ?: ""), { valorManual = it }, "Valor", teclado = KeyboardType.Decimal, prefixo = "R$ ")
@@ -333,8 +335,8 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
                 PwInterruptor("Acréscimo por distância", cobrarAcrescimo, { cobrarAcrescimo = it }, icone = PwIcones.TrendingUp,
                     descricao = if (cobrarAcrescimo) "Cobra a mais em percursos longos e para motoboys longe da coleta." else "Esta corrida fica com o valor acima, sem acréscimo.")
                 if (acrescimoLigado) TextoDica(
-                    (if (fe > 0) "Percurso longo: +${fe}× → ${moedaBr(valorComAcrescimo)}. " else "Sem acréscimo de percurso. ") +
-                        "Se o motoboy estiver a mais de ${cfg.numero("acrescimo_coleta_cada_km", 100.0).toInt()} km da coleta, soma +${cfg.numero("acrescimo_coleta_fator", 0.5)}× a cada ${cfg.numero("acrescimo_coleta_cada_km", 100.0).toInt()} km na oferta dele.",
+                    (if (fe > 0) "Percurso longo: +${numeroBr(fe)}× → ${moedaBr(valorComAcrescimo)}. " else "Sem acréscimo de percurso. ") +
+                        "Se o motoboy estiver a mais de ${cfg.numero("acrescimo_coleta_cada_km", 100.0).toInt()} km da coleta, soma +${numeroBr(cfg.numero("acrescimo_coleta_fator", 0.5))}× a cada ${cfg.numero("acrescimo_coleta_cada_km", 100.0).toInt()} km na oferta dele.",
                 )
             }
         }
@@ -355,7 +357,7 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
             PwRotulo("Despacho")
             Espaco(8)
             PwSegmentado(
-                listOf((if (planejar) "Aberta a todos" else "Mais próximo") to PwIcones.Radar, (if (planejar) "Reservar para" else "Motoboy específico") to PwIcones.UserRound),
+                listOf((if (planejar) "Aberta" else "Mais próximo") to PwIcones.Radar, (if (planejar) "Reservar" else "Escolher") to PwIcones.UserRound),
                 if (direto) 1 else 0, { direto = it == 1 },
             )
             Espaco(6)
@@ -375,19 +377,26 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
         }
 
         PwErro(erro)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                PwRotulo(if (planejar && datas.size > 1) "Valor de cada corrida" else "Valor da corrida", linhas = 1)
+                if (planejar && datas.size > 1) TextoDica("${datas.size} corridas na repetição")
+            }
+            com.pwexpress.core.designsystem.PwValor(moedaBr(valorComAcrescimo), Modifier.weight(1f), tamanhoMax = 30)
+        }
         PwBotaoOuro(
             when {
                 enviando -> "Criando…"
-                planejar -> "${if (datas.size > 1) "Planejar ${datas.size} corridas" else "Planejar corrida"} · ${moedaBr(valorComAcrescimo)}${if (datas.size > 1) " cada" else ""}"
-                else -> "${if (teste) "Criar teste" else "Criar e despachar"} · ${moedaBr(valorComAcrescimo)}"
+                planejar -> if (datas.size > 1) "Planejar ${datas.size} corridas" else "Planejar corrida"
+                else -> if (teste) "Criar teste" else "Criar e despachar"
             },
-            onClick = ::enviar, icone = PwIcones.Send, habilitado = !enviando, altura = 62.dp,
+            onClick = ::enviar, icone = if (planejar) PwIcones.CalendarCheck else PwIcones.Send, habilitado = !enviando, altura = 60.dp,
         )
     }
 
     if (escolhendoHora) SeletorDataHora("Começa em", inicio, onFechar = { escolhendoHora = false }, onEscolher = { inicio = it; escolhendoHora = false })
     marcando?.let { p ->
-        SeletorNoMapa(p.lat?.let { la -> p.lng?.let { lo -> la to lo } }, onFechar = { marcando = null }) { la, lo ->
+        SeletorNoMapa(p.lat?.let { la -> p.lng?.let { lo -> la to lo } } ?: paradas.firstNotNullOfOrNull { q -> q.lat?.let { la -> q.lng?.let { lo -> la to lo } } }, onFechar = { marcando = null }, titulo = if (p.coleta) "Local da coleta" else "Local da entrega") { la, lo ->
             marcando = null
             p.lat = la; p.lng = lo; p.endereco = "Buscando endereço…"
             escopo.launch { p.endereco = Geo.enderecoDoPonto(la, lo) }
@@ -398,7 +407,7 @@ fun NovaCorridaG(onVoltar: () -> Unit, onCriada: (String) -> Unit) {
 @Composable
 private fun Chip(texto: String, onClick: () -> Unit) {
     val c = Pw.cores
-    Text(texto, color = c.texto, fontSize = 12.5.sp, modifier = Modifier.clip(RoundedCornerShape(99.dp)).background(c.vidroForte).border(1.dp, c.bordaForte, RoundedCornerShape(99.dp)).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp))
+    Text(texto, color = c.texto, fontSize = 12.5.sp, maxLines = 1, softWrap = false, modifier = Modifier.clip(RoundedCornerShape(99.dp)).background(c.vidroForte).border(1.dp, c.bordaForte, RoundedCornerShape(99.dp)).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp))
 }
 
 @Composable
@@ -419,29 +428,30 @@ private fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) -
         Modifier.fillMaxWidth().clip(forma).background(c.vidroSutil).border(1.dp, if (p.coleta) c.ouro.copy(alpha = 0.5f) else c.borda, forma).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(26.dp).clip(CircleShape).background(if (p.coleta) c.gradOuro else androidx.compose.ui.graphics.Brush.linearGradient(listOf(c.texto, c.texto))), contentAlignment = Alignment.Center) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Box(Modifier.size(28.dp).clip(CircleShape).background(if (p.coleta) c.gradOuro else androidx.compose.ui.graphics.Brush.linearGradient(listOf(c.texto, c.texto))), contentAlignment = Alignment.Center) {
                 Text("${i + 1}", color = if (p.coleta) c.sobreOuro else c.fundo, fontWeight = FontWeight.Black, fontSize = 13.sp)
             }
-            Spacer(Modifier.width(8.dp))
-            PwSegmentado(listOf("Coleta" to null, "Entrega" to null), if (p.coleta) 0 else 1, { p.coleta = it == 0 }, Modifier.weight(1f))
-            PwBotaoIcone(PwIcones.ArrowUp, "Subir", { onMover(-1) })
-            PwBotaoIcone(PwIcones.ArrowDown, "Descer", { onMover(1) })
-            if (total > 2) PwBotaoIcone(PwIcones.X, "Remover", onRemover)
+            Text(if (p.coleta) "Coleta" else "Entrega", color = c.texto, fontWeight = FontWeight.Bold, fontSize = 15.sp, modifier = Modifier.weight(1f).padding(start = 4.dp), maxLines = 1)
+            PwBotaoIcone(PwIcones.ArrowUp, "Subir", { onMover(-1) }, tamanho = 34.dp, habilitado = i > 0)
+            PwBotaoIcone(PwIcones.ArrowDown, "Descer", { onMover(1) }, tamanho = 34.dp, habilitado = i < total - 1)
+            if (total > 2) PwBotaoIcone(PwIcones.Trash2, "Remover parada", onRemover, tamanho = 34.dp, cor = c.vermelho)
         }
+        PwSegmentado(listOf("Coleta" to PwIcones.ArrowUpFromLine, "Entrega" to PwIcones.ArrowDownToLine), if (p.coleta) 0 else 1, { p.coleta = it == 0 })
         PwCampo(p.endereco, { digitado = true; p.endereco = it; p.lat = null; p.lng = null }, "Endereço", dica = "Rua, número, cidade")
         sugestoes.forEach { s ->
             Text(s.descricao, color = c.texto, fontSize = 13.sp, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable {
                 digitado = false; p.endereco = s.descricao; p.lat = s.lat; p.lng = s.lng; sugestoes = emptyList()
             }.padding(8.dp))
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Marcar no mapa", color = c.ouro, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onMarcar).padding(4.dp))
-            Spacer(Modifier.width(10.dp))
-            if (p.lat != null) Text("✓ Localizado", color = c.verde, fontSize = 12.5.sp) else Text("Sem localização", color = c.texto3, fontSize = 12.5.sp)
-            Spacer(Modifier.weight(1f))
-            Text(if (p.aberta) "Menos" else "Contato e referências" + if (p.refs.isNotEmpty()) " (${p.refs.size})" else "", color = c.ouro, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { p.aberta = !p.aberta }.padding(4.dp))
+        if (p.lat != null) Detalhe(PwIcones.CircleCheck, "Localizado no mapa", c.verde)
+        else Detalhe(PwIcones.MapPin, "Sem localização: busque o endereço ou marque no mapa")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PwBotaoVidro("No mapa", onClick = onMarcar, icone = PwIcones.MapPinned, modifier = Modifier.weight(1f))
+            PwBotaoVidro(
+                if (p.aberta) "Menos" else "Detalhes" + if (p.refs.isNotEmpty()) " (${p.refs.size})" else "",
+                onClick = { p.aberta = !p.aberta }, icone = if (p.aberta) PwIcones.ChevronUp else PwIcones.SlidersHorizontal, modifier = Modifier.weight(1f),
+            )
         }
         if (p.aberta) {
             PwCampo(p.contato, { p.contato = it }, "Nome do contato")
@@ -452,14 +462,14 @@ private fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) -
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(PwIcones.Landmark, null, tint = c.ouro, modifier = Modifier.size(14.dp))
                     Spacer(Modifier.width(6.dp))
-                    Text(r.nome + listOfNotNull(r.tipo, r.distanciaM?.let { "$it m" }).joinToString(" · ").let { if (it.isNotEmpty()) "  ·  $it" else "" }, color = c.texto, fontSize = 13.sp, modifier = Modifier.weight(1f))
-                    PwBotaoIcone(PwIcones.X, "Remover", { p.refs.remove(r) })
+                    Text(r.nome + listOfNotNull(r.tipo, r.distanciaM?.let { "$it m" }).joinToString(" · ").let { if (it.isNotEmpty()) "  ·  $it" else "" }, color = c.texto, fontSize = 13.sp, modifier = Modifier.weight(1f), maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    PwBotaoIcone(PwIcones.X, "Remover", { p.refs.remove(r) }, tamanho = 32.dp)
                 }
             }
             if (p.refs.size < 3) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    PwCampo(novaRef, { novaRef = it }, "Ex.: em frente ao Posto Ipiranga", modifier = Modifier.weight(1f))
-                    PwBotaoIcone(PwIcones.Plus, "Adicionar", { if (novaRef.isNotBlank()) { p.refs.add(RefG(novaRef.trim(), null, null)); novaRef = "" } })
+                    PwCampo(novaRef, { novaRef = it }, "Nova referência", dica = "Ex.: em frente ao posto", modifier = Modifier.weight(1f))
+                    PwBotaoIcone(PwIcones.Plus, "Adicionar", { if (novaRef.isNotBlank()) { p.refs.add(RefG(novaRef.trim(), null, null)); novaRef = "" } }, ativo = novaRef.isNotBlank())
                 }
                 PwBotaoVidro(if (proximos == null) "Sugerir próximos" else "Buscar de novo", onClick = {
                     val la = p.lat; val lo = p.lng
@@ -467,8 +477,10 @@ private fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) -
                 }, icone = PwIcones.Sparkles, habilitado = p.lat != null, modifier = Modifier.fillMaxWidth())
                 proximos?.let { lista ->
                     if (lista.isEmpty()) TextoDica("Nenhum estabelecimento com nome por perto.")
-                    lista.filter { s -> p.refs.none { it.nome.equals(s.nome, true) } }.take(6).forEach { s ->
-                        Chip("+ ${s.nome}" + (s.distanciaM?.let { "  $it m" } ?: "")) { if (p.refs.size < 3) p.refs.add(s) }
+                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        lista.filter { s -> p.refs.none { it.nome.equals(s.nome, true) } }.take(8).forEach { s ->
+                            Chip("+ ${s.nome}" + (s.distanciaM?.let { "  $it m" } ?: "")) { if (p.refs.size < 3) p.refs.add(s) }
+                        }
                     }
                 }
             }
@@ -476,20 +488,46 @@ private fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) -
     }
 }
 
-/** Mapa em janela para tocar e escolher o ponto. */
+/**
+ * Escolher um ponto em tela cheia: arraste o mapa até o alfinete do centro ficar no lugar certo
+ * (ou toque no mapa para pular até lá) e confirme.
+ */
 @Composable
-private fun SeletorNoMapa(inicial: Pair<Double, Double>?, onFechar: () -> Unit, onEscolher: (Double, Double) -> Unit) {
-    var ponto by remember { mutableStateOf(inicial) }
-    PwJanela("Toque no mapa", onFechar = onFechar) {
-        Box(Modifier.fillMaxWidth().height(380.dp).clip(RoundedCornerShape(18.dp))) {
+internal fun SeletorNoMapa(inicial: Pair<Double, Double>?, onFechar: () -> Unit, titulo: String = "Marcar no mapa", onEscolher: (Double, Double) -> Unit) {
+    val c = Pw.cores
+    var centro by remember { mutableStateOf(inicial) }
+    var irPara by remember { mutableStateOf<Pair<Double, Double>?>(null) }
+    androidx.compose.ui.window.Dialog(onDismissRequest = onFechar, properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(Modifier.fillMaxSize().background(c.fundo)) {
             PwMapa(
-                paradas = listOfNotNull(ponto?.let { PinoMapa(it.first, it.second, true, true, false) }),
-                rota = null, minhaPosicao = null, modifier = Modifier.fillMaxWidth().height(380.dp),
-                onToque = { la, lo -> ponto = la to lo },
+                paradas = emptyList(), rota = null, minhaPosicao = null, modifier = Modifier.fillMaxSize(),
+                inicio = inicial, zoomInicio = 16.0, irPara = irPara,
+                onToque = { la, lo -> irPara = la to lo },
+                onCentro = { la, lo -> centro = la to lo },
             )
+            // alfinete fixo no centro
+            Column(Modifier.align(Alignment.Center).padding(bottom = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(40.dp).clip(CircleShape).background(c.gradOuro).border(3.dp, c.fundo, CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(PwIcones.MapPin, null, tint = c.sobreOuro, modifier = Modifier.size(22.dp))
+                }
+                Box(Modifier.size(width = 3.dp, height = 14.dp).background(c.ouro))
+            }
+            Row(
+                Modifier.align(Alignment.TopCenter).fillMaxWidth().statusBarsPadding().padding(12.dp).clip(RoundedCornerShape(20.dp)).background(c.fundo2.copy(alpha = 0.95f))
+                    .border(1.dp, c.bordaForte, RoundedCornerShape(20.dp)).padding(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PwBotaoIcone(PwIcones.ArrowLeft, "Voltar", onFechar)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(titulo, color = c.texto, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1)
+                    Text("Arraste o mapa até o alfinete ficar no lugar", color = c.texto3, fontSize = 12.5.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
+            }
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(16.dp)) {
+                PwBotaoOuro("Usar este ponto", onClick = { centro?.let { onEscolher(it.first, it.second) } }, habilitado = centro != null, icone = PwIcones.Check)
+            }
         }
-        TextoDica("Toque onde fica o endereço e confirme.")
-        PwBotaoOuro("Usar este ponto", onClick = { ponto?.let { onEscolher(it.first, it.second) } }, habilitado = ponto != null, icone = PwIcones.MapPin)
     }
 }
 

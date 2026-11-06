@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -121,9 +122,9 @@ fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {})
     }
 
     PwPagina(modifier) {
-        PwCabeca(PwIcones.CalendarClock, "Planejadas", "Corridas com hora marcada. Reserve e inicie no horário.")
+        PwCabeca(PwIcones.CalendarClock, "Corridas", "Com hora marcada: reserve e inicie no horário")
         PwSegmentado(
-            listOf("Livres (${livres.size})" to PwIcones.CalendarClock, "Minhas reservas (${minhas.size})" to PwIcones.CalendarCheck),
+            listOf("Livres" to PwIcones.CalendarClock, "Minhas reservas" to PwIcones.CalendarCheck),
             aba, { aba = it },
         )
         PwErro(erro)
@@ -179,14 +180,14 @@ private fun CartaoPlanejada(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(corrida.numeroExibicao, color = c.texto2, fontWeight = FontWeight.Bold, fontFamily = Archivo, fontSize = 13.sp)
                     Spacer(Modifier.width(8.dp))
-                    if (corrida.minha) PwSelo("reservada para você", c.azul, icone = PwIcones.CalendarCheck)
-                    if (corrida.teste) { Spacer(Modifier.width(6.dp)); PwSelo("TESTE", c.violeta, icone = PwIcones.FlaskConical) }
+                    if (corrida.minha) PwSelo("Sua reserva", c.azul, icone = PwIcones.CalendarCheck)
                 }
                 Spacer(Modifier.height(4.dp))
-                Text(quandoTexto(quando).replaceFirstChar { it.uppercase() }, style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 20.sp), color = c.texto)
-                Text(relativoTexto(quando, agora), color = c.azul, fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                com.pwexpress.core.designsystem.TextoAjustado(quandoTexto(quando).replaceFirstChar { it.uppercase() }, TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, color = c.texto), 20, minimo = 14)
+                Text(relativoTexto(quando, agora), color = c.azul, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1)
             }
-            Column(horizontalAlignment = Alignment.End) {
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.widthIn(max = 130.dp), horizontalAlignment = Alignment.End) {
                 PwValor(moedaBr(corrida.valorMotoboy), tamanhoMax = 26)
                 corrida.distanciaM?.let { Text(if (it < 1000) "$it m" else "%.1f km".format(br, it / 1000.0), color = c.texto3, fontSize = 12.sp) }
             }
@@ -226,7 +227,7 @@ private fun CartaoPlanejada(
             Spacer(Modifier.height(8.dp))
             if (podeDesistir) {
                 PwBotaoVidro(
-                    "Desistir (até ${corrida.cancelarReservaAte?.let { quandoTexto(it).substringAfter(" às ") } ?: "—"})",
+                    "Desistir até ${corrida.cancelarReservaAte?.let { quandoTexto(it).substringAfter(" às ") } ?: "—"}",
                     onClick = onDesistir, icone = PwIcones.CalendarX, habilitado = !ocupado, modifier = Modifier.fillMaxWidth(),
                 )
             } else {

@@ -38,6 +38,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import com.pwexpress.core.designsystem.PwPilula
+import com.pwexpress.core.designsystem.PwPonto
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pwexpress.core.designsystem.ArchivoLargo
@@ -145,6 +151,7 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
     var erro by remember { mutableStateOf<String?>(null) }
     var ocupado by remember { mutableStateOf(false) }
     var excluir by remember { mutableStateOf(false) }
+    var marcarMapa by remember { mutableStateOf(false) }
     fun num(s: String) = s.trim().replace(',', '.').toDoubleOrNull()
 
     fun localizar() = escopo.launch {
@@ -153,19 +160,15 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
     }
 
     PwPagina {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PwBotaoIcone(PwIcones.ArrowLeft, "Voltar", onVoltar)
-            Spacer(Modifier.width(10.dp))
-            TituloTela(if (e == null) "Nova empresa" else e.nome, "Dados, preço e coleta padrão", PwIcones.Building2)
-        }
+        Cabecalho(if (e == null) "Nova empresa" else e.nome, onVoltar, subtitulo = "Dados, preço e coleta padrão")
         PwCartao {
             PwRotulo("Receita Federal")
             Espaco(8)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PwCampo(cnpj, { cnpj = it }, "CNPJ", teclado = KeyboardType.Number, modifier = Modifier.weight(1f))
-                PwBotaoVidro("Consultar", onClick = {
+                PwBotaoIcone(PwIcones.Search, "Consultar na Receita", habilitado = !ocupado, tamanho = 52.dp, ativo = cnpj.count { it.isDigit() } == 14, onClick = {
                     val d = cnpj.filter { it.isDigit() }
-                    if (d.length != 14) { erro = "Digite os 14 dígitos do CNPJ."; return@PwBotaoVidro }
+                    if (d.length != 14) { erro = "Digite os 14 dígitos do CNPJ."; return@PwBotaoIcone }
                     ocupado = true
                     escopo.launch {
                         Gestao.consultarCnpj(d).onSuccess { r ->
@@ -178,7 +181,7 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
                         }.onFailure { erro = it.message }
                         ocupado = false
                     }
-                }, icone = PwIcones.Search, habilitado = !ocupado)
+                })
             }
             if (razao.isNotBlank()) { Espaco(6); TextoDica("$razao${if (situacao.isNotBlank()) " · $situacao" else ""}") }
             if (situacao.isNotBlank() && situacao != "ATIVA") PwErro("Situação cadastral: $situacao")
@@ -204,22 +207,26 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
             Espaco(8)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PwCampo(endereco, { endereco = it; lat = null; lng = null }, "Endereço de coleta", modifier = Modifier.weight(1f))
-                PwBotaoIcone(PwIcones.Search, "Localizar", { localizar() })
+                PwBotaoIcone(PwIcones.Search, "Localizar endereço", { localizar() }, tamanho = 52.dp)
             }
             Espaco(8)
-            Box(Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(18.dp))) {
+            val formaMapa = RoundedCornerShape(18.dp)
+            Box(Modifier.fillMaxWidth().height(180.dp).clip(formaMapa).border(1.dp, c.borda, formaMapa)) {
                 PwMapa(
                     paradas = listOfNotNull(lat?.let { la -> lng?.let { lo -> PinoMapa(la, lo, true, true, false) } }), rota = null, minhaPosicao = null,
-                    modifier = Modifier.fillMaxWidth().height(200.dp), enquadrar = "$lat,$lng",
-                    onToque = { la, lo -> lat = la; lng = lo; escopo.launch { if (endereco.isBlank()) endereco = Geo.enderecoDoPonto(la, lo) } },
+                    modifier = Modifier.fillMaxWidth().height(180.dp), enquadrar = "$lat,$lng",
                 )
+                // a prévia não se mexe: o toque abre o mapa em tela cheia, que é fácil de arrastar
+                Box(Modifier.fillMaxSize().clickable { marcarMapa = true })
+                PwPilula(if (lat != null) "Ajustar no mapa" else "Marcar no mapa", PwIcones.MapPinned, { marcarMapa = true }, Modifier.align(Alignment.BottomEnd).padding(10.dp))
             }
-            TextoDica(if (lat != null) "✓ Coleta marcada. Toque no mapa para ajustar." else "Toque no mapa para marcar a coleta.")
+            Detalhe(if (lat != null) PwIcones.CircleCheck else PwIcones.MapPin, if (lat != null) "Coleta marcada no mapa" else "Sem local: busque o endereço ou marque no mapa", if (lat != null) c.verde else null)
             Espaco(8)
             PwCampo(instrucoes, { instrucoes = it }, "Instruções de coleta", linhas = 2)
         }
         PwCartao {
-            PwRotulo("Motoboys favoritos (recebem primeiro)")
+            PwRotulo("Motoboys favoritos")
+            TextoDica("Recebem as corridas deste cliente antes dos outros, na ordem marcada.")
             dados.equipe.filter { it.motoboy }.forEach { m ->
                 PwInterruptor(m.nome + (if (m.id in favoritos) "  · ${favoritos.indexOf(m.id) + 1}º" else ""), m.id in favoritos, { lig -> if (lig) favoritos.add(m.id) else favoritos.remove(m.id) })
             }
@@ -247,6 +254,13 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
             }
         })
         if (e != null) PwBotaoPerigo("Excluir empresa", onClick = { excluir = true }, modifier = Modifier.fillMaxWidth())
+    }
+    if (marcarMapa) {
+        SeletorNoMapa(lat?.let { la -> lng?.let { lo -> la to lo } }, onFechar = { marcarMapa = false }, titulo = "Coleta padrão") { la, lo ->
+            marcarMapa = false
+            lat = la; lng = lo
+            escopo.launch { if (endereco.isBlank()) endereco = Geo.enderecoDoPonto(la, lo) }
+        }
     }
     if (excluir && e != null) {
         PwJanela("Excluir ${e.nome}?", onFechar = { excluir = false }) {
@@ -276,30 +290,42 @@ fun EquipeG(onAbrir: (String) -> Unit) {
             item { TituloTela("Equipe", if (dados.equipe.size == 1) "1 pessoa" else "${dados.equipe.size} pessoas", PwIcones.Users) }
             items(dados.equipe, key = { it.id }) { m ->
                 val p = dados.posicao(m.id)
-                PwCartao(padding = PaddingValues(12.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).then(Modifier)) {
-                        PwAvatar(m.nome, m.foto, tamanho = 44.dp, onClick = { onAbrir(m.id) })
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(m.nome, color = c.texto, fontWeight = FontWeight.Bold, fontSize = 15.5.sp)
-                            Text(m.email, color = c.texto3, fontSize = 12.sp)
-                            Espaco(4)
-                            Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                                if (m.gestor) PwSelo("Gestor", c.ouro, icone = PwIcones.ShieldCheck)
-                                if (m.motoboy) PwSelo("Motoboy", c.texto2, icone = PwIcones.Bike)
-                                if (m.modoTeste) PwSelo("Teste", c.violeta, icone = PwIcones.FlaskConical)
-                                if (m.bloqueado) PwSelo("Bloqueado", c.vermelho, icone = PwIcones.Lock)
-                            }
+                val forma = RoundedCornerShape(20.dp)
+                Row(
+                    Modifier.fillMaxWidth().clip(forma).background(c.vidro).border(1.dp, c.borda, forma).clickable { onAbrir(m.id) }.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PwAvatar(m.nome, m.foto, tamanho = 46.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(m.nome, color = c.texto, fontWeight = FontWeight.Bold, fontSize = 15.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            if (m.motoboy) { Spacer(Modifier.width(6.dp)); PwPonto(corMotoboy(p?.status, c), 9.dp) }
                         }
-                        if (m.motoboy) PwSelo(rotuloMotoboy[p?.status] ?: "Offline", corMotoboy(p?.status, c))
-                        PwBotaoIcone(PwIcones.ChevronRight, "Abrir", { onAbrir(m.id) })
+                        Text(m.email, color = c.texto3, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Selos(m, p?.status)
                     }
+                    Spacer(Modifier.width(6.dp))
+                    Icon(PwIcones.ChevronRight, null, tint = c.texto3, modifier = Modifier.size(18.dp))
                 }
             }
         }
         PwBotaoFlutuante(PwIcones.UserPlus, "Nova conta", { criando = true }, Modifier.align(Alignment.BottomEnd).padding(end = 18.dp, bottom = 108.dp))
     }
     if (criando) NovaContaG(dados.config.numero("repasse_motoboy_pct", 70.0), onFechar = { criando = false }, onCriada = { criando = false; it?.let(onAbrir) })
+}
+
+/** Papéis e situação da pessoa, em fichas que quebram de linha sem cortar o texto. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun Selos(m: com.pwexpress.feature.gestor.data.MembroG, status: String?) {
+    val c = Pw.cores
+    androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        if (m.gestor) PwSelo("Gestor", c.ouro, icone = PwIcones.ShieldCheck)
+        if (m.motoboy) PwSelo(rotuloMotoboy[status] ?: "Offline", corMotoboy(status, c), icone = PwIcones.Bike)
+        if (m.modoTeste) PwSelo("Teste", c.violeta, icone = PwIcones.FlaskConical)
+        if (m.bloqueado) PwSelo("Bloqueado", c.vermelho, icone = PwIcones.Lock)
+    }
 }
 
 private fun gerarSenha(): String {
@@ -368,23 +394,14 @@ fun MembroG(id: String, meuId: String?, onVoltar: () -> Unit) {
     val m = dados.membro(id)
     var aba by remember { mutableIntStateOf(0) }
     PwPagina {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PwBotaoIcone(PwIcones.ArrowLeft, "Voltar", onVoltar)
-        }
+        Cabecalho(m?.nome ?: "Conta", onVoltar, subtitulo = m?.email)
         if (m == null) { if (!dados.carregado) PwCarregando() else PwErro("Essa conta não existe mais."); return@PwPagina }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            PwAvatar(m.nome, m.foto, tamanho = 64.dp)
+            PwAvatar(m.nome, m.foto, tamanho = 60.dp)
             Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Text(m.nome, style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 22.sp), color = c.texto)
-                Text(m.email, color = c.texto3, fontSize = 13.sp)
-                Espaco(4)
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    if (m.gestor) PwSelo("Gestor", c.ouro, icone = PwIcones.ShieldCheck)
-                    if (m.motoboy) PwSelo("Motoboy", c.texto2, icone = PwIcones.Bike)
-                    if (m.modoTeste) PwSelo("Teste", c.violeta, icone = PwIcones.FlaskConical)
-                    if (m.bloqueado) PwSelo("Bloqueado", c.vermelho, icone = PwIcones.Lock)
-                }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Selos(m, dados.posicao(m.id)?.status)
+                m.ultimoAcesso?.let { TextoDica("Último acesso: ${dataHora(it)}") }
             }
         }
         PwSegmentado(listOf("Registro" to PwIcones.History, "Editar" to PwIcones.Pencil), aba, { aba = it })
@@ -404,27 +421,28 @@ private fun RegistroG(id: String) {
     val d = dados ?: run { if (erro == null) PwCarregando(); return }
     val r = d.first
     fun n(k: String) = (r.int(k) ?: 0).toString()
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        PwNumero(if (teste) "Ganhos de teste" else "Ganhos", moedaBr(r.dbl(if (teste) "ganhos_teste" else "ganhos") ?: 0.0), Modifier.weight(1.4f), destaque = true)
-        PwNumero("Km rodados", "%.1f".format(BR, r.dbl("km_rodados") ?: 0.0), Modifier.weight(1f))
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        PwNumero("Concluídas", n(if (teste) "concluidas_teste" else "concluidas"), Modifier.weight(1f))
-        PwNumero("Criadas", n(if (teste) "criadas_teste" else "criadas"), Modifier.weight(1f))
-        PwNumero("Aceitas", n("aceitas"), Modifier.weight(1f))
-    }
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        PwNumero("Recusadas", n("recusadas"), Modifier.weight(1f))
-        PwNumero("Expiradas", n("expiradas"), Modifier.weight(1f))
-        PwNumero("Canceladas", ((r.int("cancelou") ?: 0) + (r.int("canceladas_com_ele") ?: 0)).toString(), Modifier.weight(1f))
-        PwNumero("Apagadas", n("excluiu"), Modifier.weight(1f))
+    PwNumero(if (teste) "Ganhos de teste" else "Ganhos", moedaBr(r.dbl(if (teste) "ganhos_teste" else "ganhos") ?: 0.0), Modifier.fillMaxWidth(), icone = PwIcones.Wallet, destaque = true)
+    val numeros = listOf(
+        Triple("Km rodados", "%.1f".format(BR, r.dbl("km_rodados") ?: 0.0), PwIcones.Ruler),
+        Triple("Concluídas", n(if (teste) "concluidas_teste" else "concluidas"), PwIcones.CircleCheck),
+        Triple("Criadas", n(if (teste) "criadas_teste" else "criadas"), PwIcones.Plus),
+        Triple("Aceitas", n("aceitas"), PwIcones.Check),
+        Triple("Recusadas", n("recusadas"), PwIcones.Ban),
+        Triple("Expiradas", n("expiradas"), PwIcones.Timer),
+        Triple("Canceladas", ((r.int("cancelou") ?: 0) + (r.int("canceladas_com_ele") ?: 0)).toString(), PwIcones.CircleX),
+        Triple("Apagadas", n("excluiu"), PwIcones.Trash2),
+    )
+    numeros.chunked(2).forEach { par ->
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            par.forEach { (rot, v, ic) -> PwNumero(rot, v, Modifier.weight(1f), icone = ic) }
+        }
     }
     val grupos = mapOf(
         "criada" to 1, "reagendada" to 1, "concluida" to 2, "parada_concluida" to 2, "chegou" to 2, "cancelada" to 3,
         "oferta_enviada" to 4, "oferta_recusada" to 4, "oferta_expirada" to 4, "aceita" to 4, "redespachada" to 4, "reservada" to 4, "reserva_cancelada" to 4, "planejada_atrasada" to 4,
         "excluida" to 5,
     )
-    PwFiltros(listOf("Tudo" to 0, "Criadas" to 0, "Concluídas" to 0, "Canceladas" to 0, "Ofertas e reservas" to 0, "Apagadas" to 0), filtro, { filtro = it })
+    PwFiltros(listOf("Tudo" to 0, "Criadas" to 0, "Concluídas" to 0, "Canceladas" to 0, "Ofertas" to 0, "Apagadas" to 0), filtro, { filtro = it })
     val itens = d.second.filter { (teste || !it.teste) && (filtro == 0 || grupos[it.tipo] == filtro) }
     if (itens.isEmpty()) PwVazio("Nada por aqui ainda.", icone = PwIcones.History)
     var diaAnterior = ""
@@ -436,6 +454,7 @@ private fun RegistroG(id: String) {
                 Text(descricaoRegistro(i), color = c.texto, fontSize = 14.sp)
                 extraRegistro(i)?.let { TextoDica(it) }
             }
+            Spacer(Modifier.width(8.dp))
             Text(hora(i.quando), color = c.texto3, fontSize = 12.sp)
         }
     }
@@ -501,8 +520,8 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
         PwCampo(nome, { nome = it }, "Nome de exibição")
         Espaco(8)
         PwRotulo("Papéis")
-        PwInterruptor("Gestor (acessa o painel)", gestor, { gestor = it }, icone = PwIcones.ShieldCheck)
-        PwInterruptor("Motoboy (usa o app e recebe corridas)", motoboy, { motoboy = it }, icone = PwIcones.Bike)
+        PwInterruptor("Gestor", gestor, { gestor = it }, descricao = "Acessa o painel (site e app)", icone = PwIcones.ShieldCheck)
+        PwInterruptor("Motoboy", motoboy, { motoboy = it }, descricao = "Usa o app e recebe corridas", icone = PwIcones.Bike)
         if (motoboy) PwCampo(repasse, { repasse = it }, "Repasse individual (%)", dica = "padrão: ${dados.config.numero("repasse_motoboy_pct", 70.0).toInt()}%", teclado = KeyboardType.Decimal)
         PwErro(erro)
         msg?.let { Text(it, color = c.verde, fontWeight = FontWeight.SemiBold) }
@@ -516,7 +535,6 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
                 }
             })
         }
-        m.ultimoAcesso?.let { Espaco(4); TextoDica("Último acesso: ${dataHora(it)}") }
     }
 
     if (eu) { TextoDica("Esta é a sua conta: nome e foto você muda no seu perfil."); return }
@@ -576,7 +594,7 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
 // =====================================================================
 
 @Composable
-fun FinanceiroG(onVoltar: () -> Unit) {
+fun FinanceiroG(onVoltar: (() -> Unit)?) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
     val teste by TemaApp.modoTeste.collectAsState()
@@ -594,11 +612,8 @@ fun FinanceiroG(onVoltar: () -> Unit) {
         linhas = Gestao.concluidas(cal.timeInMillis, teste)
     }
     PwPagina {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PwBotaoIcone(PwIcones.ArrowLeft, "Voltar", onVoltar)
-            Spacer(Modifier.width(10.dp))
-            TituloTela("Financeiro", if (teste) "Ganhos das corridas de teste" else "Corridas concluídas (sem testes)", PwIcones.Wallet)
-        }
+        val sub = if (teste) "Ganhos das corridas de teste" else "Corridas concluídas (sem testes)"
+        if (onVoltar != null) Cabecalho("Financeiro", onVoltar, subtitulo = sub) else TituloTela("Financeiro", sub, PwIcones.Wallet)
         PwFiltros(listOf("Hoje" to 0, "7 dias" to 0, "Este mês" to 0, "30 dias" to 0), periodo, { periodo = it })
         val l = linhas ?: run { PwCarregando(); return@PwPagina }
         val total = l.sumOf { it.valor ?: 0.0 }; val moto = l.sumOf { it.valorMotoboy ?: 0.0 }; val gest = l.sumOf { it.valorGestao ?: 0.0 }
@@ -614,9 +629,10 @@ fun FinanceiroG(onVoltar: () -> Unit) {
                 Espaco(8)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text(dados.membro(mid)?.nome ?: cs.first().motoboyNomeArquivado ?: "—", color = c.texto, fontWeight = FontWeight.SemiBold)
+                        Text(dados.membro(mid)?.nome ?: cs.first().motoboyNomeArquivado ?: "—", color = c.texto, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         TextoDica("${cs.size} corrida${if (cs.size == 1) "" else "s"} · repasse ${moedaBr(cs.sumOf { it.valorMotoboy ?: 0.0 })} · gestão ${moedaBr(cs.sumOf { it.valorGestao ?: 0.0 })}")
                     }
+                    Spacer(Modifier.width(8.dp))
                     Text(moedaBr(cs.sumOf { it.valor ?: 0.0 }), color = c.texto, fontWeight = FontWeight.Bold)
                 }
             }
@@ -627,7 +643,8 @@ fun FinanceiroG(onVoltar: () -> Unit) {
                 Espaco(8)
                 val nome = when { k == "—" -> "Avulso (sem nome)"; k.startsWith("avulso:") -> "${k.removePrefix("avulso:")} (avulso)"; else -> dados.empresa(k)?.nome ?: "—" }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) { Text(nome, color = c.texto, fontWeight = FontWeight.SemiBold); TextoDica("${cs.size} corrida${if (cs.size == 1) "" else "s"}") }
+                    Column(Modifier.weight(1f)) { Text(nome, color = c.texto, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis); TextoDica("${cs.size} corrida${if (cs.size == 1) "" else "s"}") }
+                    Spacer(Modifier.width(8.dp))
                     Text(moedaBr(cs.sumOf { it.valor ?: 0.0 }), color = c.texto, fontWeight = FontWeight.Bold)
                 }
             }
@@ -655,11 +672,7 @@ fun ConfiguracoesG(onVoltar: () -> Unit) {
     }
 
     PwPagina {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PwBotaoIcone(PwIcones.ArrowLeft, "Voltar", onVoltar)
-            Spacer(Modifier.width(10.dp))
-            TituloTela("Configurações", "Valem para todo o sistema · salvas sozinhas", PwIcones.Settings2)
-        }
+        Cabecalho("Configurações", onVoltar, subtitulo = "Valem para todo o sistema · salvam sozinhas")
         PwCampo(busca, { busca = it }, "Buscar ajuste…")
         val termo = sem(busca.trim())
         if (termo.isEmpty()) PwFiltros(GRUPOS_CONFIG.map { it.titulo to 0 }, grupo, { grupo = it })
@@ -674,7 +687,7 @@ fun ConfiguracoesG(onVoltar: () -> Unit) {
             PwCartao(cor = c.ouro.copy(alpha = 0.5f)) {
                 PwRotulo("Exemplo")
                 TextoDica("Corrida de R$ 100,00, motoboy a 250 km da coleta e 450 km de percurso:")
-                Text(if (cfg.logico("acrescimo_distancia", true)) "100 × (1 + $fc + $fe) = ${moedaBr(100 * (1 + fc + fe))}" else "Acréscimo desligado: fica R$ 100,00.", color = c.texto, fontWeight = FontWeight.Bold)
+                Text(if (cfg.logico("acrescimo_distancia", true)) "100 × (1 + ${com.pwexpress.core.designsystem.numeroBr(fc)} + ${com.pwexpress.core.designsystem.numeroBr(fe)}) = ${moedaBr(100 * (1 + fc + fe))}" else "Acréscimo desligado: fica R$ 100,00.", color = c.texto, fontWeight = FontWeight.Bold)
             }
         }
         lista.forEach { p ->

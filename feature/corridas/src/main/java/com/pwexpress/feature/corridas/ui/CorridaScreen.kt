@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -157,7 +158,7 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
                     corrida.empresaNome?.let { Text(it, color = c.texto2, fontSize = 12.sp, fontFamily = Archivo, maxLines = 1) }
                 }
                 Spacer(Modifier.width(10.dp))
-                PwValor(moeda(corrida.valorMotoboy), tamanhoMax = 22, cor = c.texto)
+                PwValor(moeda(corrida.valorMotoboy), Modifier.widthIn(max = 150.dp), tamanhoMax = 22, cor = c.texto)
             }
             // navegação externa, sempre à mão
             if (parada != null) {

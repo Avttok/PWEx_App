@@ -3,17 +3,27 @@ package com.pwexpress.motoboy.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -25,22 +35,20 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.pwexpress.core.designsystem.Archivo
 import com.pwexpress.core.designsystem.PreferenciaTema
 import com.pwexpress.core.designsystem.Pw
-import com.pwexpress.core.designsystem.PwAvatar
-import com.pwexpress.core.designsystem.PwBotaoPerigo
-import com.pwexpress.core.designsystem.PwCartao
+import com.pwexpress.core.designsystem.PwAvatarConta
 import com.pwexpress.core.designsystem.PwErro
 import com.pwexpress.core.designsystem.PwIcones
-import com.pwexpress.core.designsystem.PwInterruptor
-import com.pwexpress.core.designsystem.PwJanela
-import com.pwexpress.core.designsystem.PwLinha
-import com.pwexpress.core.designsystem.PwRotulo
-import com.pwexpress.core.designsystem.PwSegmentado
 import com.pwexpress.core.designsystem.TemaApp
 import com.pwexpress.core.perfil.Perfis
 import com.pwexpress.core.update.Atualizador
@@ -49,7 +57,7 @@ import kotlinx.coroutines.launch
 /** Qual lado do app está aberto (para quem é gestor e motoboy). */
 enum class Painel { MOTOBOY, GESTOR }
 
-/** Ações do topo: troca motoboy/gestor (quando tem os dois) e a foto, que abre o menu da conta. */
+/** Ações do topo: troca motoboy/gestor (quando tem os dois) e a foto, único caminho para o menu da conta. */
 @Composable
 fun RowScope.AcoesTopo(painel: Painel, podeTrocar: Boolean, onTrocar: (Painel) -> Unit, onConta: () -> Unit) {
     val c = Pw.cores
@@ -60,18 +68,20 @@ fun RowScope.AcoesTopo(painel: Painel, podeTrocar: Boolean, onTrocar: (Painel) -
         Row(Modifier.clip(forma).background(c.vidroForte).border(1.dp, c.borda, forma).padding(3.dp)) {
             listOf(Painel.MOTOBOY to PwIcones.Bike, Painel.GESTOR to PwIcones.ShieldCheck).forEach { (p, i) ->
                 val ativo = p == painel
-                Row(
-                    Modifier.clip(forma).then(if (ativo) Modifier.background(c.gradOuro) else Modifier).clickable { onTrocar(p) }.padding(horizontal = 10.dp, vertical = 7.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) { Icon(i, if (p == Painel.MOTOBOY) "Motoboy" else "Gestor", tint = if (ativo) c.sobreOuro else c.texto3, modifier = Modifier.size(17.dp)) }
+                Box(
+                    Modifier.clip(forma).then(if (ativo) Modifier.background(c.gradOuro) else Modifier).clickable { onTrocar(p) }.padding(horizontal = 11.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(i, if (p == Painel.MOTOBOY) "Lado do motoboy" else "Painel do gestor", tint = if (ativo) c.sobreOuro else c.texto3, modifier = Modifier.size(17.dp)) }
             }
         }
     }
-    val anel = if (teste) Modifier.border(2.dp, c.violeta, RoundedCornerShape(99.dp)).padding(2.dp) else Modifier
-    PwAvatar(perfil?.nome ?: "", perfil?.fotoUrl, anel, tamanho = 42.dp, onClick = onConta)
+    PwAvatarConta(perfil?.nome ?: "", perfil?.fotoUrl, teste, tamanho = 42.dp, onClick = onConta)
 }
 
-/** Menu da conta (mesmo do site): perfil, tema, modo teste, atualização, trocar de lado e sair. */
+/**
+ * Menu da conta, aberto pela foto (como no site): perfil, tema, modo teste,
+ * configurações (gestor), trocar de lado, atualização e sair.
+ */
 @Composable
 fun JanelaConta(
     email: String,
@@ -79,64 +89,103 @@ fun JanelaConta(
     podeTrocar: Boolean,
     onFechar: () -> Unit,
     onPerfil: () -> Unit,
-    onTrocar: (Painel) -> Unit,
-    onSair: () -> Unit,
-) {
-    PwJanela("Minha conta", onFechar = onFechar) { ItensConta(email, painel, podeTrocar, onPerfil, onTrocar, onSair) }
-}
-
-@Composable
-fun ColumnScope.ItensConta(
-    email: String,
-    painel: Painel,
-    podeTrocar: Boolean,
-    onPerfil: () -> Unit,
+    onConfiguracoes: () -> Unit,
     onTrocar: (Painel) -> Unit,
     onSair: () -> Unit,
 ) {
     val c = Pw.cores
     val perfil by Perfis.perfil.collectAsState()
-    val tema by TemaApp.preferencia.collectAsState()
     val teste by TemaApp.modoTeste.collectAsState()
     var erro by remember { mutableStateOf<String?>(null) }
+    var trocandoTeste by remember { mutableStateOf(false) }
     val escopo = rememberCoroutineScope()
 
-    PwCartao(padding = PaddingValues(14.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            PwAvatar(perfil?.nome ?: email, perfil?.fotoUrl, tamanho = 54.dp)
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(perfil?.nome ?: email.substringBefore("@"), color = c.texto, fontWeight = FontWeight.Bold, fontFamily = Archivo, fontSize = 17.sp)
-                Text(email, color = c.texto3, fontSize = 12.5.sp)
+    Dialog(onDismissRequest = onFechar, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Box(
+            Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onFechar),
+        ) {
+            val forma = RoundedCornerShape(24.dp)
+            Column(
+                Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 62.dp, end = 12.dp, start = 12.dp).widthIn(max = 340.dp).fillMaxWidth()
+                    .clip(forma).background(c.fundo2).border(1.dp, c.bordaForte, forma)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
+                    .verticalScroll(rememberScrollState()).padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                // cabeça: foto, nome e e-mail (toque edita o perfil)
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onPerfil).padding(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    PwAvatarConta(perfil?.nome ?: email, perfil?.fotoUrl, teste, tamanho = 48.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(perfil?.nome ?: email.substringBefore("@"), color = c.texto, fontWeight = FontWeight.Bold, fontFamily = Archivo, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(email, color = c.texto3, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(c.borda))
+
+                ItemMenu(PwIcones.UserRoundPen, "Editar perfil", onClick = onPerfil)
+                val escuro = c.escuro
+                ItemMenu(if (escuro) PwIcones.Moon else PwIcones.Sun, if (escuro) "Tema noturno" else "Tema claro",
+                    onClick = { TemaApp.definir(if (escuro) PreferenciaTema.CLARO else PreferenciaTema.ESCURO) }) {
+                    Interruptor(escuro) { TemaApp.definir(if (it) PreferenciaTema.ESCURO else PreferenciaTema.CLARO) }
+                }
+                if (perfil?.gestor == true) {
+                    fun alternarTeste(lig: Boolean) {
+                        if (trocandoTeste) return
+                        trocandoTeste = true
+                        escopo.launch { Perfis.definirModoTeste(lig).onFailure { erro = it.message }.onSuccess { erro = null }; trocandoTeste = false }
+                    }
+                    ItemMenu(PwIcones.FlaskConical, "Modo teste", subtitulo = if (teste) "Só corridas e ganhos de teste" else null, cor = c.violeta, onClick = { alternarTeste(!teste) }) {
+                        Interruptor(teste, c.violeta) { alternarTeste(it) }
+                    }
+                }
+                PwErro(erro)
+                if (painel == Painel.GESTOR) ItemMenu(PwIcones.Settings2, "Configurações", onClick = onConfiguracoes)
+                if (podeTrocar) {
+                    if (painel == Painel.MOTOBOY) ItemMenu(PwIcones.ShieldCheck, "Painel do gestor", onClick = { onTrocar(Painel.GESTOR) })
+                    else ItemMenu(PwIcones.Bike, "Lado do motoboy", onClick = { onTrocar(Painel.MOTOBOY) })
+                }
+                ItemMenu(PwIcones.Download, "Verificar atualização", onClick = { onFechar(); Atualizador.abrirJanela(); Atualizador.verificar(automatico = false) })
+                Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(c.borda))
+                ItemMenu(PwIcones.LogOut, "Sair da conta", cor = c.vermelho, corTexto = c.vermelho, onClick = onSair)
             }
         }
-        Spacer(Modifier.size(6.dp))
-        PwLinha("Editar perfil", subtitulo = "Nome e foto (valem também no site)", icone = PwIcones.UserRoundPen, onClick = onPerfil)
     }
-    PwCartao(padding = PaddingValues(14.dp)) {
-        PwRotulo("Tema")
-        Spacer(Modifier.size(8.dp))
-        val opcoes = listOf(PreferenciaTema.SISTEMA, PreferenciaTema.CLARO, PreferenciaTema.ESCURO)
-        PwSegmentado(listOf("Auto" to PwIcones.Monitor, "Claro" to PwIcones.Sun, "Noturno" to PwIcones.Moon), opcoes.indexOf(tema), { TemaApp.definir(opcoes[it]) })
-        if (perfil?.gestor == true) {
-            Spacer(Modifier.size(6.dp))
-            PwInterruptor(
-                "Modo teste", teste, { lig -> escopo.launch { Perfis.definirModoTeste(lig).onFailure { erro = it.message }.onSuccess { erro = null } } },
-                descricao = if (teste) "App e painel em violeta: só corridas e ganhos de teste." else "Ver e criar só corridas de teste.",
-                icone = PwIcones.FlaskConical, cor = c.violeta,
-            )
+}
+
+@Composable
+private fun ItemMenu(
+    icone: ImageVector,
+    texto: String,
+    subtitulo: String? = null,
+    cor: Color? = null,
+    corTexto: Color? = null,
+    onClick: () -> Unit,
+    direita: @Composable RowScope.() -> Unit = {},
+) {
+    val c = Pw.cores
+    Row(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 11.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icone, null, tint = cor ?: c.ouro, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text(texto, color = corTexto ?: c.texto, fontWeight = FontWeight.SemiBold, fontFamily = Archivo, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (subtitulo != null) Text(subtitulo, color = c.texto3, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        PwErro(erro)
+        Row(verticalAlignment = Alignment.CenterVertically, content = direita)
     }
-    PwCartao(padding = PaddingValues(8.dp)) {
-        if (podeTrocar) PwLinha(
-            if (painel == Painel.MOTOBOY) "Abrir o painel do gestor" else "Voltar para o app do motoboy",
-            subtitulo = if (painel == Painel.MOTOBOY) "Corridas, empresas, equipe, financeiro…" else "Status, corridas e ganhos",
-            icone = if (painel == Painel.MOTOBOY) PwIcones.ShieldCheck else PwIcones.Bike,
-            onClick = { onTrocar(if (painel == Painel.MOTOBOY) Painel.GESTOR else Painel.MOTOBOY) },
-        )
-        PwLinha("Verificar atualização", subtitulo = "Versão instalada: build ${Atualizador.versaoInstalada}", icone = PwIcones.Download,
-            onClick = { Atualizador.abrirJanela(); Atualizador.verificar(automatico = false) })
-    }
-    PwBotaoPerigo("Sair da conta", onClick = onSair, icone = PwIcones.LogOut, modifier = Modifier.padding(top = 2.dp))
+}
+
+@Composable
+private fun Interruptor(ligado: Boolean, cor: Color? = null, onMudar: (Boolean) -> Unit) {
+    val c = Pw.cores
+    Switch(
+        checked = ligado, onCheckedChange = onMudar,
+        colors = SwitchDefaults.colors(checkedThumbColor = c.sobreOuro, checkedTrackColor = cor ?: c.ouro, uncheckedTrackColor = c.bordaForte, uncheckedBorderColor = Color.Transparent),
+    )
 }

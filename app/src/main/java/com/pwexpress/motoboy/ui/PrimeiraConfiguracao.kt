@@ -164,7 +164,7 @@ private fun Passo(numero: Int, icone: ImageVector, titulo: String, texto: String
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(38.dp).clip(CircleShape).background(if (ok) c.verde.copy(alpha = 0.18f) else c.gradSuave),
+            Modifier.size(38.dp).clip(CircleShape).then(if (ok) Modifier.background(c.verde.copy(alpha = 0.18f)) else Modifier.background(c.gradSuave)),
             contentAlignment = Alignment.Center,
         ) { Icon(if (ok) PwIcones.Check else icone, null, tint = if (ok) c.verde else c.ouro, modifier = Modifier.size(19.dp)) }
         Spacer(Modifier.width(12.dp))

@@ -86,8 +86,13 @@ object Atualizador {
         if (_estado.value is EstadoAtualizacao.Baixando || _estado.value is EstadoAtualizacao.Verificando) return
         escopo.launch {
             _estado.value = EstadoAtualizacao.Verificando
-            val v = runCatching { buscarUltima() }.getOrElse {
-                _estado.value = if (automatico) EstadoAtualizacao.Ocioso else EstadoAtualizacao.Erro("Não consegui consultar as atualizações. Verifique a internet.", null)
+            val v = runCatching { buscarUltima() }.getOrElse { e ->
+                val motivo = when (e) {
+                    is java.net.UnknownHostException, is java.net.ConnectException -> "Sem conexão com a internet."
+                    is java.net.SocketTimeoutException, is java.io.InterruptedIOException -> "A conexão demorou demais. Tente de novo."
+                    else -> "Não consegui consultar as atualizações (${e.message ?: e.javaClass.simpleName})."
+                }
+                _estado.value = if (automatico) EstadoAtualizacao.Ocioso else EstadoAtualizacao.Erro(motivo, null)
                 return@launch
             }
             if (v == null || v.build <= buildAtual) {
@@ -99,15 +104,53 @@ object Atualizador {
         }
     }
 
+    /** Falha ao consultar, com o motivo real (aparece na janela). */
+    private class FalhaConsulta(msg: String) : Exception(msg)
+
+    /**
+     * Versão mais nova publicada. Primeiro o arquivo `versao.json` da release fixa "atualizacao"
+     * (download comum do GitHub, sem limite de consultas); se não existir, a API de releases
+     * (limitada a 60 consultas por hora por rede sem login).
+     */
     private suspend fun buscarUltima(): Versao? = withContext(Dispatchers.IO) {
+        val motivoArquivo = runCatching { return@withContext buscarArquivo() }.exceptionOrNull()
+        runCatching { buscarApi() }.getOrElse { e ->
+            throw FalhaConsulta(listOfNotNull(e.message, motivoArquivo?.message?.let { "arquivo: $it" }).joinToString(" · "))
+        }
+    }
+
+    private fun buscarArquivo(): Versao {
         val req = Request.Builder()
-            .url("https://api.github.com/repos/${PwConfig.githubRepo}/releases?per_page=15")
+            .url("https://github.com/${PwConfig.githubRepo}/releases/download/atualizacao/versao.json?t=${System.currentTimeMillis() / 60_000}")
+            .header("User-Agent", "PWExpress-app")
+            .header("Cache-Control", "no-cache")
+            .build()
+        PwCore.http.client.newCall(req).execute().use { r ->
+            if (!r.isSuccessful) error("HTTP ${r.code}")
+            val o = Json.parseToJsonElement(r.body!!.string()) as JsonObject
+            return Versao(
+                build = o.long("build")?.toInt() ?: error("sem build"),
+                nome = o.str("nome") ?: "build ${o.long("build")}",
+                notas = o.str("notas").orEmpty().trim(),
+                urlApk = o.str("url") ?: error("sem url"),
+                tamanho = o.long("tamanho") ?: 0L,
+                publicadaEm = o.str("publicada_em"),
+            )
+        }
+    }
+
+    private fun buscarApi(): Versao? {
+        val req = Request.Builder()
+            .url("https://api.github.com/repos/${PwConfig.githubRepo}/releases?per_page=30")
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "PWExpress-app")
             .build()
         PwCore.http.client.newCall(req).execute().use { r ->
-            if (!r.isSuccessful) error("github ${r.code}")
-            Json.parseToJsonElement(r.body!!.string()).jsonArray
+            if (!r.isSuccessful) {
+                val limite = r.header("X-RateLimit-Remaining") == "0"
+                error(if (limite) "GitHub: limite de consultas desta rede atingido, tente em 1 h" else "GitHub respondeu ${r.code}")
+            }
+            return Json.parseToJsonElement(r.body!!.string()).jsonArray
                 .mapNotNull { it as? JsonObject }
                 .mapNotNull { rel ->
                     val build = rel.str("tag_name")?.substringAfter("build-")?.toIntOrNull() ?: return@mapNotNull null

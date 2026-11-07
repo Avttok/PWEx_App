@@ -1,3 +1,4 @@
+• Atualizador mais confiável: não depende mais do limite de consultas do GitHub e, se falhar, mostra o motivo real
 • Início: botão inteiro só com o ícone e ONLINE / OFFLINE (sem texto embaixo) e sem a frase abaixo do "Olá"
 • Carteira: chaves PIX agora ficam aqui, quantas quiser, com uma principal (para onde vai o repasse)
 • Chave PIX: o tipo é reconhecido sozinho (CPF, CNPJ, celular, e-mail ou aleatória); se 11 números servem para CPF e celular, você escolhe

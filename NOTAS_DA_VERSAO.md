@@ -1,3 +1,4 @@
+• Botão de disponibilidade: círculo inteiro em degradê, com brilho girando, halo e ondas
 • Atualizador mais confiável: não depende mais do limite de consultas do GitHub e, se falhar, mostra o motivo real
 • Início: botão inteiro só com o ícone e ONLINE / OFFLINE (sem texto embaixo) e sem a frase abaixo do "Olá"
 • Carteira: chaves PIX agora ficam aqui, quantas quiser, com uma principal (para onde vai o repasse)

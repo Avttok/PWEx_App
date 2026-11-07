@@ -44,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
@@ -162,8 +163,8 @@ fun TrackingScreen(
 }
 
 /**
- * O botão de status: um disco de vidro com anel em degradê girando, halo de luz e o ícone num
- * medalhão. Offline convida (na cor da marca), disponível pulsa em verde, em corrida fica na cor da marca.
+ * O botão de status: um círculo inteiro em degradê (sólido), com um brilho que gira devagar por cima,
+ * reflexo de vidro, halo de luz e ondas. Offline na cor da marca, online em verde, em corrida na cor da marca.
  */
 @Composable
 private fun BotaoStatus(modo: Modo, onClick: () -> Unit) {
@@ -172,6 +173,7 @@ private fun BotaoStatus(modo: Modo, onClick: () -> Unit) {
     val cor by animateColorAsState(if (modo == Modo.DISPONIVEL) c.verde else c.ouro, label = "cor-status")
     val claro by animateColorAsState(if (modo == Modo.DISPONIVEL) Color(0xFFA7F3D0) else c.ouroClaro, label = "claro-status")
     val escuroCor by animateColorAsState(if (modo == Modo.DISPONIVEL) Color(0xFF047857) else c.ouroEscuro, label = "escuro-status")
+    val tinta = if (modo == Modo.DISPONIVEL) Color(0xFF052E1B) else c.sobreOuro
     val anim = rememberInfiniteTransition(label = "status")
     val giro by anim.animateFloat(0f, 360f, infiniteRepeatable(tween(if (ligado) 6000 else 14000, easing = androidx.compose.animation.core.LinearEasing)), label = "giro")
     val onda by anim.animateFloat(0f, 1f, infiniteRepeatable(tween(2400), RepeatMode.Restart), label = "onda")
@@ -183,47 +185,39 @@ private fun BotaoStatus(modo: Modo, onClick: () -> Unit) {
         // halo de luz + ondas
         Box(Modifier.size(disco + 72.dp).drawBehind {
             val r = size.minDimension / 2f
-            drawCircle(Brush.radialGradient(listOf(cor.copy(alpha = if (ligado) 0.30f * respiro else 0.16f), Color.Transparent), center, r), r)
+            drawCircle(Brush.radialGradient(listOf(cor.copy(alpha = if (ligado) 0.34f * respiro else 0.18f), Color.Transparent), center, r), r)
             if (ligado) listOf(onda, (onda + 0.5f) % 1f).forEach { t ->
                 drawCircle(cor.copy(alpha = (1f - t) * 0.45f), radius = r * (0.74f + 0.26f * t), style = Stroke(width = 2.dp.toPx()))
             }
         })
         Box(
             Modifier.size(disco).scale(if (apertado) 0.95f else 1f)
-                .drawBehind {
-                    // anel em degradê girando
-                    val anel = 7.dp.toPx()
-                    rotate(giro) {
-                        drawCircle(Brush.sweepGradient(listOf(claro, cor, escuroCor, cor.copy(alpha = 0.25f), claro)), radius = size.minDimension / 2f - anel / 2f, style = Stroke(width = anel))
-                    }
-                }
-                .padding(11.dp)
                 .clip(CircleShape)
-                .background(Brush.verticalGradient(listOf(c.vidroForte, c.fundo2, c.fundo)))
                 .drawBehind {
-                    // brilho de vidro no alto
-                    drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = if (c.escuro) 0.08f else 0.5f), Color.Transparent), 0f, size.height * 0.55f), radius = size.minDimension / 2f)
-                    drawCircle(cor.copy(alpha = 0.10f), radius = size.minDimension / 2f)
+                    val r = size.minDimension / 2f
+                    // círculo inteiro em degradê
+                    drawCircle(Brush.linearGradient(listOf(claro, cor, escuroCor), start = Offset.Zero, end = Offset(size.width, size.height)), r)
+                    // brilho que gira por cima (sem buracos: só clareia e escurece o degradê)
+                    rotate(giro) {
+                        drawCircle(Brush.sweepGradient(listOf(Color.White.copy(alpha = 0.28f), Color.Transparent, Color.Black.copy(alpha = 0.14f), Color.Transparent, Color.White.copy(alpha = 0.28f))), r)
+                    }
+                    // reflexo de vidro no alto e borda clara
+                    drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.32f), Color.Transparent), 0f, size.height * 0.5f), r)
+                    drawCircle(Color.White.copy(alpha = 0.35f), r - 1.dp.toPx(), style = Stroke(width = 2.dp.toPx()))
                 }
                 .clickable(interactionSource = toque, indication = null, onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
-            // o disco inteiro é o botão: só o ícone e o estado
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(
-                    Modifier.size(84.dp).clip(CircleShape).background(Brush.linearGradient(listOf(claro, cor, escuroCor))),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Icon(
-                        when (modo) { Modo.OFFLINE -> PwIcones.Power; Modo.DISPONIVEL -> PwIcones.Radio; Modo.EM_CORRIDA -> PwIcones.Route },
-                        null, tint = if (modo == Modo.DISPONIVEL) Color(0xFF052E1B) else c.sobreOuro, modifier = Modifier.size(42.dp),
-                    )
-                }
-                Spacer(Modifier.height(14.dp))
+                Icon(
+                    when (modo) { Modo.OFFLINE -> PwIcones.Power; Modo.DISPONIVEL -> PwIcones.Radio; Modo.EM_CORRIDA -> PwIcones.Route },
+                    null, tint = tinta, modifier = Modifier.size(64.dp),
+                )
+                Spacer(Modifier.height(12.dp))
                 Text(
                     when (modo) { Modo.OFFLINE -> "OFFLINE"; Modo.DISPONIVEL -> "ONLINE"; Modo.EM_CORRIDA -> "EM CORRIDA" },
                     style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 22.sp, letterSpacing = 1.4.sp),
-                    color = c.texto, maxLines = 1, softWrap = false,
+                    color = tinta, maxLines = 1, softWrap = false,
                 )
             }
         }

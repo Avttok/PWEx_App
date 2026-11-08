@@ -1,5 +1,7 @@
 package com.pwexpress.feature.gestor.ui
 
+import com.pwexpress.core.json.str
+
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -982,7 +984,8 @@ private fun CadastrosPendentesG() {
         }
     }
     aberto?.let { cd ->
-        var express by remember(cd) { mutableStateOf(dados_cfgBool("cadastro_express_liberado")) }
+        val expressPadrao = dados_cfgBool("cadastro_express_liberado")
+        var express by remember(cd) { mutableStateOf(expressPadrao) }
         var credito by remember(cd) { mutableStateOf(false) }
         var motivo by remember(cd) { mutableStateOf("") }
         var erro by remember(cd) { mutableStateOf<String?>(null) }

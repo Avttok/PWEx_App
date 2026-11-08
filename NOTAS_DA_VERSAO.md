@@ -1,8 +1,10 @@
-• Rotas: nova aba com o quadro de rotas (Agora e Planejadas com o mesmo destaque). Toque em "Pegar rota" e ela é sua; o 1º que pegar leva
-• Cada parada mostra o cliente, o número do pedido e os itens, com selos de PERIGOSO e FRÁGIL
-• Holerite no lugar da Carteira: a folha de cada período (rotas, entregas e km), com ajustes e as suas chaves PIX
-• Valores só aparecem se o gestor liberar; sem isso o app mostra entregas, rotas e km
-• Aviso de rota nova no quadro, com a quantidade de entregas
-• Menu da foto e a janela de atualização agora abrem em tela cheia
-• Gestor: aba Pedidos para aprovar, ajustar o valor ou recusar; rotas montadas esperando você soltar (Quadro, Melhor primeiro, Cascata ou direto); pagamento do motoboy linha a linha com ajuste
-• Gestor: novas configurações de pedidos, rotas automáticas e pagamento por km
+• Botão de status novo: orbe de vidro com anel de luz. Segure até o anel encher para ficar online ou offline (vibra no fim, sem toque sem querer). Online, um radar procura rotas
+• Versão do app definida pelo Dev: se o celular estiver numa versão não liberada, o app trava na tela de atualização até instalar a certa
+• Janela de atualização em tela cheia, com a logo no centro e o anel em degradê mostrando o download
+• Rotas: botão "Detalhes" antes de pegar ou reservar, com mapa, horário, distância, tempo, cada parada, itens e cuidados
+• Contador das abas (Rotas, Holerite…) centralizado no círculo
+• Modo teste: simulador de GPS (botão "Simulador GPS"): anda pela rota ou até onde você tocar no mapa, na velocidade escolhida
+• Perfil: veículo e CNH (o gestor cadastra; avisa quando a CNH vence)
+• Mapa: sem pontos de ônibus/trem poluindo; percurso de vermelho a verde (o mais recente)
+• Gestor: novo pedido pelo app (itens por categoria, orçamento na hora), voltar pedido para revisão, aba Veículo do motoboy, motoboys offline esmaecendo (somem após 24 h) e de teste com frasco violeta
+• Referências próximas mais confiáveis (vários servidores e raio maior)

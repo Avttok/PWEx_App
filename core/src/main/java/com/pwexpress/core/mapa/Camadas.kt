@@ -69,9 +69,9 @@ fun distanciaM(la1: Double, lo1: Double, la2: Double, lo2: Double): Double {
 /** Percurso desenhado: pontos (lat, lng) do mais antigo ao mais recente. */
 data class PercursoMapa(val pontos: List<Pair<Double, Double>>, val destaque: Boolean = false, val apagado: Boolean = false)
 
-/** Do início ao mais recente. Normal: vermelho → amarelo → verde → dourado. Teste: cinza → roxo → azul → violeta. */
+/** Do início ao mais recente. Normal: vermelho → amarelo → verde. Teste: cinza → roxo → azul. */
 fun coresPercurso(teste: Boolean): List<Int> =
-    (if (teste) listOf("#8A8A93", "#9333EA", "#3B82F6", "#A78BFA") else listOf("#EF4444", "#FACC15", "#22C55E", "#D4AF37")).map { android.graphics.Color.parseColor(it) }
+    (if (teste) listOf("#8A8A93", "#9333EA", "#3B82F6") else listOf("#EF4444", "#FACC15", "#22C55E")).map { android.graphics.Color.parseColor(it) }
 
 internal fun misturarCor(cores: List<Int>, t: Double): String {
     val n = cores.size - 1
@@ -95,8 +95,7 @@ internal fun criarCamadasPercurso(s: Style, teste: Boolean) {
         PropertyFactory.lineWidth(Expression.switchCase(Expression.get("destaque"), Expression.literal(5f), Expression.literal(3.5f))),
         PropertyFactory.lineOpacity(Expression.switchCase(Expression.get("apagado"), Expression.literal(0.35f), Expression.literal(1f))),
         PropertyFactory.lineGradient(Expression.interpolate(Expression.linear(), Expression.lineProgress(),
-            Expression.stop(0f, Expression.color(cores[0])), Expression.stop(0.33f, Expression.color(cores[1])),
-            Expression.stop(0.66f, Expression.color(cores[2])), Expression.stop(1f, Expression.color(cores[3])))),
+            *cores.mapIndexed { i, cor -> Expression.stop(i.toFloat() / (cores.size - 1), Expression.color(cor)) }.toTypedArray())),
         PropertyFactory.lineCap(Property.LINE_CAP_ROUND), PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
     ))
     s.addLayer(CircleLayer("pings", "pings").withProperties(
@@ -135,7 +134,7 @@ val ICONE_POI = mapOf(
     "restaurant" to "restaurante", "fast_food" to "restaurante", "food_court" to "restaurante", "bar" to "restaurante", "pub" to "restaurante",
     "cafe" to "cafe", "bakery" to "cafe", "ice_cream" to "cafe",
     "fuel" to "posto", "bank" to "banco", "atm" to "banco", "place_of_worship" to "igreja", "lodging" to "hotel",
-    "police" to "policia", "post" to "correio", "car" to "carro", "car_repair" to "carro", "bus" to "onibus",
+    "police" to "policia", "post" to "correio", "car" to "carro", "car_repair" to "carro",
 )
 
 private fun carregarIcones(ctx: Context, s: Style) {
@@ -147,6 +146,10 @@ private fun carregarIcones(ctx: Context, s: Style) {
 }
 
 /** Estabelecimentos com ícone por tipo (na cor do tema) + rótulos coloridos (cidade, bairro, vila, rua). */
+/** Classes/subclasses do OpenMapTiles que não entram no mapa (transporte: só poluem com nomes de parada/rua). */
+internal val POI_FORA = listOf("bus", "bus_stop", "bus_station", "railway", "platform", "stop_position", "tram_stop", "subway", "subway_entrance",
+    "halt", "station", "aerialway", "ferry_terminal", "taxi", "bicycle_rental", "parking", "parking_entrance", "bicycle_parking", "motorcycle_parking")
+
 internal fun aplicarEstiloPw(ctx: Context, s: Style, escuro: Boolean, corTema: String, modo: ModoRuas) {
     runCatching { carregarIcones(ctx, s) }
     val halo = if (escuro) "#0B0B0D" else "#FFFFFF"
@@ -160,7 +163,11 @@ internal fun aplicarEstiloPw(ctx: Context, s: Style, escuro: Boolean, corTema: S
         s.addLayer(SymbolLayer("pwex-poi", "openmaptiles").apply {
             sourceLayer = "poi"
             minZoom = 15f
-            setFilter(Expression.has("name"))
+            // pontos de ônibus/trem têm o nome da rua ou da parada: poluíam o mapa nas cidades grandes
+            val fora = POI_FORA.map { Expression.stop(it, false) }.toTypedArray()
+            setFilter(Expression.all(Expression.has("name"),
+                Expression.match(Expression.coalesce(Expression.get("class"), Expression.literal("")), Expression.literal(true), *fora),
+                Expression.match(Expression.coalesce(Expression.get("subclass"), Expression.literal("")), Expression.literal(true), *fora)))
             setProperties(
                 PropertyFactory.iconImage(icone), PropertyFactory.iconSize(0.45f), PropertyFactory.iconAllowOverlap(false),
                 PropertyFactory.iconColor(corTema), PropertyFactory.iconHaloColor(halo), PropertyFactory.iconHaloWidth(2f),
@@ -208,7 +215,7 @@ internal fun aplicarModoRuas(s: Style, modo: ModoRuas, @Suppress("UNUSED_PARAMET
  * Pino do motoboy: foto (ou inicial) num círculo com anel na cor do status, ponta embaixo e
  * selo de moto. Retorna um bitmap pronto para o estilo (âncora embaixo).
  */
-internal fun desenharPino(ctx: Context, foto: Bitmap?, inicial: String, corAnel: Int, selecionado: Boolean, escuro: Boolean): Bitmap {
+internal fun desenharPino(ctx: Context, foto: Bitmap?, inicial: String, corAnel: Int, selecionado: Boolean, escuro: Boolean, teste: Boolean = false): Bitmap {
     val d = ctx.resources.displayMetrics.density
     val diam = (if (selecionado) 52 else 44) * d
     val anel = 3.2f * d
@@ -248,7 +255,20 @@ internal fun desenharPino(ctx: Context, foto: Bitmap?, inicial: String, corAnel:
     val sr = 9.5f * d
     val sx = cx + diam / 2f - sr * 0.7f; val sy = cy + diam / 2f - sr * 0.9f
     p.color = if (escuro) 0xFF0B0B0D.toInt() else 0xFFFFFFFF.toInt(); cv.drawCircle(sx, sy, sr + 1.5f * d, p)
-    p.color = corAnel; cv.drawCircle(sx, sy, sr, p)
+    p.color = if (teste) 0xFFA78BFA.toInt() else corAnel; cv.drawCircle(sx, sy, sr, p)
+    if (teste) {
+        // frasco (modo teste) no lugar da moto
+        val f = sr * 0.62f
+        val pf = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF0B0B0D.toInt(); style = Paint.Style.STROKE; strokeWidth = 1.6f * d; strokeJoin = Paint.Join.ROUND; strokeCap = Paint.Cap.ROUND }
+        cv.drawPath(Path().apply {
+            moveTo(sx - f * 0.32f, sy - f); lineTo(sx - f * 0.32f, sy - f * 0.25f); lineTo(sx - f * 0.9f, sy + f * 0.8f)
+            lineTo(sx + f * 0.9f, sy + f * 0.8f); lineTo(sx + f * 0.32f, sy - f * 0.25f); lineTo(sx + f * 0.32f, sy - f)
+        }, pf)
+        cv.drawLine(sx - f * 0.5f, sy - f, sx + f * 0.5f, sy - f, pf)
+        pf.style = Paint.Style.FILL
+        cv.drawPath(Path().apply { moveTo(sx - f * 0.62f, sy + f * 0.3f); lineTo(sx - f * 0.9f, sy + f * 0.8f); lineTo(sx + f * 0.9f, sy + f * 0.8f); lineTo(sx + f * 0.62f, sy + f * 0.3f); close() }, pf)
+        return bmp
+    }
     val idMoto = ctx.resources.getIdentifier("poi_moto", "drawable", ctx.packageName)
     if (idMoto != 0) BitmapFactory.decodeResource(ctx.resources, idMoto)?.let { m ->
         val pm = Paint(Paint.ANTI_ALIAS_FLAG).apply { colorFilter = PorterDuffColorFilter(0xFF0B0B0D.toInt(), PorterDuff.Mode.SRC_IN) }

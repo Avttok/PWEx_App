@@ -52,6 +52,10 @@ data class MarcadorMapa(
     val foto: String? = null,
     /** false = marcador simples (ponto), sem pino. */
     val pino: Boolean = true,
+    /** 0..1: motoboy offline vai esmaecendo conforme o tempo sem ser visto. */
+    val opacidade: Float = 1f,
+    /** Modo teste: selo de frasco e anel violeta no lugar da moto. */
+    val teste: Boolean = false,
 )
 
 /** Linha de trajeto (trilha real do motoboy). */
@@ -337,9 +341,9 @@ fun PwMapa(
                 validos.map { mk ->
                     val sel = mk.id == seguir
                     val foto = mk.foto?.let { fotos[it] }
-                    val img = "pino-${mk.id}-${mk.cor}-$sel-${foto != null}-$escuro"
+                    val img = "pino-${mk.id}-${mk.cor}-$sel-${foto != null}-$escuro-${mk.teste}"
                     if (mk.pino && s.getImage(img) == null) runCatching {
-                        s.addImage(img, desenharPino(ctx, foto, mk.rotulo.trim().take(1).uppercase(), android.graphics.Color.parseColor(mk.cor), sel, escuro))
+                        s.addImage(img, desenharPino(ctx, foto, mk.rotulo.trim().take(1).uppercase(), android.graphics.Color.parseColor(mk.cor), sel, escuro, mk.teste))
                     }
                     Feature.fromGeometry(Point.fromLngLat(mk.lng, mk.lat)).apply {
                         addStringProperty("id", mk.id)
@@ -350,6 +354,7 @@ fun PwMapa(
                         addStringProperty("inicial", mk.rotulo.trim().take(1).uppercase())
                         addNumberProperty("raio", if (mk.id == seguir) 17 else 13)
                         addNumberProperty("borda", if (mk.id == seguir) 4 else 3)
+                        addNumberProperty("opacidade", mk.opacidade.coerceIn(0f, 1f))
                     }
                 },
             ),
@@ -484,6 +489,8 @@ private fun criarCamadas(ctx: Context, s: Style, escuro: Boolean, ouro: String, 
             PropertyFactory.circleColor(Expression.toColor(Expression.get("cor"))),
             PropertyFactory.circleStrokeColor(if (escuro) "#F5F2EA" else "#16130C"),
             PropertyFactory.circleStrokeWidth(Expression.get("borda")),
+            PropertyFactory.circleOpacity(Expression.coalesce(Expression.get("opacidade"), Expression.literal(1f))),
+            PropertyFactory.circleStrokeOpacity(Expression.coalesce(Expression.get("opacidade"), Expression.literal(1f))),
         ).apply { setFilter(Expression.not(Expression.get("pino"))) },
     )
     s.addLayer(
@@ -492,6 +499,7 @@ private fun criarCamadas(ctx: Context, s: Style, escuro: Boolean, ouro: String, 
             PropertyFactory.iconAnchor(Property.ICON_ANCHOR_BOTTOM),
             PropertyFactory.iconAllowOverlap(true),
             PropertyFactory.iconIgnorePlacement(true),
+            PropertyFactory.iconOpacity(Expression.coalesce(Expression.get("opacidade"), Expression.literal(1f))),
         ),
     )
     s.addLayer(
@@ -505,6 +513,7 @@ private fun criarCamadas(ctx: Context, s: Style, escuro: Boolean, ouro: String, 
             PropertyFactory.textHaloColor(if (escuro) "#0B0B0D" else "#FFFFFF"),
             PropertyFactory.textHaloWidth(1.6f),
             PropertyFactory.textAllowOverlap(true),
+            PropertyFactory.textOpacity(Expression.coalesce(Expression.get("opacidade"), Expression.literal(1f))),
         ),
     )
 }

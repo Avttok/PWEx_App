@@ -471,14 +471,20 @@ fun MembroG(id: String, meuId: String?, onVoltar: () -> Unit) {
             }
         }
         val comPercursos = m.motoboy && modulo("trilhas_mapa")
-        PwSegmentado(listOfNotNull("Registro" to PwIcones.History, ("Percursos" to PwIcones.Route).takeIf { comPercursos }, "Editar" to PwIcones.Pencil), aba, { aba = it })
+        val abas = listOfNotNull(
+            Triple("registro", "Registro", PwIcones.History),
+            Triple("percursos", "Percursos", PwIcones.Route).takeIf { comPercursos },
+            Triple("veiculo", "Veículo", PwIcones.Bike).takeIf { m.motoboy },
+            Triple("editar", "Editar", PwIcones.Pencil),
+        )
+        PwSegmentado(abas.map { it.second to it.third }, aba.coerceIn(0, abas.lastIndex), { aba = it })
         val souDev = com.pwexpress.core.perfil.Perfis.perfil.collectAsState().value?.dev == true
-        val abaEditar = if (comPercursos) 2 else 1
-        if (aba == 0) RegistroG(m.id)
-        else if (aba == 1 && comPercursos) PercursosMembroG(m.id, m.modoTeste)
-        else if (aba != abaEditar) Unit
-        else if (m.dev && !souDev) TextoDica("Conta Dev: só o Dev altera esta conta.")
-        else EditarMembroG(m, eu = m.id == meuId, onExcluida = onVoltar, souDev = souDev)
+        when (abas.getOrNull(aba)?.first) {
+            "registro" -> RegistroG(m.id)
+            "percursos" -> PercursosMembroG(m.id, m.modoTeste)
+            "veiculo" -> VeiculoG(m.id)
+            "editar" -> if (m.dev && !souDev) TextoDica("Conta Dev: só o Dev altera esta conta.") else EditarMembroG(m, eu = m.id == meuId, onExcluida = onVoltar, souDev = souDev)
+        }
     }
 }
 
@@ -849,3 +855,52 @@ fun ConfiguracoesG(onVoltar: () -> Unit) {
 }
 
 @Suppress("unused") private val usado = JsonNull
+
+
+/** Veículo e CNH do motoboy (o gestor edita; o motoboy só vê, a não ser que a regra deixe). */
+@Composable
+internal fun VeiculoG(id: String) {
+    val c = Pw.cores
+    val escopo = androidx.compose.runtime.rememberCoroutineScope()
+    var v by remember { androidx.compose.runtime.mutableStateOf<com.pwexpress.feature.gestor.data.VeiculoG?>(null) }
+    var erro by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    var salvando by remember { androidx.compose.runtime.mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(id) { v = Gestao.veiculo(id) ?: com.pwexpress.feature.gestor.data.VeiculoG() }
+    val x = v ?: run { PwCarregando(); return }
+    fun mudar(f: (com.pwexpress.feature.gestor.data.VeiculoG) -> com.pwexpress.feature.gestor.data.VeiculoG) { v = f(x) }
+    PwCartao {
+        PwRotulo("Veículo")
+        PwSegmentado(listOf("Moto" to PwIcones.Bike, "Carro" to PwIcones.Route, "Bicicleta" to PwIcones.Bike, "Van" to PwIcones.Package),
+            listOf("moto", "carro", "bicicleta", "van").indexOf(x.tipo).coerceAtLeast(0), { i -> mudar { it.copy(tipo = listOf("moto", "carro", "bicicleta", "van")[i]) } })
+        Espaco(8)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PwCampo(x.placa, { t -> mudar { it.copy(placa = t.uppercase()) } }, "Placa", dica = "AAA0A00", modifier = Modifier.weight(1f))
+            PwCampo(x.cor, { t -> mudar { it.copy(cor = t) } }, "Cor", modifier = Modifier.weight(1f))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PwCampo(x.modelo, { t -> mudar { it.copy(modelo = t) } }, "Modelo", dica = "Ex.: CG 160", modifier = Modifier.weight(2f))
+            PwCampo(x.ano, { t -> mudar { it.copy(ano = t.filter(Char::isDigit).take(4)) } }, "Ano", teclado = androidx.compose.ui.text.input.KeyboardType.Number, modifier = Modifier.weight(1f))
+        }
+    }
+    PwCartao {
+        PwRotulo("CNH")
+        PwCampo(x.cnhNumero, { t -> mudar { it.copy(cnhNumero = t.filter(Char::isDigit).take(11)) } }, "Número", teclado = androidx.compose.ui.text.input.KeyboardType.Number)
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PwCampo(x.cnhCategoria, { t -> mudar { it.copy(cnhCategoria = t.uppercase().take(3)) } }, "Categoria", dica = "A, AB…", modifier = Modifier.weight(1f))
+            PwCampo(x.cnhValidade, { t -> mudar { it.copy(cnhValidade = t) } }, "Validade", dica = "dd/mm/aaaa", teclado = androidx.compose.ui.text.input.KeyboardType.Number, modifier = Modifier.weight(1.4f))
+        }
+        x.venceEmDias?.let { d ->
+            if (d < 0) Text("CNH vencida há ${-d} dia${if (d == -1L) "" else "s"}.", color = c.vermelho, fontWeight = FontWeight.SemiBold)
+            else if (d <= 30) Text("CNH vence em $d dia${if (d == 1L) "" else "s"}.", color = c.ouro, fontWeight = FontWeight.SemiBold)
+        }
+    }
+    PwErro(erro)
+    PwBotaoOuro(if (salvando) "Salvando…" else "Salvar veículo", onClick = {
+        salvando = true
+        escopo.launch {
+            Gestao.salvarVeiculo(id, x).onSuccess { v = it; erro = null; com.pwexpress.core.designsystem.PwToast.mostrar("Veículo salvo.", com.pwexpress.core.designsystem.TipoAviso.OK) }
+                .onFailure { erro = it.message }
+            salvando = false
+        }
+    }, icone = PwIcones.Check, habilitado = !salvando)
+}

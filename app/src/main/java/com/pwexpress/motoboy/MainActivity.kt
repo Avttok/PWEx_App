@@ -1,6 +1,10 @@
 package com.pwexpress.motoboy
 
+import androidx.lifecycle.lifecycleScope
+
+
 import android.content.Context
+import androidx.compose.foundation.layout.navigationBarsPadding
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -83,6 +87,7 @@ class MainActivity : ComponentActivity() {
                     val perfil by Perfis.perfil.collectAsState()
                     var noPerfil by remember { mutableStateOf(false) }
                     var naConfig by remember { mutableStateOf(false) }
+                    var simulador by remember { mutableStateOf(false) }
                     var conta by remember { mutableStateOf(false) }
                     var aba by rememberSaveable { mutableStateOf("inicio") }
                     var painel by remember { mutableStateOf(runCatching { Painel.valueOf(prefs.getString("painel", "MOTOBOY")!!) }.getOrDefault(Painel.MOTOBOY)) }
@@ -219,7 +224,20 @@ class MainActivity : ComponentActivity() {
                             onDev = { conta = false; if (efetivo != Painel.GESTOR) trocar(Painel.GESTOR); GestorNav.abrirDev() },
                         )
                     }
+                    // simulador de GPS: só no modo teste, por cima de tudo (dá para usar no meio da rota)
+                    val simEstado by com.pwexpress.feature.tracking.Simulador.estado.collectAsState()
+                    val podeSimular = s != null && perfil?.modoTeste == true && perfil?.motoboy == true && painel == Painel.MOTOBOY &&
+                        perfil?.logico("simulador_ligado", true) != false
+                    if (podeSimular) {
+                        com.pwexpress.core.designsystem.PwPilula(
+                            if (simEstado.ativo) (if (simEstado.andando) "Simulando…" else "Simulador ligado") else "Simulador GPS",
+                            PwIcones.FlaskConical, { simulador = true },
+                            Modifier.align(Alignment.BottomStart).navigationBarsPadding().padding(start = 14.dp, bottom = 100.dp),
+                        )
+                    } else if (simEstado.ativo) LaunchedEffect(Unit) { com.pwexpress.feature.tracking.Simulador.desligar() }
+                    if (simulador && podeSimular) com.pwexpress.motoboy.ui.SimuladorScreen(onFechar = { simulador = false }, kmhPadrao = perfil?.numero("simulador_velocidade_kmh", 35.0) ?: 35.0)
                     JanelaAtualizacao()
+                    LaunchedEffect(Unit) { while (true) { delay(15 * 60_000L); Atualizador.verificarObrigatoria() } }
                     com.pwexpress.core.designsystem.PwToasts(Modifier.align(Alignment.BottomCenter))
                 }
             }
@@ -237,6 +255,8 @@ class MainActivity : ComponentActivity() {
             Tracking.retomarSeAtivo()
             Corridas.sincronizar()
         }
+        // versão obrigatória (escolhida pelo Dev): confere sempre que o app volta para a frente
+        lifecycleScope.launch { Atualizador.verificarObrigatoria() }
         // procura versão nova uma vez por abertura do app (só abre a janela se for nova)
         if (!verificouAtualizacao) {
             verificouAtualizacao = true

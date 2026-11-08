@@ -30,6 +30,7 @@ import kotlinx.coroutines.delay
 sealed interface TelaG {
     data class Corrida(val id: String) : TelaG
     data object NovaCorrida : TelaG
+    data object NovoPedido : TelaG
     data class Empresa(val id: String?) : TelaG
     data class Membro(val id: String) : TelaG
     data object Financeiro : TelaG
@@ -114,6 +115,7 @@ fun GestorApp(
             Box(Modifier.weight(1f)) {
                 when (atual) {
                     is TelaG.Corrida -> DetalheCorridaG(atual.id, onVoltar = ::voltar)
+                    TelaG.NovoPedido -> NovoPedidoG(onVoltar = ::voltar, onCriado = { voltar(); aba = "pedidos" })
                     TelaG.NovaCorrida -> NovaCorridaG(onVoltar = ::voltar, onCriada = { id -> voltar(); abrir(TelaG.Corrida(id)) })
                     is TelaG.Empresa -> EmpresaG(atual.id, onVoltar = ::voltar)
                     is TelaG.Membro -> MembroG(atual.id, meuId = meuId, onVoltar = ::voltar)
@@ -122,7 +124,7 @@ fun GestorApp(
                     TelaG.Dev -> DevG(onVoltar = ::voltar)
                     null -> when (aba) {
                         "mapa" -> MapaG(onCorrida = { abrir(TelaG.Corrida(it)) })
-                        "pedidos" -> PedidosG()
+                        "pedidos" -> PedidosG(onNovo = { abrir(TelaG.NovoPedido) })
                         "corridas" -> CorridasG(onAbrir = { abrir(TelaG.Corrida(it)) }, onNova = { abrir(TelaG.NovaCorrida) })
                         "empresas" -> EmpresasG(onAbrir = { abrir(TelaG.Empresa(it)) })
                         "equipe" -> EquipeG(onAbrir = { abrir(TelaG.Membro(it)) })

@@ -337,6 +337,42 @@ object Gestao {
         PwCore.rpc.chamar("cancelar_pedido", buildJsonObject { put("p_pedido", id); if (motivo != null) put("p_motivo", motivo) else put("p_motivo", JsonNull) }).exigirOk(::traduzir); Unit
     }
 
+    /** Tipos de pedido e categorias de produto ativos (para o formulário). */
+    suspend fun catalogoPedido(): Pair<List<TipoPedidoG>, List<CategoriaG>> = runCatching {
+        coroutineScope {
+            val t = async { PwCore.rpc.rest("GET", "/rest/v1/tipos_pedido?select=chave,nome,descricao,icone&ativo=eq.true&order=ordem").exigirOk().lista().map { it.paraTipoPedidoG() } }
+            val k = async { PwCore.rpc.rest("GET", "/rest/v1/categorias_produto?select=*&ativa=eq.true&order=ordem").exigirOk().lista().map { it.paraCategoriaG() } }
+            t.await() to k.await()
+        }
+    }.getOrDefault(emptyList<TipoPedidoG>() to emptyList())
+
+    /** Orçamento na hora (mesmo cálculo que o pedido vai usar). */
+    suspend fun orcarPrevia(dados: JsonObject): JsonObject? = runCatching {
+        PwCore.rpc.chamar("orcar_previa", buildJsonObject { put("dados", dados) }).exigirOk(::traduzir).objeto()
+    }.getOrNull()
+
+    suspend fun criarPedido(dados: JsonObject): Result<String> = acao {
+        PwCore.rpc.chamar("criar_pedido", buildJsonObject { put("dados", dados) }).exigirOk(::traduzir).corpo.trim().trim('"')
+    }
+
+    suspend fun veiculo(id: String): VeiculoG? = runCatching {
+        PwCore.rpc.rest("GET", "/rest/v1/motoboys?select=veiculo_tipo,veiculo_modelo,veiculo_placa,veiculo_cor,veiculo_ano,cnh_numero,cnh_categoria,cnh_validade&id=eq.$id")
+            .exigirOk().lista().firstOrNull()?.paraVeiculoG()
+    }.getOrNull()
+
+    /** null em [id] = o próprio motoboy (se a regra deixar). */
+    suspend fun salvarVeiculo(id: String?, v: VeiculoG): Result<VeiculoG> = acao {
+        val validade = Regex("""(\d{2})/(\d{2})/(\d{4})""").matchEntire(v.cnhValidade.trim())?.destructured?.let { (d, m, a) -> "$a-$m-$d" }
+        if (v.cnhValidade.isNotBlank() && validade == null) throw Exception("Validade da CNH no formato dd/mm/aaaa.")
+        PwCore.rpc.chamar("salvar_veiculo", buildJsonObject {
+            if (id != null) put("p_motoboy", id) else put("p_motoboy", JsonNull)
+            put("d", buildJsonObject {
+                put("tipo", v.tipo); put("modelo", v.modelo); put("placa", v.placa); put("cor", v.cor); put("ano", v.ano)
+                put("cnh_numero", v.cnhNumero); put("cnh_categoria", v.cnhCategoria); put("cnh_validade", validade ?: "")
+            })
+        }).exigirOk(::traduzir).objeto()?.paraVeiculoG() ?: v
+    }
+
     suspend fun roteirizarAgora() = acao { PwCore.rpc.chamar("roteirizar_agora", JsonObject(emptyMap())).exigirOk(::traduzir); Unit }
 
     /** modo: quadro | melhor_primeiro | cascata; ou motoboy para entregar direto. */
@@ -395,6 +431,14 @@ object Gestao {
         "usuario_nao_encontrado" to "Conta não encontrada.",
         "nao_encontrado" to "CNPJ não encontrado na Receita.",
         "pedido_finalizado" to "Esse pedido já terminou.",
+        "pedido_nao_pode_voltar" to "Esse pedido não pode voltar para a revisão agora.",
+        "placa_invalida" to "Placa inválida (use AAA0A00 ou AAA0000).",
+        "cnh_invalida" to "Número da CNH inválido (9 a 11 dígitos).",
+        "cnh_categoria_invalida" to "Categoria da CNH inválida.",
+        "so_o_gestor_edita" to "Só o gestor muda os dados do veículo.",
+        "so_em_modo_teste" to "Só dá para simular motoboys em modo teste.",
+        "cadastre_o_veiculo" to "Cadastre a placa do veículo antes de pegar rotas.",
+        "versao_nao_autorizada" to "Esta versão do app não está liberada. Atualize.",
         "pedido_ja_faturado" to "Esse pedido já está numa fatura emitida.",
         "pedido_ja_em_rota" to "Esse pedido já saiu com o motoboy.",
         "pedido_em_andamento" to "Esse pedido já está em andamento.",

@@ -59,7 +59,7 @@ import kotlinx.coroutines.launch
  * o gestor aprova (vai para o roteirizador), ajusta o valor ou recusa.
  */
 @Composable
-fun PedidosG() {
+fun PedidosG(onNovo: () -> Unit = {}) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
     val teste by TemaApp.modoTeste.collectAsState()
@@ -82,6 +82,7 @@ fun PedidosG() {
             PwBotaoIcone(PwIcones.Sparkles, "Montar rotas agora", {
                 if (!ocupado) { ocupado = true; escopo.launch { Gestao.roteirizarAgora().onSuccess { PwToast.mostrar("Rotas montadas com os pedidos aprovados.", TipoAviso.OK) }.onFailure { PwToast.mostrar(it.message ?: "Erro", TipoAviso.ERRO) }; Gestao.atualizar(); ocupado = false } }
             }, tamanho = 38.dp)
+            PwBotaoIcone(PwIcones.Plus, "Novo pedido", onNovo, ativo = true, tamanho = 38.dp)
         }
         PwFiltros(listOf("Revisar" to listas[0].size, "Em andamento" to listas[1].size, "Concluídos" to 0, "Cancelados" to 0), filtro, { filtro = it })
         when {
@@ -197,6 +198,12 @@ private fun JanelaPedido(p: PedidoG, empresa: String?, onFechar: () -> Unit) {
                 PwCampo(motivo, { motivo = it }, "Por que recusar?", dica = "O cliente vê esse motivo")
                 PwBotaoPerigo("Confirmar recusa", onClick = { rodar("Pedido recusado.") { Gestao.revisarPedido(p.id, "recusar", null, motivo.ifBlank { null }) } }, cheio = true, modifier = Modifier.fillMaxWidth())
             }
+        }
+        if (p.status in setOf("aprovado", "roteirizado", "em_rota")) {
+            PwBotaoVidro("Voltar para revisão", onClick = {
+                rodar("Pedido voltou para revisão: as rotas dele foram desfeitas.", fechar = false) { Gestao.revisarPedido(p.id, "voltar_revisao", null, motivo.ifBlank { null }) }
+            }, icone = PwIcones.History, modifier = Modifier.fillMaxWidth())
+            TextoDica("Só enquanto nenhuma coleta ou entrega dele foi feita. Serve para refazer as rotas com regras novas.")
         }
         Spacer(Modifier.size(12.dp))
     }

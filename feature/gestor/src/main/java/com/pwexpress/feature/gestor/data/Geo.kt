@@ -66,13 +66,38 @@ object Geo {
         "fuel" to "Posto", "pharmacy" to "Farmácia", "supermarket" to "Mercado", "bank" to "Banco", "restaurant" to "Restaurante",
         "school" to "Escola", "hospital" to "Hospital", "place_of_worship" to "Igreja", "bakery" to "Padaria", "cafe" to "Café",
         "fast_food" to "Lanchonete", "convenience" to "Conveniência", "park" to "Praça/parque", "police" to "Polícia", "post_office" to "Correios",
+        "clothes" to "Loja", "hairdresser" to "Salão", "beauty" to "Salão", "dentist" to "Dentista", "doctors" to "Clínica", "clinic" to "Clínica",
+        "bar" to "Bar", "pub" to "Bar", "ice_cream" to "Sorveteria", "hotel" to "Hotel", "hardware" to "Ferragem", "car_repair" to "Oficina",
+        "butcher" to "Açougue", "optician" to "Ótica", "mall" to "Shopping", "townhall" to "Prefeitura", "gym" to "Academia", "fitness_centre" to "Academia",
+        "veterinary" to "Veterinário", "pet" to "Pet shop", "atm" to "Caixa eletrônico", "kindergarten" to "Escola", "university" to "Faculdade",
     )
 
-    suspend fun pontosProximos(lat: Double, lng: Double, raioM: Int = 250): List<RefG> = withContext(Dispatchers.IO) {
-        val q = "[out:json][timeout:12];(nwr(around:$raioM,$lat,$lng)[name][~\"^(amenity|shop|leisure|tourism)$\"~\".\"];);out center 40;way(around:${minOf(raioM, 180)},$lat,$lng)[highway][name];out geom 40;"
-        runCatching {
-            val req = Request.Builder().url("https://overpass-api.de/api/interpreter").header("User-Agent", UA).post(FormBody.Builder().add("data", q).build()).build()
-            val corpo = PwCore.http.client.newCall(req).execute().use { it.body?.string() } ?: return@runCatching emptyList()
+    /** Overpass tem vários espelhos; o principal vive lotado (429/504). */
+    private val overpass = listOf(
+        "https://overpass-api.de/api/interpreter",
+        "https://overpass.private.coffee/api/interpreter",
+        "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
+    )
+    private val fora = setOf("bus", "bus_stop", "bus_station", "platform", "stop_position", "tram_stop", "subway", "subway_entrance", "taxi", "parking", "parking_entrance", "bicycle_parking", "motorcycle_parking", "bicycle_rental")
+
+    /** Estabelecimentos perto do ponto (amplia o raio se não achar nada). */
+    suspend fun pontosProximos(lat: Double, lng: Double, raioM: Int = 250): List<RefG> =
+        buscarProximos(lat, lng, raioM).ifEmpty { if (raioM < 600) buscarProximos(lat, lng, 600) else emptyList() }
+
+    private suspend fun buscarProximos(lat: Double, lng: Double, raioM: Int): List<RefG> = withContext(Dispatchers.IO) {
+        val q = "[out:json][timeout:10];(nwr(around:$raioM,$lat,$lng)[name][~\"^(amenity|shop|leisure|tourism|office|healthcare|craft)$\"~\".\"];);out center 60;way(around:${minOf(raioM, 180)},$lat,$lng)[highway][name];out geom 40;"
+        for (url in overpass) {
+            val corpo = runCatching {
+                val req = Request.Builder().url(url).header("User-Agent", UA).post(FormBody.Builder().add("data", q).build()).build()
+                PwCore.http.client.newCall(req).execute().use { r -> if (r.isSuccessful) r.body?.string() else null }
+            }.getOrNull() ?: continue
+            val lista = runCatching { montarReferencias(corpo, lat, lng) }.getOrNull() ?: continue
+            return@withContext lista
+        }
+        emptyList()
+    }
+
+    private fun montarReferencias(corpo: String, lat: Double, lng: Double): List<RefG> {
             val vistos = mutableSetOf<String>()
             val elementos = (Json.parseToJsonElement(corpo).jsonObject["elements"] as JsonArray).mapNotNull { it as? JsonObject }
             val xy = Plano(lat, lng)
@@ -81,19 +106,18 @@ object Geo {
                 if (pts.isNullOrEmpty()) null else Via(w.obj("tags")!!.str("name").orEmpty(), pts)
             }
             val destino = xy(lat, lng)
-            elementos.filterNot { it.str("type") == "way" && it.obj("tags")?.str("highway") != null }.mapNotNull { o ->
+            return elementos.filterNot { it.str("type") == "way" && it.obj("tags")?.str("highway") != null }.mapNotNull { o ->
                 val tags = o.obj("tags") ?: return@mapNotNull null
                 val nome = tags.str("name") ?: return@mapNotNull null
                 val c = o.obj("center")
                 val plat = o.dbl("lat") ?: c?.dbl("lat") ?: return@mapNotNull null
                 val plng = o.dbl("lon") ?: c?.dbl("lon") ?: return@mapNotNull null
-                if (!vistos.add(nome.lowercase())) return@mapNotNull null
-                val t = tags.str("amenity") ?: tags.str("shop") ?: tags.str("leisure") ?: tags.str("tourism")
+                val t = tags.str("amenity") ?: tags.str("shop") ?: tags.str("leisure") ?: tags.str("tourism") ?: tags.str("office") ?: tags.str("healthcare") ?: tags.str("craft")
+                if (t in fora || !vistos.add(nome.lowercase())) return@mapNotNull null
                 val rel = runCatching { relacaoNaRua(destino, xy(plat, plng), vias) }.getOrNull()
                 val frase = when (rel) { null -> null; "frente" -> "Fica do outro lado da rua de $nome"; else -> "Fica à $rel de $nome (olhando da rua)" }
                 RefG(nome, metros(lat, lng, plat, plng), tipos[t], plat, plng, frase)
             }.sortedBy { it.distanciaM ?: 0 }.take(8)
-        }.getOrDefault(emptyList())
     }
 
     fun metros(aLat: Double, aLng: Double, bLat: Double, bLng: Double): Int {

@@ -135,6 +135,7 @@ class TrackingService : Service() {
     }
 
     private fun processar(loc: Location) {
+        if (com.pwexpress.feature.tracking.Simulador.ativo) return // modo teste: quem manda a posição é o simulador
         val modo = Tracking.prefs.modo
         when (modo) {
             Modo.OFFLINE -> return

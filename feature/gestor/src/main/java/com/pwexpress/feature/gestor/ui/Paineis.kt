@@ -189,10 +189,14 @@ fun MapaG(onCorrida: (String) -> Unit) {
         java.text.Normalizer.normalize("${m.nome} ${m.email}", java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase().contains(termo)
     val motoboys = todos.filter { filtros[filtro].second(it) && casa(it) }
     val emServico = todos.count { st(it.id) != "offline" }
+    val someH = dados.cfgNum("mapa_offline_some_h", 24.0)
+    val esmaecer = dados.cfgBool("mapa_offline_esmaecer", true)
     val marcadores = motoboys.mapNotNull { m ->
         val p = dados.posicao(m.id) ?: return@mapNotNull null
         if (!coordenadaValida(p.lat, p.lng)) return@mapNotNull null
-        MarcadorMapa(m.id, p.lat!!, p.lng!!, corHex(corMotoboy(p.status, c)), m.nome.substringBefore(" "), foto = m.foto)
+        val op = opacidadeNoMapa(p.status, p.posicaoEm, someH, esmaecer, agora) ?: return@mapNotNull null
+        MarcadorMapa(m.id, p.lat!!, p.lng!!, corHex(corMotoboyMapa(p.status, p.modoTeste || m.modoTeste, c)), m.nome.substringBefore(" "), foto = m.foto,
+            opacidade = op, teste = p.modoTeste || m.modoTeste)
     }
     // selecionado: todos os registros do dia; os outros: só o registro atual (se estiver em serviço)
     val regSel = seguindo?.let { registrosDe(dados, it) }.orEmpty()
@@ -341,7 +345,7 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
     val pinos = ativas.flatMap { cor -> cor.paradas.map { PinoMapa(it.lat, it.lng, it.coleta, false, it.status == "concluida") } }
     val online = dados.equipe.filter { it.motoboy && it.modoTeste == teste }.mapNotNull { m ->
         val p = dados.posicao(m.id)?.takeIf { it.status != "offline" && coordenadaValida(it.lat, it.lng) } ?: return@mapNotNull null
-        MarcadorMapa(m.id, p.lat!!, p.lng!!, corHex(corMotoboy(p.status, c)), m.nome.substringBefore(" "), foto = m.foto)
+        MarcadorMapa(m.id, p.lat!!, p.lng!!, corHex(corMotoboyMapa(p.status, m.modoTeste, c)), m.nome.substringBefore(" "), foto = m.foto, teste = m.modoTeste)
     }
 
     TelaComMapa(

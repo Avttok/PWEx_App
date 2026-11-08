@@ -151,6 +151,9 @@ fun PerfilScreen(
             PwBotaoOuro(if (salvando) "Salvando…" else "Salvar", onClick = { salvar() }, icone = PwIcones.Check, habilitado = mudou && !salvando)
         }
 
+        // ---------------------------------------------------------- veículo (motoboy)
+        if (perfil?.motoboy == true) CartaoMeuVeiculo()
+
         // ---------------------------------------------------------- diagnóstico (administrador)
         if (perfil?.admin == true) {
             PwCartao {
@@ -215,4 +218,39 @@ private fun quadrado(bmp: Bitmap): ByteArray {
     val recorte = Bitmap.createBitmap(bmp, (bmp.width - lado) / 2, (bmp.height - lado) / 2, lado, lado)
     val final = if (lado > 512) Bitmap.createScaledBitmap(recorte, 512, 512, true) else recorte
     return ByteArrayOutputStream().also { final.compress(Bitmap.CompressFormat.JPEG, 85, it) }.toByteArray()
+}
+
+
+/** Veículo e CNH do motoboy: quem cadastra é o gestor (o motoboy confere aqui). */
+@Composable
+private fun CartaoMeuVeiculo() {
+    val c = Pw.cores
+    var v by remember { mutableStateOf<kotlinx.serialization.json.JsonObject?>(null) }
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        v = runCatching { com.pwexpress.core.PwCore.rpc.chamar("meu_veiculo", kotlinx.serialization.json.JsonObject(emptyMap())) }.getOrNull()
+            ?.takeIf { it.ok }?.let { runCatching { kotlinx.serialization.json.Json.parseToJsonElement(it.corpo) as? kotlinx.serialization.json.JsonObject }.getOrNull() }
+    }
+    fun t(k: String) = (v?.get(k) as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
+    PwCartao {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(PwIcones.Bike, null, tint = c.ouro, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            PwRotulo("Seu veículo")
+        }
+        Spacer(Modifier.height(8.dp))
+        val placa = t("placa")
+        if (placa == null) Text("Ainda sem veículo cadastrado. Peça ao gestor para cadastrar a placa, a cor e a CNH.", color = c.texto2)
+        else {
+            Text(listOfNotNull(t("modelo"), t("cor"), t("ano")).joinToString(" · ").ifEmpty { "Veículo" }, color = c.texto, fontWeight = FontWeight.SemiBold)
+            Text("Placa ${placa.take(3)}-${placa.drop(3)}", style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 22.sp, letterSpacing = 2.sp), color = c.texto)
+        }
+        t("cnh_categoria")?.let { cat ->
+            val dias = t("cnh_vence_em_dias")?.toLongOrNull()
+            val validade = t("cnh_validade")?.takeIf { it.length >= 10 }?.let { "${it.substring(8, 10)}/${it.substring(5, 7)}/${it.substring(0, 4)}" }
+            Spacer(Modifier.height(6.dp))
+            Text("CNH $cat" + (validade?.let { " · vale até $it" } ?: ""),
+                color = when { dias != null && dias < 0 -> c.vermelho; dias != null && dias <= 30 -> c.ouro; else -> c.texto2 }, fontSize = 13.5.sp)
+            if (dias != null && dias < 0) Text("Sua CNH está vencida. Avise o gestor.", color = c.vermelho, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
+    }
 }

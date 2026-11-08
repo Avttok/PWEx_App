@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Column
@@ -122,19 +123,39 @@ fun PwBarraAbas(abas: List<PwAba>, selecionada: String, onSelecionar: (String) -
                     .padding(vertical = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Box {
+                Box(Modifier.size(22.dp)) {
                     Icon(aba.icone, null, tint = cor, modifier = Modifier.size(22.dp))
-                    if (aba.contador > 0) {
-                        Box(
-                            Modifier.align(Alignment.TopEnd).padding(start = 14.dp).size(16.dp).clip(CircleShape).background(c.ouro),
-                            contentAlignment = Alignment.Center,
-                        ) { Text(if (aba.contador > 9) "9+" else aba.contador.toString(), color = c.sobreOuro, fontSize = 9.sp, fontWeight = FontWeight.Black) }
-                    }
+                    if (aba.contador > 0) PwContador(aba.contador, Modifier.align(Alignment.TopEnd).offset(x = 10.dp, y = (-7).dp))
                 }
                 Spacer(Modifier.height(3.dp))
                 Text(aba.rotulo, color = cor, fontSize = 11.sp, fontWeight = if (ativa) FontWeight.Bold else FontWeight.Medium, fontFamily = Archivo, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
             }
         }
+    }
+}
+
+/**
+ * Bolinha de contador (abas, botões). O número fica no centro exato: sem o espaço extra da fonte
+ * e com a linha centralizada, senão ele "cai" para baixo do círculo.
+ */
+@Composable
+fun PwContador(n: Int, modifier: Modifier = Modifier) {
+    val c = Pw.cores
+    Box(
+        modifier.height(18.dp).widthIn(min = 18.dp).clip(CircleShape).background(c.gradOuro)
+            .border(1.5.dp, c.fundo2, CircleShape).padding(horizontal = 4.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            if (n > 99) "99+" else n.toString(),
+            style = androidx.compose.ui.text.TextStyle(
+                color = c.sobreOuro, fontSize = 10.sp, fontWeight = FontWeight.Black, fontFamily = Archivo, lineHeight = 10.sp,
+                platformStyle = androidx.compose.ui.text.PlatformTextStyle(includeFontPadding = false),
+                lineHeightStyle = androidx.compose.ui.text.style.LineHeightStyle(
+                    androidx.compose.ui.text.style.LineHeightStyle.Alignment.Center, androidx.compose.ui.text.style.LineHeightStyle.Trim.Both),
+            ),
+            maxLines = 1,
+        )
     }
 }
 

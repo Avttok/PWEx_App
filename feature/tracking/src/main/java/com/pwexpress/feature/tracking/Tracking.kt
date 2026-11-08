@@ -126,6 +126,7 @@ object Tracking {
 
     /** Fica offline, envia o que der, limpa a fila e encerra a sessão. */
     suspend fun sairDaConta() {
+        Simulador.desligar()
         prefs.modo = Modo.OFFLINE
         prefs.sessaoId = null
         prefs.statusPendente = true

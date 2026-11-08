@@ -3,6 +3,7 @@ package com.pwexpress.feature.corridas.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -49,6 +50,7 @@ import com.pwexpress.core.designsystem.PwJanela
 import com.pwexpress.core.designsystem.PwPagina
 import com.pwexpress.core.designsystem.PwSegmentado
 import com.pwexpress.core.designsystem.PwSelo
+import com.pwexpress.core.designsystem.PwRotulo
 import com.pwexpress.core.designsystem.PwValor
 import com.pwexpress.core.designsystem.PwVazio
 import com.pwexpress.core.designsystem.moedaBr
@@ -104,6 +106,7 @@ fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {},
     var erro by remember { mutableStateOf<String?>(null) }
     var agora by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var ocupado by remember { mutableStateOf<String?>(null) }
+    var detalhe by remember { mutableStateOf<String?>(null) }
     var desistindo by remember { mutableStateOf<Corrida?>(null) }
     val escopo = rememberCoroutineScope()
 
@@ -172,9 +175,15 @@ fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {},
             else -> when {
                 carregando && disponiveis.isEmpty() -> PwCarregando(texto = "Buscando rotas…")
                 disponiveis.isEmpty() -> PwVazio("Nenhuma rota disponível agora. Fique online: quando surgir uma, você recebe um aviso.", icone = PwIcones.Megaphone)
-                else -> disponiveis.forEach { r -> CartaoRota(r, agora, ocupado == r.id, onPegar = { pegar(r) }) }
+                else -> disponiveis.forEach { r -> CartaoRota(r, agora, ocupado == r.id, onPegar = { pegar(r) }, onDetalhes = { detalhe = r.id }) }
             }
         }
+    }
+
+    detalhe?.let { id ->
+        val r = disponiveis.firstOrNull { it.id == id }
+        if (r == null) detalhe = null
+        else DetalheRotaQuadro(r, agora, ocupado == r.id, onFechar = { detalhe = null }, onPegar = { detalhe = null; pegar(r) })
     }
 
     desistindo?.let { cor ->
@@ -196,7 +205,7 @@ fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {},
 /** Uma rota do quadro: express ("Agora") e planejada (com horário) no mesmo formato. */
 @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun CartaoRota(r: Corrida, agora: Long, ocupado: Boolean, onPegar: () -> Unit) {
+private fun CartaoRota(r: Corrida, agora: Long, ocupado: Boolean, onPegar: () -> Unit, onDetalhes: () -> Unit) {
     val c = Pw.cores
     val coleta = r.paradas.firstOrNull { it.tipo == TipoParada.COLETA }
     val entregas = r.paradas.filter { it.tipo == TipoParada.ENTREGA }
@@ -247,10 +256,81 @@ private fun CartaoRota(r: Corrida, agora: Long, ocupado: Boolean, onPegar: () ->
                 color = c.texto3, fontSize = 12.5.sp, maxLines = 2)
         }
         Spacer(Modifier.height(12.dp))
-        PwBotaoOuro(
-            if (ocupado) (if (r.planejada) "Reservando…" else "Pegando…") else if (r.planejada) "Reservar" else "Pegar rota",
-            onClick = onPegar, icone = if (r.planejada) PwIcones.CalendarCheck else PwIcones.ChevronsRight, habilitado = !ocupado, altura = 56.dp,
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            PwBotaoVidro("Detalhes", onClick = onDetalhes, icone = PwIcones.Mapa, modifier = Modifier.weight(1f).height(56.dp))
+            PwBotaoOuro(
+                if (ocupado) (if (r.planejada) "Reservando…" else "Pegando…") else if (r.planejada) "Reservar" else "Pegar rota",
+                onClick = onPegar, icone = if (r.planejada) PwIcones.CalendarCheck else PwIcones.ChevronsRight, habilitado = !ocupado, altura = 56.dp,
+                modifier = Modifier.weight(1.4f),
+            )
+        }
+    }
+}
+
+/**
+ * Tudo da rota antes de pegar ou reservar: mapa com o caminho, horário, distância, tempo,
+ * cada parada (com cliente, referências e itens) e os cuidados. O motoboy se planeja antes.
+ */
+@Composable
+private fun DetalheRotaQuadro(r: Corrida, agora: Long, ocupado: Boolean, onFechar: () -> Unit, onPegar: () -> Unit) {
+    val c = Pw.cores
+    val perfil by com.pwexpress.core.perfil.Perfis.perfil.collectAsState()
+    val verEnderecos = perfil?.logico("quadro_mostra_enderecos", true) != false
+    val verItens = perfil?.logico("quadro_mostra_itens", true) != false
+    com.pwexpress.core.designsystem.PwTelaCheia(
+        "Rota ${r.numeroExibicao}", onFechar,
+        subtitulo = r.agendadaPara?.let { quandoTexto(it).replaceFirstChar { ch -> ch.uppercase() } + " · " + relativoTexto(it, agora) } ?: "Para agora",
+        rodape = {
+            PwBotaoOuro(
+                if (ocupado) (if (r.planejada) "Reservando…" else "Pegando…") else if (r.planejada) "Reservar esta rota" else "Pegar esta rota",
+                onClick = onPegar, icone = if (r.planejada) PwIcones.CalendarCheck else PwIcones.ChevronsRight, habilitado = !ocupado, altura = 58.dp,
+            )
+        },
+    ) {
+        Box(Modifier.fillMaxWidth().height(240.dp).clip(RoundedCornerShape(20.dp))) {
+            com.pwexpress.core.mapa.PwMapa(
+                paradas = r.paradas.map { com.pwexpress.core.mapa.PinoMapa(it.lat, it.lng, it.tipo == TipoParada.COLETA, false, false) },
+                rota = r.rotaPlanejada, minhaPosicao = null, modifier = Modifier.fillMaxWidth().height(240.dp), enquadrar = r.id,
+            )
+        }
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (r.planejada) PwSelo("Planejada", c.azul, icone = PwIcones.CalendarClock) else PwSelo("Agora", c.verde, icone = PwIcones.Zap)
+            if (r.sugerida) PwSelo("Melhor pra você", c.ouro, icone = PwIcones.Sparkles)
+            if (r.urgente) PwSelo("Urgente", c.vermelho, icone = PwIcones.Zap)
+            if (r.perigoso) PwSelo("Carga perigosa", c.vermelho, icone = PwIcones.FlaskConical)
+            if (r.exigeFoto) PwSelo("Foto", c.texto2, icone = PwIcones.Camera)
+            if (r.exigeAssinatura) PwSelo("Assinatura", c.texto2, icone = PwIcones.Pencil)
+            if (r.exigeCodigo) PwSelo("Código", c.texto2, icone = PwIcones.KeyRound)
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.pwexpress.core.designsystem.PwNumero("Entregas", "${r.entregas}" + if (r.coletas > 1) " · ${r.coletas} col." else "", Modifier.weight(1f), icone = PwIcones.Package2)
+            com.pwexpress.core.designsystem.PwNumero("Rota", r.distanciaM?.let { kmCurto(it) } ?: "—", Modifier.weight(1f), icone = PwIcones.Ruler)
+            com.pwexpress.core.designsystem.PwNumero("Tempo", r.duracaoS?.let { if (it < 3600) "${it / 60} min" else "${it / 3600} h ${(it % 3600) / 60}" } ?: "—", Modifier.weight(1f), icone = PwIcones.Clock)
+        }
+        if (r.valoresVisiveis && r.valorMotoboy != null) {
+            PwCartao(destaque = true) { PwRotulo("Você recebe"); PwValor(moedaBr(r.valorMotoboy), tamanhoMax = 36) }
+        }
+        r.distanciaAteColetaM?.let { Text("A primeira coleta fica a ${kmCurto(it)} de você.", color = c.texto2, fontSize = 13.5.sp) }
+        PwRotulo("Paradas, na ordem")
+        r.paradas.forEachIndexed { i, p ->
+            val coleta = p.tipo == TipoParada.COLETA
+            val forma = RoundedCornerShape(16.dp)
+            Row(Modifier.fillMaxWidth().clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).padding(12.dp), verticalAlignment = Alignment.Top) {
+                Box(Modifier.size(26.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (coleta) c.gradOuro else androidx.compose.ui.graphics.SolidColor(c.texto)), contentAlignment = Alignment.Center) {
+                    Text("${i + 1}", color = if (coleta) c.sobreOuro else c.fundo, fontWeight = FontWeight.Black, fontSize = 12.sp)
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(if (coleta) "COLETA" else "ENTREGA", color = if (coleta) c.ouro else c.texto2, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = Archivo)
+                    Text(if (verEnderecos) p.endereco else p.endereco.split(",").drop(1).take(2).joinToString(",").trim().ifEmpty { "Endereço liberado ao pegar" },
+                        color = c.texto, fontSize = 14.sp)
+                    if (verEnderecos) ReferenciasParada(p.referencias)
+                    if (verItens) ItensParada(p) else if (p.cliente != null) Text(p.cliente, color = c.texto2, fontSize = 12.5.sp)
+                    p.instrucoes?.takeIf { verEnderecos }?.let { Text(it, color = c.ouro, fontSize = 12.5.sp) }
+                }
+            }
+        }
+        r.observacoes?.let { PwCartao { PwRotulo("Observações"); Text(it, color = c.texto) } }
     }
 }
 

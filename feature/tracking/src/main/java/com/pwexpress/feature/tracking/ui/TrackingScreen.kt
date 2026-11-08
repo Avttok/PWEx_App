@@ -44,6 +44,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.launch
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
@@ -98,7 +104,6 @@ fun TrackingScreen(
     val info by Tracking.info.collectAsState()
     var perms by remember { mutableStateOf(Permissoes.ler(ctx)) }
     var aviso by remember { mutableStateOf<String?>(null) }
-    var confirmarOffline by remember { mutableStateOf(false) }
     var agora by remember { mutableLongStateOf(System.currentTimeMillis()) }
     LaunchedEffect(Unit) { while (true) { agora = System.currentTimeMillis(); delay(1_000) } }
     LifecycleResumeEffect(Unit) {
@@ -127,13 +132,23 @@ fun TrackingScreen(
 
         // ---------------------------------------------------------- o botão
         Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
-            BotaoStatus(info.modo) {
-                when (info.modo) {
-                    Modo.OFFLINE -> escolher(Modo.DISPONIVEL)
-                    Modo.DISPONIVEL -> confirmarOffline = true
-                    Modo.EM_CORRIDA -> aviso = "Conclua a corrida para mudar o status."
-                }
-            }
+            BotaoStatus(
+                info.modo,
+                onAlternar = {
+                    when (info.modo) {
+                        Modo.OFFLINE -> escolher(Modo.DISPONIVEL)
+                        Modo.DISPONIVEL -> escolher(Modo.OFFLINE)
+                        Modo.EM_CORRIDA -> Unit
+                    }
+                },
+                onToque = {
+                    aviso = when (info.modo) {
+                        Modo.EM_CORRIDA -> "Conclua a rota para mudar o status."
+                        Modo.OFFLINE -> "Segure o botão até o anel encher para ficar online."
+                        Modo.DISPONIVEL -> "Segure o botão até o anel encher para ficar offline."
+                    }
+                },
+            )
         }
 
         // atalhos (GPS, raio, economia, aparelho)
@@ -153,74 +168,148 @@ fun TrackingScreen(
         extras()
     }
 
-    if (confirmarOffline) {
-        PwJanela("Ficar offline?", onFechar = { confirmarOffline = false }) {
-            Text("Você para de receber corridas até ficar disponível de novo.", color = c.texto2)
-            PwBotaoPerigo("Ficar offline", onClick = { confirmarOffline = false; escolher(Modo.OFFLINE) }, icone = PwIcones.Power, cheio = true, modifier = Modifier.fillMaxWidth())
-            PwBotaoVidro("Continuar disponível", onClick = { confirmarOffline = false }, icone = PwIcones.Radio, modifier = Modifier.fillMaxWidth())
-        }
-    }
 }
 
 /**
- * O botão de status: um círculo inteiro em degradê (sólido), com um brilho que gira devagar por cima,
- * reflexo de vidro, halo de luz e ondas. Offline na cor da marca, online em verde, em corrida na cor da marca.
+ * O botão de status, refeito do zero: um orbe escuro de vidro com um anel de luz.
+ * - Segure para trocar (o anel enche enquanto você segura e o celular vibra no fim): nada de toque sem querer.
+ * - Offline: o anel dorme em tracinhos dourados e o orbe respira devagar.
+ * - Online: o anel vira uma aurora verde girando, com um cometa na ponta, e dentro do orbe
+ *   um radar varre o mapa procurando rotas (com "blips" que acendem e apagam).
+ * - Em rota: anel dourado pulsando; trocar só depois de concluir.
  */
 @Composable
-private fun BotaoStatus(modo: Modo, onClick: () -> Unit) {
+private fun BotaoStatus(modo: Modo, onAlternar: () -> Unit, onToque: () -> Unit) {
     val c = Pw.cores
-    val ligado = modo != Modo.OFFLINE
-    val cor by animateColorAsState(if (modo == Modo.DISPONIVEL) c.verde else c.ouro, label = "cor-status")
-    val claro by animateColorAsState(if (modo == Modo.DISPONIVEL) Color(0xFFA7F3D0) else c.ouroClaro, label = "claro-status")
-    val escuroCor by animateColorAsState(if (modo == Modo.DISPONIVEL) Color(0xFF047857) else c.ouroEscuro, label = "escuro-status")
-    val tinta = if (modo == Modo.DISPONIVEL) Color(0xFF052E1B) else c.sobreOuro
-    val anim = rememberInfiniteTransition(label = "status")
-    val giro by anim.animateFloat(0f, 360f, infiniteRepeatable(tween(if (ligado) 6000 else 14000, easing = androidx.compose.animation.core.LinearEasing)), label = "giro")
-    val onda by anim.animateFloat(0f, 1f, infiniteRepeatable(tween(2400), RepeatMode.Restart), label = "onda")
-    val respiro by anim.animateFloat(0.55f, 1f, infiniteRepeatable(tween(1800), RepeatMode.Reverse), label = "respiro")
-    val toque = remember { MutableInteractionSource() }
-    val apertado by toque.collectIsPressedAsState()
-    val disco = 200.dp
-    Box(Modifier.size(disco + 72.dp), contentAlignment = Alignment.Center) {
-        // halo de luz + ondas
-        Box(Modifier.size(disco + 72.dp).drawBehind {
-            val r = size.minDimension / 2f
-            drawCircle(Brush.radialGradient(listOf(cor.copy(alpha = if (ligado) 0.34f * respiro else 0.18f), Color.Transparent), center, r), r)
-            if (ligado) listOf(onda, (onda + 0.5f) % 1f).forEach { t ->
-                drawCircle(cor.copy(alpha = (1f - t) * 0.45f), radius = r * (0.74f + 0.26f * t), style = Stroke(width = 2.dp.toPx()))
-            }
-        })
+    val online = modo == Modo.DISPONIVEL
+    val emRota = modo == Modo.EM_CORRIDA
+    val verde = Color(0xFF34D399)
+    val cor by animateColorAsState(if (online) verde else c.ouro, tween(600), label = "cor")
+    val cor2 by animateColorAsState(if (online) Color(0xFF10B981) else c.ouroEscuro, tween(600), label = "cor2")
+    val cor3 by animateColorAsState(if (online) Color(0xFFA7F3D0) else c.ouroClaro, tween(600), label = "cor3")
+    val anim = rememberInfiniteTransition(label = "orbe")
+    val giro by anim.animateFloat(0f, 360f, infiniteRepeatable(tween(if (online) 3800 else 24000, easing = androidx.compose.animation.core.LinearEasing)), label = "giro")
+    val radar by anim.animateFloat(0f, 360f, infiniteRepeatable(tween(2600, easing = androidx.compose.animation.core.LinearEasing)), label = "radar")
+    val respiro by anim.animateFloat(0f, 1f, infiniteRepeatable(tween(if (online) 1400 else 2600), RepeatMode.Reverse), label = "respiro")
+    val ligar = remember { androidx.compose.animation.core.Animatable(if (online || emRota) 1f else 0f) }
+    LaunchedEffect(online, emRota) { ligar.animateTo(if (online || emRota) 1f else 0f, tween(700)) }
+    val segurar = remember { androidx.compose.animation.core.Animatable(0f) }
+    val vibrar = androidx.compose.ui.platform.LocalHapticFeedback.current
+    val escopo = androidx.compose.runtime.rememberCoroutineScope()
+    var apertado by remember { mutableStateOf(false) }
+    val escala by androidx.compose.animation.core.animateFloatAsState(if (apertado) 0.94f else 1f, androidx.compose.animation.core.spring(0.5f, 380f), label = "escala")
+    val tam = 236.dp
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
-            Modifier.size(disco).scale(if (apertado) 0.95f else 1f)
-                .clip(CircleShape)
-                .drawBehind {
-                    val r = size.minDimension / 2f
-                    // círculo inteiro em degradê
-                    drawCircle(Brush.linearGradient(listOf(claro, cor, escuroCor), start = Offset.Zero, end = Offset(size.width, size.height)), r)
-                    // brilho que gira por cima (sem buracos: só clareia e escurece o degradê)
-                    rotate(giro) {
-                        drawCircle(Brush.sweepGradient(listOf(Color.White.copy(alpha = 0.28f), Color.Transparent, Color.Black.copy(alpha = 0.14f), Color.Transparent, Color.White.copy(alpha = 0.28f))), r)
-                    }
-                    // reflexo de vidro no alto e borda clara
-                    drawCircle(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.32f), Color.Transparent), 0f, size.height * 0.5f), r)
-                    drawCircle(Color.White.copy(alpha = 0.35f), r - 1.dp.toPx(), style = Stroke(width = 2.dp.toPx()))
+            Modifier.size(tam + 40.dp).scale(escala)
+                .pointerInput(modo) {
+                    detectTapGestures(
+                        onPress = {
+                            apertado = true
+                            if (emRota) { tryAwaitRelease(); apertado = false; onToque(); return@detectTapGestures }
+                            vibrar.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
+                            val enchendo = escopo.launch { segurar.animateTo(1f, tween(750, easing = androidx.compose.animation.core.LinearEasing)) }
+                            val soltou = tryAwaitRelease()
+                            apertado = false
+                            if (segurar.value >= 0.999f) {
+                                vibrar.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                onAlternar()
+                                escopo.launch { kotlinx.coroutines.delay(250); segurar.snapTo(0f) }
+                            } else {
+                                enchendo.cancel()
+                                if (soltou && segurar.value < 0.2f) onToque()
+                                escopo.launch { segurar.animateTo(0f, tween(260)) }
+                            }
+                        },
+                    )
                 }
-                .clickable(interactionSource = toque, indication = null, onClick = onClick),
+                .semantics { role = androidx.compose.ui.semantics.Role.Button; contentDescription = if (online) "Online. Segure para ficar offline" else if (emRota) "Em rota" else "Offline. Segure para ficar online" }
+                .drawBehind {
+                    val centro = center
+                    val rAnel = size.minDimension / 2f - 22.dp.toPx()
+                    val esp = 9.dp.toPx()
+                    val l = ligar.value
+                    // halo
+                    drawCircle(Brush.radialGradient(listOf(cor.copy(alpha = 0.10f + 0.28f * l * (0.6f + 0.4f * respiro)), Color.Transparent), centro, size.minDimension / 2f), size.minDimension / 2f)
+                    // trilho do anel
+                    drawCircle(Color.White.copy(alpha = 0.06f), rAnel, style = Stroke(esp))
+                    // anel: dormindo (tracinhos) → aurora girando
+                    if (l < 1f) {
+                        val n = 48
+                        for (i in 0 until n) {
+                            val ang = Math.toRadians((i * 360.0 / n) + giro)
+                            val a = (0.18f + 0.22f * respiro) * (1f - l)
+                            val p1 = Offset(centro.x + (rAnel - esp * 0.35f) * kotlin.math.cos(ang).toFloat(), centro.y + (rAnel - esp * 0.35f) * kotlin.math.sin(ang).toFloat())
+                            val p2 = Offset(centro.x + (rAnel + esp * 0.35f) * kotlin.math.cos(ang).toFloat(), centro.y + (rAnel + esp * 0.35f) * kotlin.math.sin(ang).toFloat())
+                            drawLine(cor.copy(alpha = a), p1, p2, strokeWidth = 2.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round)
+                        }
+                    }
+                    if (l > 0f) rotate(giro, centro) {
+                        drawCircle(Brush.sweepGradient(listOf(cor2.copy(alpha = 0.15f * l), cor.copy(alpha = l), cor3.copy(alpha = l), cor2.copy(alpha = 0.15f * l)), centro), rAnel, style = Stroke(esp))
+                        // cometa na ponta da aurora
+                        drawCircle(cor3.copy(alpha = l), esp * 0.62f, Offset(centro.x + rAnel, centro.y - 0.5f))
+                        drawCircle(cor3.copy(alpha = 0.35f * l), esp * 1.5f, Offset(centro.x + rAnel, centro.y))
+                    }
+                    // enchendo enquanto segura
+                    val s = segurar.value
+                    if (s > 0f) {
+                        val alvo = if (online) Color(0xFFF87171) else verde
+                        drawArc(alvo, -90f, 360f * s, false, Offset(centro.x - rAnel, centro.y - rAnel), androidx.compose.ui.geometry.Size(rAnel * 2, rAnel * 2),
+                            style = Stroke(esp + 3.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                    }
+                },
             contentAlignment = Alignment.Center,
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(
-                    when (modo) { Modo.OFFLINE -> PwIcones.Power; Modo.DISPONIVEL -> PwIcones.Radio; Modo.EM_CORRIDA -> PwIcones.Route },
-                    null, tint = tinta, modifier = Modifier.size(64.dp),
-                )
-                Spacer(Modifier.height(12.dp))
-                Text(
-                    when (modo) { Modo.OFFLINE -> "OFFLINE"; Modo.DISPONIVEL -> "ONLINE"; Modo.EM_CORRIDA -> "EM CORRIDA" },
-                    style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 22.sp, letterSpacing = 1.4.sp),
-                    color = tinta, maxLines = 1, softWrap = false,
-                )
+            // orbe de vidro escuro
+            val rOrbe = tam - 72.dp
+            Box(
+                Modifier.size(rOrbe).clip(CircleShape).drawBehind {
+                    val r = size.minDimension / 2f
+                    drawCircle(Brush.radialGradient(listOf(Color(0xFF1D1D21), Color(0xFF09090B)), Offset(center.x, center.y * 0.7f), r * 1.3f), r)
+                    // luz que sobe de baixo, na cor do estado
+                    drawCircle(Brush.radialGradient(listOf(cor.copy(alpha = 0.10f + 0.30f * ligar.value * (0.7f + 0.3f * respiro)), Color.Transparent), Offset(center.x, size.height * 1.05f), r * 1.25f), r)
+                    // radar varrendo (online)
+                    if (online) {
+                        rotate(radar) {
+                            drawCircle(Brush.sweepGradient(0f to Color.Transparent, 0.78f to Color.Transparent, 0.97f to cor.copy(alpha = 0.38f), 1f to cor.copy(alpha = 0.0f)), r)
+                        }
+                        listOf(0.25f to 40f, 0.62f to 160f, 0.45f to 255f, 0.78f to 310f).forEach { (dist, ang) ->
+                            val idade = (((radar - ang) % 360f) + 360f) % 360f / 360f // 0 logo depois do radar passar
+                            val a = (1f - idade).let { it * it } * 0.9f
+                            val rad = Math.toRadians(ang.toDouble())
+                            val p = Offset(center.x + r * dist * kotlin.math.cos(rad).toFloat(), center.y + r * dist * kotlin.math.sin(rad).toFloat())
+                            drawCircle(cor3.copy(alpha = a), 3.2.dp.toPx(), p)
+                            drawCircle(cor.copy(alpha = a * 0.35f), 7.dp.toPx(), p)
+                        }
+                        drawCircle(cor.copy(alpha = 0.10f), r * 0.66f, style = Stroke(1.dp.toPx()))
+                        drawCircle(cor.copy(alpha = 0.08f), r * 0.33f, style = Stroke(1.dp.toPx()))
+                    }
+                    // reflexo de vidro
+                    drawOval(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.16f), Color.Transparent), size.height * 0.04f, size.height * 0.42f),
+                        Offset(size.width * 0.17f, size.height * 0.05f), androidx.compose.ui.geometry.Size(size.width * 0.66f, size.height * 0.36f))
+                    drawCircle(Color.White.copy(alpha = 0.10f), r - 0.5.dp.toPx(), style = Stroke(1.dp.toPx()))
+                },
+                contentAlignment = Alignment.Center,
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        when (modo) { Modo.OFFLINE -> PwIcones.Power; Modo.DISPONIVEL -> PwIcones.Radar; Modo.EM_CORRIDA -> PwIcones.Route },
+                        null, tint = cor, modifier = Modifier.size(44.dp),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        when (modo) { Modo.OFFLINE -> "OFFLINE"; Modo.DISPONIVEL -> "ONLINE"; Modo.EM_CORRIDA -> "EM ROTA" },
+                        style = TextStyle(brush = Brush.linearGradient(listOf(cor3, cor, cor2)), fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 24.sp, letterSpacing = 2.sp),
+                        maxLines = 1, softWrap = false,
+                    )
+                }
             }
         }
+        Text(
+            when (modo) { Modo.OFFLINE -> "Segure para ficar online"; Modo.DISPONIVEL -> "Procurando rotas perto de você · segure para sair"; Modo.EM_CORRIDA -> "Conclua a rota para mudar o status" },
+            color = c.texto3, fontSize = 12.5.sp, fontFamily = Archivo, textAlign = TextAlign.Center,
+        )
     }
 }
 

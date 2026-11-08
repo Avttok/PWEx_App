@@ -15,7 +15,25 @@ class HttpResposta(val codigo: Int, val corpo: String) {
 /** Cliente HTTP mínimo para a API REST do Supabase (Auth + PostgREST + Storage) e para o site. */
 class SupabaseHttp(private val baseUrl: String, private val apiKey: String) {
 
+    companion object {
+        /** Build instalado: vai em todo pedido ao Supabase (o servidor recusa versões que o Dev não escolheu). */
+        @Volatile var versaoApp: Int = 0
+        /** Chamado quando o servidor responde "versao_nao_autorizada". */
+        @Volatile var aoVersaoBloqueada: (() -> Unit)? = null
+    }
+
+    private val hostSupabase = runCatching { java.net.URI(baseUrl).host }.getOrNull()
+
     val client: OkHttpClient = OkHttpClient.Builder()
+        .addInterceptor { cadeia ->
+            val req = cadeia.request()
+            val doSupabase = req.url.host == hostSupabase
+            val r = cadeia.proceed(if (doSupabase && versaoApp > 0) req.newBuilder().header("x-pwex-versao", versaoApp.toString()).build() else req)
+            if (doSupabase && r.code in 400..499 && runCatching { r.peekBody(4096).string() }.getOrNull()?.contains("versao_nao_autorizada") == true) {
+                aoVersaoBloqueada?.invoke()
+            }
+            r
+        }
         .connectTimeout(15, TimeUnit.SECONDS)
         .writeTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)

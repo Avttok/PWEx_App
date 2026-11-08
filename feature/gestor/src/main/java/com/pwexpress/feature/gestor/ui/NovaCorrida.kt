@@ -80,7 +80,7 @@ import kotlinx.serialization.json.put
 import java.util.Calendar
 
 private var seq = 0
-private class ParadaForm(coleta: Boolean) {
+internal class ParadaForm(coleta: Boolean) {
     val chave = "p${++seq}"
     var coleta by mutableStateOf(coleta)
     var endereco by mutableStateOf("")
@@ -434,7 +434,7 @@ private fun Chip(texto: String, onClick: () -> Unit) {
 }
 
 @Composable
-private fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) -> Unit, onRemover: () -> Unit, onMarcar: () -> Unit) {
+internal fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) -> Unit, onRemover: () -> Unit, onMarcar: () -> Unit) {
     val c = Pw.cores
     val escopo = rememberCoroutineScope()
     var sugestoes by remember { mutableStateOf<List<EnderecoG>>(emptyList()) }

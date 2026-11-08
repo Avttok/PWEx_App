@@ -33,6 +33,12 @@ import java.io.File
 /** Uma versão publicada no GitHub (Releases "build-N" com o APK anexado). */
 data class Versao(val build: Int, val nome: String, val notas: String, val urlApk: String, val tamanho: Long, val publicadaEm: String?)
 
+/**
+ * O Dev escolheu a versão que deve rodar e esta não é ela: o app fica travado até atualizar.
+ * [maisNova] = a instalada é mais nova que a escolhida (Android não volta versão sem reinstalar).
+ */
+data class BloqueioVersao(val exigida: Int, val versao: Versao, val maisNova: Boolean)
+
 sealed interface EstadoAtualizacao {
     data object Ocioso : EstadoAtualizacao
     data object Verificando : EstadoAtualizacao
@@ -64,9 +70,19 @@ object Atualizador {
 
     val versaoInstalada: Int get() = buildAtual
 
+    /** Versão obrigatória (escolhida pelo Dev) diferente da instalada: o app inteiro fica atrás da janela. */
+    private val _bloqueio = MutableStateFlow<BloqueioVersao?>(null)
+    val bloqueio: StateFlow<BloqueioVersao?> = _bloqueio.asStateFlow()
+
     fun init(context: Context, build: Int) {
         app = context.applicationContext
         buildAtual = build
+        com.pwexpress.core.network.SupabaseHttp.versaoApp = build
+        com.pwexpress.core.network.SupabaseHttp.aoVersaoBloqueada = { escopo.launch { verificarObrigatoria() } }
+        // o último bloqueio vale mesmo sem internet até o app confirmar de novo
+        prefs().getInt("exigida", 0).takeIf { it > 0 && it != build }?.let { e ->
+            prefs().getString("exigida_url", null)?.let { url -> _bloqueio.value = BloqueioVersao(e, Versao(e, "build $e", "", url, 0, null), build > e) }
+        }
         // apaga APKs de atualizações já instaladas
         runCatching { pasta(context).listFiles()?.forEach { it.delete() } }
     }
@@ -76,6 +92,7 @@ object Atualizador {
 
     fun abrirJanela() { _janela.value = true }
     fun fecharJanela() {
+        if (_bloqueio.value != null) return // versão obrigatória: não dá para fechar
         _janela.value = false
         val e = _estado.value
         if (e is EstadoAtualizacao.Disponivel) prefs().edit { putInt("adiada", e.versao.build) }
@@ -84,6 +101,7 @@ object Atualizador {
     /** `automatico`: na abertura do app. Só abre a janela se for uma versão nova que ainda não foi adiada. */
     fun verificar(automatico: Boolean = false) {
         if (_estado.value is EstadoAtualizacao.Baixando || _estado.value is EstadoAtualizacao.Verificando) return
+        if (_bloqueio.value != null) { escopo.launch { verificarObrigatoria() }; return }
         escopo.launch {
             _estado.value = EstadoAtualizacao.Verificando
             val v = runCatching { buscarUltima() }.getOrElse { e ->
@@ -102,6 +120,45 @@ object Atualizador {
             _estado.value = EstadoAtualizacao.Disponivel(v)
             if (!automatico || prefs().getInt("adiada", 0) < v.build) _janela.value = true
         }
+    }
+
+    private var consultando = false
+
+    /**
+     * Pergunta ao servidor qual versão deve rodar. Diferente da instalada (ou, com "sempre a mais nova",
+     * há uma mais nova publicada) e o Dev mandou forçar: trava o app na janela de atualização.
+     */
+    suspend fun verificarObrigatoria() {
+        if (consultando) return
+        consultando = true
+        try {
+            val r = runCatching { PwCore.rpc.chamar("versao_app", JsonObject(emptyMap())) }.getOrNull() ?: return
+            if (!r.ok) return
+            val o = runCatching { Json.parseToJsonElement(r.corpo) as JsonObject }.getOrNull() ?: return
+            val exigida = o.long("exigida")?.toInt() ?: 0
+            val forcar = (o["forcar"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true"
+            val devLivre = (o["dev_livre"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true"
+            val novo: BloqueioVersao? = when {
+                !forcar || devLivre -> null
+                exigida > 0 && exigida == buildAtual -> null
+                exigida > 0 -> {
+                    val url = o.str("url") ?: return
+                    // as notas vêm do versao.json quando a escolhida é a mais nova
+                    val notas = runCatching { withContext(Dispatchers.IO) { buscarArquivo() } }.getOrNull()?.takeIf { it.build == exigida }
+                    BloqueioVersao(exigida, notas ?: Versao(exigida, "build $exigida", "", url, 0, null), buildAtual > exigida)
+                }
+                else -> runCatching { buscarUltima() }.getOrNull()?.takeIf { it.build > buildAtual }?.let { BloqueioVersao(it.build, it, false) }
+            }
+            prefs().edit {
+                if (novo != null && exigida > 0) { putInt("exigida", exigida); putString("exigida_url", novo.versao.urlApk) } else { remove("exigida"); remove("exigida_url") }
+            }
+            _bloqueio.value = novo
+            if (novo != null) {
+                val e = _estado.value
+                if (e !is EstadoAtualizacao.Baixando && e !is EstadoAtualizacao.Instalando) _estado.value = EstadoAtualizacao.Disponivel(novo.versao)
+                _janela.value = true
+            }
+        } finally { consultando = false }
     }
 
     /** Falha ao consultar, com o motivo real (aparece na janela). */

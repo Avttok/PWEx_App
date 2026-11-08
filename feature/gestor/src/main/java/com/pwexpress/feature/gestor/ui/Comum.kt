@@ -71,6 +71,23 @@ internal fun corMotoboy(s: String?, c: PwPaleta): Color = when (s) {
     else -> c.texto3
 }
 
+/**
+ * Quanto o motoboy aparece no mapa: em serviço 100%; offline vai esmaecendo conforme o tempo sem ser visto
+ * e some depois de [someH] horas (null = não mostrar).
+ */
+internal fun opacidadeNoMapa(status: String?, posicaoEm: Long?, someH: Double, esmaecer: Boolean, agora: Long = System.currentTimeMillis()): Float? {
+    if (status != null && status != "offline") return 1f
+    val horas = posicaoEm?.let { (agora - it) / 3_600_000.0 } ?: return null
+    if (someH > 0 && horas > someH) return null
+    if (!esmaecer) return 0.6f
+    val t = if (someH > 0) (horas / someH).coerceIn(0.0, 1.0) else 0.0
+    return (0.85 - 0.6 * t).toFloat()
+}
+
+/** Cor do anel do motoboy no mapa (modo teste segue o violeta). */
+internal fun corMotoboyMapa(s: String?, teste: Boolean, c: PwPaleta): Color =
+    if (teste && s != null && s != "offline") (if (s == "em_corrida") c.violeta.copy(red = c.violeta.red * 0.8f) else c.violeta) else corMotoboy(s, c)
+
 internal val rotuloMotoboy = mapOf("disponivel" to "Disponível", "em_corrida" to "Em corrida", "offline" to "Offline")
 
 internal fun hora(ms: Long?): String = ms?.let { Instant.ofEpochMilli(it).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("HH:mm")) } ?: "—"

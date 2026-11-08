@@ -197,3 +197,40 @@ fun JsonObject.paraItemRegistro() = ItemRegistro(
     quando = iso(str("quando")) ?: 0, tipo = str("tipo").orEmpty(), dados = obj("dados") ?: JsonObject(emptyMap()), fez = bool("fez"),
     numero = long("numero"), teste = bool("teste"), ganho = dbl("ganho"), valor = dbl("valor"), cliente = str("cliente"),
 )
+
+
+// ------------------------------------------------------------------ catálogo do pedido
+
+data class TipoPedidoG(val chave: String, val nome: String, val descricao: String?, val icone: String?)
+
+/** Campo do item: "oculto", "opcional" ou "obrigatorio" (o gestor define por categoria). */
+data class CategoriaG(
+    val id: String, val nome: String, val perigoso: Boolean, val fragil: Boolean, val icone: String?,
+    val campoDescricao: String, val campoPeso: String, val campoMedidas: String, val campoValor: String, val campoQuantidade: String,
+)
+
+fun JsonObject.paraTipoPedidoG() = TipoPedidoG(str("chave")!!, str("nome").orEmpty(), str("descricao"), str("icone"))
+fun JsonObject.paraCategoriaG() = CategoriaG(
+    str("id")!!, str("nome").orEmpty(), bool("perigoso"), bool("fragil"), str("icone"),
+    str("campo_descricao") ?: "opcional", str("campo_peso") ?: "opcional", str("campo_medidas") ?: "opcional",
+    str("campo_valor") ?: "oculto", str("campo_quantidade") ?: "opcional",
+)
+
+
+/** Veículo e CNH (campos de texto como no formulário; validade em dd/mm/aaaa). */
+data class VeiculoG(
+    val tipo: String = "moto", val modelo: String = "", val placa: String = "", val cor: String = "", val ano: String = "",
+    val cnhNumero: String = "", val cnhCategoria: String = "", val cnhValidade: String = "", val venceEmDias: Long? = null,
+)
+
+fun JsonObject.paraVeiculoG(): VeiculoG {
+    val validade = str("cnh_validade")?.takeIf { it.length >= 10 }
+    return VeiculoG(
+        tipo = str("tipo") ?: str("veiculo_tipo") ?: "moto", modelo = (str("modelo") ?: str("veiculo_modelo")).orEmpty(),
+        placa = (str("placa") ?: str("veiculo_placa")).orEmpty(), cor = (str("cor") ?: str("veiculo_cor")).orEmpty(),
+        ano = (str("ano") ?: str("veiculo_ano") ?: int("veiculo_ano")?.toString()).orEmpty(),
+        cnhNumero = str("cnh_numero").orEmpty(), cnhCategoria = str("cnh_categoria").orEmpty(),
+        cnhValidade = validade?.let { "${it.substring(8, 10)}/${it.substring(5, 7)}/${it.substring(0, 4)}" }.orEmpty(),
+        venceEmDias = validade?.let { runCatching { java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), java.time.LocalDate.parse(it.take(10))) }.getOrNull() },
+    )
+}

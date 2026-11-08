@@ -1,6 +1,16 @@
 package com.pwexpress.motoboy.ui
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -8,16 +18,19 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +39,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -41,90 +60,161 @@ import com.pwexpress.core.designsystem.PwBotaoOuro
 import com.pwexpress.core.designsystem.PwBotaoVidro
 import com.pwexpress.core.designsystem.PwErro
 import com.pwexpress.core.designsystem.PwIcones
+import com.pwexpress.core.designsystem.PwSelo
 import com.pwexpress.core.designsystem.PwSeloLogo
 import com.pwexpress.core.update.Atualizador
 import com.pwexpress.core.update.EstadoAtualizacao
 
-/** Janela de atualização: versão nova, notas, download com progresso e instalação. */
+/**
+ * Janela de atualização em tela cheia: logo no centro com um anel em degradê (que vira o progresso
+ * do download), notas da versão e os botões. Quando o Dev escolheu a versão e esta não é ela,
+ * a janela não fecha: o app só volta a funcionar na versão certa.
+ */
 @Composable
 fun JanelaAtualizacao() {
     val aberta by Atualizador.janela.collectAsState()
+    val bloqueio by Atualizador.bloqueio.collectAsState()
     val estado by Atualizador.estado.collectAsState()
-    if (!aberta) return
+    if (!aberta && bloqueio == null) return
     val c = Pw.cores
     val ctx = LocalContext.current
     val baixando = estado is EstadoAtualizacao.Baixando || estado is EstadoAtualizacao.Instalando
-    com.pwexpress.core.designsystem.PwTelaCheia(
-        "Atualização do app", { if (!baixando) Atualizador.fecharJanela() },
-        fecharVoltar = !baixando, centralizar = true,
+    val obrigatoria = bloqueio != null
+    val podeFechar = !baixando && !obrigatoria
+    Dialog(
+        onDismissRequest = { if (podeFechar) Atualizador.fecharJanela() },
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false, dismissOnClickOutside = false, dismissOnBackPress = podeFechar),
     ) {
-            val fracao = (estado as? EstadoAtualizacao.Baixando)?.fracao ?: if (estado is EstadoAtualizacao.Instalando) 1f else 0f
-            val anim by animateFloatAsState(fracao, label = "progresso")
-            Box(contentAlignment = Alignment.Center) {
-                if (baixando) CircularProgressIndicator(progress = { anim }, color = c.ouro, trackColor = c.borda, strokeWidth = 5.dp, modifier = Modifier.size(132.dp))
-                PwSeloLogo(if (baixando) 104.dp else 120.dp)
+        if (obrigatoria) BackHandler { /* não sai: versão obrigatória */ }
+        val fracao = (estado as? EstadoAtualizacao.Baixando)?.fracao ?: if (estado is EstadoAtualizacao.Instalando) 1f else 0f
+        val anim by animateFloatAsState(fracao, label = "progresso")
+        val giro = rememberInfiniteTransition(label = "giro")
+        val angulo by giro.animateFloat(0f, 360f, infiniteRepeatable(tween(5200, easing = LinearEasing)), label = "angulo")
+        val pulso by giro.animateFloat(0.9f, 1.06f, infiniteRepeatable(tween(1600), RepeatMode.Reverse), label = "pulso")
+
+        Box(
+            Modifier.fillMaxSize().background(c.fundo)
+                .background(Brush.radialGradient(listOf(c.ouro.copy(alpha = 0.30f), c.ouro.copy(alpha = 0.06f), Color.Transparent), radius = 1400f, center = Offset(540f, 620f))),
+        ) {
+            Column(
+                Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 24.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
+            ) {
+                if (podeFechar) {
+                    Row(Modifier.fillMaxWidth()) {
+                        Spacer(Modifier.weight(1f))
+                        com.pwexpress.core.designsystem.PwBotaoIcone(PwIcones.X, "Fechar", { Atualizador.fecharJanela() })
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+                // logo no centro, anel em degradê girando (ou o progresso do download)
+                Box(Modifier.size(210.dp), contentAlignment = Alignment.Center) {
+                    val grad = Brush.sweepGradient(listOf(c.ouroEscuro, c.ouroClaro, c.ouro, c.ouroEscuro))
+                    Canvas(Modifier.size(210.dp).rotate(if (baixando) -90f else angulo)) {
+                        val esp = 7.dp.toPx()
+                        drawCircle(c.borda, style = Stroke(esp))
+                        drawArc(grad, 0f, if (baixando) 360f * anim else 300f, false, style = Stroke(esp, cap = StrokeCap.Round))
+                    }
+                    Box(Modifier.size(170.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(Brush.radialGradient(listOf(c.ouro.copy(alpha = 0.22f * pulso), Color.Transparent))))
+                    PwSeloLogo(132.dp)
+                }
+                if (obrigatoria) PwSelo("ATUALIZAÇÃO OBRIGATÓRIA", c.ouro, icone = PwIcones.ShieldCheck)
+
+                when (val e = estado) {
+                    is EstadoAtualizacao.Baixando -> {
+                        Titulo("Baixando…")
+                        val mb = { b: Long -> "%.1f".format(b / 1_048_576.0).replace('.', ',') }
+                        Text("${mb(e.baixado)} de ${mb(e.total)} MB · ${(e.fracao * 100).toInt()}%", color = c.texto2, fontFamily = Archivo, textAlign = TextAlign.Center)
+                        Barra(anim)
+                        Texto("Pode deixar o app aberto. O Android vai pedir para confirmar a instalação.")
+                        PwBotaoVidro("Cancelar", onClick = { Atualizador.cancelarDownload() }, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth())
+                    }
+                    is EstadoAtualizacao.Instalando -> {
+                        Titulo("Instalando…")
+                        Texto("Confirme no aviso do Android. O app reabre sozinho já atualizado.")
+                        Barra(1f)
+                    }
+                    is EstadoAtualizacao.Erro -> {
+                        Titulo("Não deu certo")
+                        PwErro(e.mensagem, Modifier.widthIn(max = 420.dp))
+                        Instalar(ctx)
+                        if (e.versao != null) PwBotaoOuro("Tentar de novo", onClick = { Atualizador.baixar() }, icone = PwIcones.RefreshCw, modifier = Modifier.widthIn(max = 420.dp))
+                        if (podeFechar) PwBotaoVidro("Fechar", onClick = { Atualizador.fecharJanela() }, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth())
+                    }
+                    EstadoAtualizacao.Verificando -> { Titulo("Procurando atualização…"); Barra(null) }
+                    EstadoAtualizacao.EmDia -> if (!obrigatoria) {
+                        Titulo("O app está em dia")
+                        Texto("Você já tem tudo o que há de novo (build ${Atualizador.versaoInstalada}).")
+                        PwBotaoOuro("Ótimo", onClick = { Atualizador.fecharJanela() }, icone = PwIcones.Check, modifier = Modifier.widthIn(max = 420.dp))
+                    }
+                    else -> {
+                        val v = (e as? EstadoAtualizacao.Disponivel)?.versao ?: bloqueio?.versao
+                        val b = bloqueio
+                        when {
+                            b != null && b.maisNova -> {
+                                Titulo("Volte para a versão ${b.exigida}")
+                                Texto("Este celular está com a build ${Atualizador.versaoInstalada}, mais nova que a liberada pelo Dev (build ${b.exigida}). O Android só volta versão reinstalando: baixe a versão certa, desinstale este app e instale a baixada.")
+                                PwBotaoOuro("Baixar a build ${b.exigida}", onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(b.versao.urlApk)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+                                    icone = PwIcones.Download, altura = 58.dp, modifier = Modifier.widthIn(max = 420.dp))
+                                PwBotaoVidro("Desinstalar este app", onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+                                    icone = PwIcones.Trash2, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth())
+                            }
+                            v != null -> {
+                                Titulo(if (obrigatoria) "Atualize para continuar" else "Há uma nova versão")
+                                Texto(if (obrigatoria) "O Dev liberou a build ${v.build}. Enquanto não atualizar, o app fica parado: nada de rotas nem localização."
+                                      else "Build ${v.build}. Leva só um minuto e o app continua de onde parou.")
+                                Notas(v.notas)
+                                Instalar(ctx)
+                                PwBotaoOuro("Atualizar agora", onClick = { Atualizador.baixar() }, icone = PwIcones.Download, altura = 58.dp, modifier = Modifier.widthIn(max = 420.dp))
+                                if (podeFechar) PwBotaoVidro("Depois", onClick = { Atualizador.fecharJanela() }, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth())
+                            }
+                            else -> if (podeFechar) PwBotaoVidro("Fechar", onClick = { Atualizador.fecharJanela() }, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth())
+                        }
+                    }
+                }
+                Text("Instalada: build ${Atualizador.versaoInstalada}", color = c.texto3, fontSize = 12.sp, fontFamily = Archivo)
             }
-            when (val e = estado) {
-                is EstadoAtualizacao.Disponivel -> {
-                    Titulo("Há uma nova versão disponível")
-                    Text("Leva só um minuto e o app continua de onde parou.", color = c.texto2, fontFamily = Archivo, textAlign = TextAlign.Center)
-                    Notas(e.versao.notas)
-                    Instalar(ctx)
-                    PwBotaoOuro("Atualizar agora", onClick = { Atualizador.baixar() }, icone = PwIcones.Download, altura = 58.dp)
-                    PwBotaoVidro("Depois", onClick = { Atualizador.fecharJanela() }, modifier = Modifier.fillMaxWidth())
-                }
-                is EstadoAtualizacao.Baixando -> {
-                    Titulo("Baixando…")
-                    val mb = { b: Long -> "%.1f".format(b / 1_048_576.0).replace('.', ',') }
-                    Text("${mb(e.baixado)} de ${mb(e.total)} MB · ${(e.fracao * 100).toInt()}%", color = c.texto2, fontFamily = Archivo)
-                    Barra(anim)
-                    Text("Pode deixar o app aberto. O Android vai pedir para confirmar a instalação.", color = c.texto3, fontSize = 13.sp, textAlign = TextAlign.Center)
-                    PwBotaoVidro("Cancelar", onClick = { Atualizador.cancelarDownload() }, modifier = Modifier.fillMaxWidth())
-                }
-                is EstadoAtualizacao.Instalando -> {
-                    Titulo("Instalando…")
-                    Text("Confirme no aviso do Android. O app reabre sozinho já atualizado.", color = c.texto2, textAlign = TextAlign.Center)
-                    Barra(1f)
-                }
-                is EstadoAtualizacao.Erro -> {
-                    Titulo("Não deu certo")
-                    PwErro(e.mensagem)
-                    Instalar(ctx)
-                    if (e.versao != null) PwBotaoOuro("Tentar de novo", onClick = { Atualizador.baixar() }, icone = PwIcones.RefreshCw)
-                    PwBotaoVidro("Fechar", onClick = { Atualizador.fecharJanela() }, modifier = Modifier.fillMaxWidth())
-                }
-                EstadoAtualizacao.Verificando -> { Titulo("Procurando atualização…"); Barra(null) }
-                EstadoAtualizacao.EmDia -> {
-                    Titulo("O app está em dia")
-                    Text("Você já tem tudo o que há de novo.", color = c.texto2, textAlign = TextAlign.Center)
-                    PwBotaoOuro("Ótimo", onClick = { Atualizador.fecharJanela() }, icone = PwIcones.Check)
-                }
-                EstadoAtualizacao.Ocioso -> PwBotaoVidro("Fechar", onClick = { Atualizador.fecharJanela() }, modifier = Modifier.fillMaxWidth())
-            }
+        }
     }
 }
 
 @Composable
 private fun Titulo(t: String) {
-    Text(t, style = TextStyle(brush = Pw.cores.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 24.sp), textAlign = TextAlign.Center)
+    Text(t, style = TextStyle(brush = Pw.cores.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 28.sp, lineHeight = 32.sp), textAlign = TextAlign.Center)
+}
+
+@Composable
+private fun Texto(t: String) {
+    Text(t, color = Pw.cores.texto2, fontFamily = Archivo, fontSize = 15.sp, lineHeight = 21.sp, textAlign = TextAlign.Center, modifier = Modifier.widthIn(max = 420.dp))
 }
 
 @Composable
 private fun Notas(notas: String) {
     if (notas.isBlank()) return
     val c = Pw.cores
-    val forma = RoundedCornerShape(16.dp)
-    Column(Modifier.fillMaxWidth().heightIn(max = 200.dp).clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).verticalScroll(rememberScrollState()).padding(14.dp)) {
-        Text("O que há de novo", color = c.ouro, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
-        Spacer(Modifier.height(6.dp))
-        Text(notas, color = c.texto, fontSize = 14.sp, lineHeight = 20.sp)
+    val forma = RoundedCornerShape(20.dp)
+    Column(
+        Modifier.widthIn(max = 460.dp).fillMaxWidth().heightIn(max = 260.dp).clip(forma)
+            .background(Brush.verticalGradient(listOf(c.ouro.copy(alpha = 0.12f), c.vidroSutil)))
+            .border(1.dp, Brush.linearGradient(listOf(c.ouro.copy(alpha = 0.55f), c.borda)), forma)
+            .verticalScroll(rememberScrollState()).padding(16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(PwIcones.Sparkles, null, tint = c.ouro, modifier = Modifier.size(15.dp))
+            Spacer(Modifier.width(6.dp))
+            Text("O QUE HÁ DE NOVO", color = c.ouro, fontWeight = FontWeight.Bold, fontSize = 12.sp, letterSpacing = 1.sp)
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(notas, color = c.texto, fontSize = 14.sp, lineHeight = 21.sp)
     }
 }
 
 @Composable
 private fun Barra(fracao: Float?) {
     val c = Pw.cores
-    Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(99.dp)).background(c.borda)) {
+    Box(Modifier.widthIn(max = 420.dp).fillMaxWidth().height(10.dp).clip(RoundedCornerShape(99.dp)).background(c.borda)) {
         if (fracao != null) Box(Modifier.fillMaxWidth(fracao.coerceIn(0.02f, 1f)).height(10.dp).clip(RoundedCornerShape(99.dp)).background(c.gradOuro))
     }
 }
@@ -134,10 +224,10 @@ private fun Barra(fracao: Float?) {
 private fun Instalar(ctx: android.content.Context) {
     if (Atualizador.podeInstalar(ctx)) return
     val c = Pw.cores
-    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth()) {
         Icon(PwIcones.ShieldCheck, null, tint = c.ouro, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Text("Libere “Instalar apps desconhecidos” para o PW Express.", color = c.texto2, fontSize = 13.sp, modifier = Modifier.weight(1f))
     }
-    PwBotaoVidro("Abrir permissão", onClick = { Atualizador.abrirPermissaoInstalar(ctx) }, icone = PwIcones.Settings2, modifier = Modifier.fillMaxWidth())
+    PwBotaoVidro("Abrir permissão", onClick = { Atualizador.abrirPermissaoInstalar(ctx) }, icone = PwIcones.Settings2, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth())
 }

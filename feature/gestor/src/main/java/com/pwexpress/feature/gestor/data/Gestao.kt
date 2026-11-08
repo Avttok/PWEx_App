@@ -47,6 +47,8 @@ object Gestao {
         val trilhas: Map<String, List<PontoTrilha>> = emptyMap(),
         /** Logins de cliente por cadastro (empresa_id → contas). */
         val acessosCliente: Map<String, List<MembroG>> = emptyMap(),
+        /** Pedidos dos últimos 30 dias (os "para revisar" ficam no topo da aba Pedidos). */
+        val pedidos: List<PedidoG> = emptyList(),
         val carregado: Boolean = false,
     ) {
         fun membro(id: String?) = equipe.firstOrNull { it.id == id }
@@ -95,6 +97,12 @@ object Gestao {
                 val fav = async { rpc.rest("GET", "/rest/v1/empresa_favoritos?select=empresa_id,motoboy_id,ordem&order=ordem").exigirOk().lista() }
                 val cfg = async { rpc.rest("GET", "/rest/v1/configuracoes?select=chave,valor").exigirOk().lista() }
                 val vinculos = async { runCatching { rpc.rest("GET", "/rest/v1/perfis?select=id,empresa_id&empresa_id=not.is.null").exigirOk().lista().associate { it.str("id")!! to it.str("empresa_id")!! } }.getOrDefault(emptyMap()) }
+                val pedidos = async {
+                    runCatching {
+                        rpc.rest("GET", "/rest/v1/pedidos?select=*,pedido_pontos(ordem,tipo,endereco,contato_nome),pedido_itens(descricao,quantidade,peso_kg)&or=(criado_em.gte.${enc(desde)},status.eq.recebido)&order=criado_em.desc&limit=300")
+                            .exigirOk().lista().map { it.paraPedidoG() }
+                    }.getOrDefault(_dados.value.pedidos)
+                }
                 val todos = equipe.await().map { it.paraMembroG() }
                 val vinc = vinculos.await()
                 _dados.value = Dados(
@@ -107,6 +115,7 @@ object Gestao {
                     favoritos = fav.await().groupBy({ it.str("empresa_id")!! }, { it.str("motoboy_id")!! }),
                     config = cfg.await().associate { it.str("chave")!! to (it["valor"] ?: JsonNull) },
                     trilhas = trilha?.await() ?: _dados.value.trilhas,
+                    pedidos = pedidos.await(),
                     carregado = true,
                 )
             }
@@ -313,6 +322,38 @@ object Gestao {
 
     // ------------------------------------------------------------------ util
 
+    // ------------------------------------------------------------------ pedidos e rotas automáticas
+
+    /** acao: aprovar | ajustar | recusar | recalcular. [valor] = valor final do pedido (com motivo se mudar do calculado). */
+    suspend fun revisarPedido(id: String, acao: String, valor: Double? = null, motivo: String? = null) = acao {
+        PwCore.rpc.chamar("revisar_pedido", buildJsonObject {
+            put("p_pedido", id); put("p_acao", acao)
+            if (valor != null) put("p_valor", valor) else put("p_valor", JsonNull)
+            if (motivo != null) put("p_motivo", motivo) else put("p_motivo", JsonNull)
+        }).exigirOk(::traduzir); Unit
+    }
+
+    suspend fun cancelarPedido(id: String, motivo: String?) = acao {
+        PwCore.rpc.chamar("cancelar_pedido", buildJsonObject { put("p_pedido", id); if (motivo != null) put("p_motivo", motivo) else put("p_motivo", JsonNull) }).exigirOk(::traduzir); Unit
+    }
+
+    suspend fun roteirizarAgora() = acao { PwCore.rpc.chamar("roteirizar_agora", JsonObject(emptyMap())).exigirOk(::traduzir); Unit }
+
+    /** modo: quadro | melhor_primeiro | cascata; ou motoboy para entregar direto. */
+    suspend fun liberarRota(id: String, modo: String?, motoboy: String? = null) = acao {
+        PwCore.rpc.chamar("liberar_rota", buildJsonObject {
+            put("p_corrida", id)
+            if (modo != null) put("p_modo", modo) else put("p_modo", JsonNull)
+            if (motoboy != null) put("p_motoboy", motoboy) else put("p_motoboy", JsonNull)
+        }).exigirOk(::traduzir); Unit
+    }
+
+    suspend fun ajustarPagamento(id: String, ajuste: Double, motivo: String?) = acao {
+        PwCore.rpc.chamar("ajustar_pagamento_rota", buildJsonObject { put("p_corrida", id); put("p_ajuste", ajuste); if (motivo != null) put("p_motivo", motivo) else put("p_motivo", JsonNull) }).exigirOk(::traduzir); Unit
+    }
+
+    suspend fun recalcularPagamento(id: String) = acao { PwCore.rpc.chamar("recalcular_pagamento_rota", buildJsonObject { put("p_corrida", id) }).exigirOk(::traduzir); Unit }
+
     private suspend fun <T> acao(bloco: suspend () -> T): Result<T> = runCatching { bloco() }.recoverCatching { throw Exception(mensagem(it)) }
 
     private fun mensagem(e: Throwable): String = when (e) {
@@ -353,6 +394,17 @@ object Gestao {
         "membro_em_corrida" to "Essa pessoa está com uma corrida em andamento. Espere terminar antes.",
         "usuario_nao_encontrado" to "Conta não encontrada.",
         "nao_encontrado" to "CNPJ não encontrado na Receita.",
+        "pedido_finalizado" to "Esse pedido já terminou.",
+        "pedido_ja_faturado" to "Esse pedido já está numa fatura emitida.",
+        "pedido_ja_em_rota" to "Esse pedido já saiu com o motoboy.",
+        "pedido_em_andamento" to "Esse pedido já está em andamento.",
+        "rota_ja_pegada" to "Um motoboy já pegou essa rota.",
+        "rota_nao_pode_ser_liberada" to "Essa rota já foi entregue a um motoboy.",
+        "rota_sem_motoboy" to "Essa rota ainda não tem motoboy.",
+        "informe_o_motivo" to "Escreva o motivo da mudança de valor.",
+        "valor_invalido" to "Valor inválido.",
+        "ajuste_invalido" to "Ajuste inválido.",
+        "holerite_fechado" to "O holerite desse período já foi fechado. Reabra antes de mudar.",
     )
 
     fun traduzir(codigo: String): String? = erros[codigo]

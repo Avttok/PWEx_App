@@ -27,6 +27,11 @@ class FcmService : FirebaseMessagingService() {
                 Alarme.planejada(applicationContext, message.data["tipo"]!!, message.data["corrida_id"], message.data["agendada_para"])
                 runBlocking { withTimeoutOrNull(6_000) { Corridas.carregarPlanejadas() } }
             }
+            "rota_nova" -> {
+                Alarme.rotaNova(applicationContext, message.data["corrida_id"], message.data["planejada"] == "true",
+                    message.data["entregas"]?.toIntOrNull() ?: 1, message.data["sugerida"] == "true", message.data["agendada_para"])
+                runBlocking { withTimeoutOrNull(6_000) { Corridas.carregarRotas() } }
+            }
             "corrida_voltou" -> Alarme.avisarSilencioso(applicationContext, "Uma corrida que você recusou voltou ao lançamento")
             "cancelada" -> {
                 Alarme.pararOferta(applicationContext)

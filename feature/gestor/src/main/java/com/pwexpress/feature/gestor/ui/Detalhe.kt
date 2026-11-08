@@ -69,6 +69,8 @@ private val ROTULO_EVENTO = mapOf(
     "parada_concluida" to "Parada concluída", "concluida" to "Corrida concluída", "cancelada" to "Cancelada", "reservada" to "Reservada",
     "reserva_cancelada" to "Reserva desfeita", "reagendada" to "Horário mudado", "planejada_despachada" to "Planejada foi para o despacho",
     "planejada_atrasada" to "Atrasada: não iniciada no horário",
+    "montada" to "Rota montada", "liberada" to "Rota liberada", "no_quadro" to "No quadro para todos", "rota_pegada" to "Pegou a rota no quadro",
+    "entrega_movida" to "Entrega movida", "otimizada" to "Caminho otimizado", "pagamento_ajustado" to "Pagamento ajustado",
 )
 
 @Composable
@@ -135,7 +137,7 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
             if (corrida.valorMotoboy != null) {
                 Espaco(8)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    PwNumero("Motoboy ${corrida.repassePct?.let { numeroBr(it) } ?: "—"}%", moedaBr(corrida.valorMotoboy), Modifier.weight(1f), icone = PwIcones.Bike)
+                    PwNumero(if (corrida.pagCalculo != null && corrida.pagCalculo["modo"]?.toString()?.contains("percentual") != true) "Motoboy (por km)" else "Motoboy ${corrida.repassePct?.let { numeroBr(it) } ?: "—"}%", moedaBr(corrida.valorMotoboy), Modifier.weight(1f), icone = PwIcones.Bike)
                     PwNumero("Gestão", moedaBr(corrida.valorGestao), Modifier.weight(1f), icone = PwIcones.Landmark)
                 }
                 if ((corrida.valorDev ?: 0.0) > 0) {
@@ -166,6 +168,7 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
         } else if (corrida.pagamentoStatus == "pago") {
             TextoDica("Pago pelo cliente" + (corrida.pagamentoMetodo?.let { " · ${if (it == "pix") "PIX" else "Cartão"}" } ?: ""))
         }
+        if (corrida.automatica || corrida.pagCalculo != null || corrida.status == Status.MONTADA) BlocoRotaG(corrida, ocupado) { bloco -> acao(bloco) }
         if (corrida.planejada) BlocoPlanejadaG(corrida, ocupado) { bloco -> acao(bloco) }
         if (corrida.status == Status.SEM_MOTOBOY) {
             var moto by remember { mutableStateOf<String?>(null) }

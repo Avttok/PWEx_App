@@ -158,7 +158,8 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
                     corrida.empresaNome?.let { Text(it, color = c.texto2, fontSize = 12.sp, fontFamily = Archivo, maxLines = 1) }
                 }
                 Spacer(Modifier.width(10.dp))
-                PwValor(moeda(corrida.valorMotoboy), Modifier.widthIn(max = 150.dp), tamanhoMax = 22, cor = c.texto)
+                if (corrida.valoresVisiveis && corrida.valorMotoboy != null) PwValor(moeda(corrida.valorMotoboy), Modifier.widthIn(max = 150.dp), tamanhoMax = 22, cor = c.texto)
+                else Text("${corrida.paradas.count { it.tipo == TipoParada.ENTREGA && it.status == StatusParada.CONCLUIDA }}/${corrida.paradas.count { it.tipo == TipoParada.ENTREGA }} entregas", color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1)
             }
             // navegação externa, sempre à mão
             if (parada != null) {
@@ -205,6 +206,7 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
                     parada.contatoNome?.let { Text("Contato: $it", color = c.texto2) }
                     parada.instrucoes?.let { Text(it, color = c.ouro) }
                     ReferenciasParada(parada.referencias)
+                    ItensParada(parada)
                     parada.contatoTelefone?.let { tel ->
                         Spacer(Modifier.height(10.dp))
                         PwBotaoVidro("Ligar para $tel", onClick = { ligar(ctx, tel) }, icone = PwIcones.Phone)

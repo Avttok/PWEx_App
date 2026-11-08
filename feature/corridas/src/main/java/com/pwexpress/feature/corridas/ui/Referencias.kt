@@ -40,3 +40,27 @@ fun ReferenciasParada(referencias: List<Referencia>, modifier: Modifier = Modifi
         }
     }
 }
+
+/** Rotas automáticas: de qual cliente/pedido é a parada e os itens (com selos de perigoso/frágil). */
+@Composable
+fun ItensParada(p: com.pwexpress.feature.corridas.data.Parada, modifier: Modifier = Modifier) {
+    if (p.cliente == null && p.pedidoNumero == null && p.itens.isEmpty()) return
+    val c = Pw.cores
+    Column(modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        if (p.cliente != null || p.pedidoNumero != null) {
+            Text(
+                listOfNotNull(p.cliente, p.pedidoNumero?.let { "pedido #$it" }).joinToString(" · "),
+                color = c.texto2, fontFamily = Archivo, fontWeight = FontWeight.SemiBold, fontSize = 12.5.sp,
+            )
+        }
+        p.itens.forEach { i ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(PwIcones.Package2, null, tint = if (i.perigoso) c.vermelho else c.texto3, modifier = Modifier.size(13.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("${i.quantidade}× ${i.descricao}", color = c.texto, fontSize = 12.5.sp, modifier = Modifier.weight(1f, fill = false))
+                if (i.perigoso) { Spacer(Modifier.width(6.dp)); com.pwexpress.core.designsystem.PwSelo("PERIGOSO", c.vermelho, icone = PwIcones.Alerta) }
+                if (i.fragil) { Spacer(Modifier.width(6.dp)); com.pwexpress.core.designsystem.PwSelo("FRÁGIL", c.ouro) }
+            }
+        }
+    }
+}

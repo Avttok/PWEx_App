@@ -62,6 +62,10 @@ data class ChavePix(val id: String, val tipo: String, val chave: String, val tit
 data class Ganhos(
     val hoje: Double, val semana: Double, val mes: Double, val corridasHoje: Int,
     val total: Double = 0.0, val corridasSemana: Int = 0, val corridasMes: Int = 0, val kmHoje: Double = 0.0, val kmMes: Double = 0.0,
+    /** O gestor deixa o motoboy ver valores? (sem isso o app mostra rotas, entregas e km) */
+    val valoresVisiveis: Boolean = true,
+    val entregasHoje: Int = 0, val entregasPeriodo: Int = 0, val corridasPeriodo: Int = 0, val kmPeriodo: Double = 0.0,
+    val periodoTotal: Double = 0.0, val periodoInicio: String? = null, val periodoFim: String? = null,
 )
 
 object Perfis {
@@ -85,6 +89,11 @@ object Perfis {
                     corridasHoje = o.num("corridas_hoje").toInt(),
                     total = o.num("total"), corridasSemana = o.num("corridas_semana").toInt(), corridasMes = o.num("corridas_mes").toInt(),
                     kmHoje = o.num("km_hoje"), kmMes = o.num("km_mes"),
+                    valoresVisiveis = (o["valores_visiveis"] as? JsonPrimitive)?.booleanOrNull ?: true,
+                    entregasHoje = o.num("entregas_hoje").toInt(), entregasPeriodo = o.num("entregas_periodo").toInt(),
+                    corridasPeriodo = o.num("corridas_periodo").toInt(), kmPeriodo = o.num("km_periodo"), periodoTotal = o.num("periodo_total"),
+                    periodoInicio = (o["periodo_inicio"] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content,
+                    periodoFim = (o["periodo_fim"] as? JsonPrimitive)?.takeIf { it !is JsonNull }?.content,
                 )
             }
         }

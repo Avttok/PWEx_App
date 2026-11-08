@@ -78,6 +78,7 @@ class MainActivity : ComponentActivity() {
                     val oferta by Corridas.oferta.collectAsState()
                     val ativa by Corridas.ativa.collectAsState()
                     val planejadas by Corridas.planejadas.collectAsState()
+                    val rotasQuadro by Corridas.rotas.collectAsState()
                     val info by Tracking.info.collectAsState()
                     val perfil by Perfis.perfil.collectAsState()
                     var noPerfil by remember { mutableStateOf(false) }
@@ -93,7 +94,7 @@ class MainActivity : ComponentActivity() {
                     var esperouPerfil by remember { mutableStateOf(false) }
                     LaunchedEffect(sessao?.email) { esperouPerfil = false; delay(8_000); esperouPerfil = true }
 
-                    LaunchedEffect(abrirAba.value) { abrirAba.value?.let { if (it == "planejadas") { aba = "corridas"; painel = Painel.MOTOBOY; naConfig = false }; abrirAba.value = null } }
+                    LaunchedEffect(abrirAba.value) { abrirAba.value?.let { if (it == "planejadas" || it == "rotas") { aba = "corridas"; painel = Painel.MOTOBOY; naConfig = false }; abrirAba.value = null } }
 
                     // se algo for desligado depois, a tela de preparo volta
                     LaunchedEffect(Unit) { ciclo.repeatOnLifecycle(Lifecycle.State.RESUMED) { preparado = lerPreparo(ctx).completo } }
@@ -108,7 +109,7 @@ class MainActivity : ComponentActivity() {
                     // planejadas: contador da aba sempre em dia
                     LaunchedEffect(sessao != null, perfil?.motoboy) {
                         if (sessao == null || perfil?.motoboy != true) return@LaunchedEffect
-                        ciclo.repeatOnLifecycle(Lifecycle.State.RESUMED) { while (true) { Corridas.carregarPlanejadas(); delay(60_000) } }
+                        ciclo.repeatOnLifecycle(Lifecycle.State.RESUMED) { while (true) { Corridas.carregarPlanejadas(); Corridas.carregarRotas(); delay(30_000) } }
                     }
 
                     BackHandler(enabled = noPerfil) { noPerfil = false }
@@ -195,12 +196,12 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
                             val reservas = planejadas.count { it.minha }
-                            val livres = planejadas.count { !it.minha && it.status == "agendada" }
+                            val livres = (rotasQuadro.map { it.id } + planejadas.filter { !it.minha && it.status == "agendada" }.map { it.id }).toSet().size
                             PwBarraAbas(
                                 listOfNotNull(
                                     PwAba("inicio", "Início", PwIcones.House),
-                                    PwAba("corridas", "Corridas", PwIcones.Route, if (comPlanejadas) livres + reservas else 0),
-                                    if (comCarteira) PwAba("carteira", "Carteira", PwIcones.Wallet) else null,
+                                    PwAba("corridas", "Rotas", PwIcones.Route, livres + if (comPlanejadas) reservas else 0),
+                                    if (comCarteira) PwAba("carteira", "Holerite", PwIcones.ReceiptText) else null,
                                 ),
                                 abaMotoboy, { aba = it },
                                 Modifier.align(Alignment.BottomCenter),

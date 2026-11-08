@@ -99,7 +99,7 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
             PwLogo(tamanho = 52, soSelo = true)
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text("NOVA CORRIDA", maxLines = 1, softWrap = false, style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 20.sp, letterSpacing = 1.sp))
+                Text(if (corrida.entregas > 1) "NOVA ROTA" else "NOVA CORRIDA", maxLines = 1, softWrap = false, style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 20.sp, letterSpacing = 1.sp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(corrida.numeroExibicao + (corrida.empresaNome?.let { " · $it" } ?: ""), color = c.texto2, fontFamily = Archivo, maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
@@ -124,8 +124,23 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
         Spacer(Modifier.height(18.dp))
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PwCartao(destaque = true) {
-                PwRotulo("Você recebe")
-                PwValor(moeda(corrida.valorMotoboy), tamanhoMax = 46)
+                if (corrida.valoresVisiveis && corrida.valorMotoboy != null) {
+                    PwRotulo("Você recebe")
+                    PwValor(moeda(corrida.valorMotoboy), tamanhoMax = 46)
+                } else {
+                    PwRotulo(if (corrida.planejada) "Rota planejada" else "Rota agora")
+                    Text(
+                        "${corrida.entregas} entrega${if (corrida.entregas == 1) "" else "s"}" + if (corrida.coletas > 1) " · ${corrida.coletas} coletas" else "",
+                        style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 34.sp),
+                    )
+                }
+                if (corrida.urgente || corrida.perigoso) {
+                    Spacer(Modifier.height(6.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (corrida.urgente) PwSelo("URGENTE", c.vermelho, icone = PwIcones.Flame)
+                        if (corrida.perigoso) PwSelo("CARGA PERIGOSA", c.vermelho, icone = PwIcones.Alerta)
+                    }
+                }
                 Spacer(Modifier.height(8.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
                     Info("Até a coleta", km(oferta.distanciaM))
@@ -148,6 +163,7 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
                             Text(if (coleta) "COLETA" else "ENTREGA", color = if (coleta) c.ouro else c.texto2, fontWeight = FontWeight.Bold, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = Archivo)
                             Text(p.endereco, style = MaterialTheme.typography.bodyMedium, color = c.texto)
                             ReferenciasParada(p.referencias)
+                            ItensParada(p)
                         }
                     }
                 }

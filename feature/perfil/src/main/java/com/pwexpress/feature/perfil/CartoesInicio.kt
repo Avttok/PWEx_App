@@ -83,24 +83,34 @@ fun CartaoGanhos(onCarteira: (() -> Unit)? = null) {
     LaunchedEffect(Unit) { Perfis.carregar() }
     val g = ganhos
 
+    val periodo = g?.periodoInicio?.let { ini -> g.periodoFim?.let { fim -> "${ini.substring(8, 10)}/${ini.substring(5, 7)} – ${fim.substring(8, 10)}/${fim.substring(5, 7)}" } }
     PwCartao(destaque = true, modifier = if (onCarteira != null) Modifier.clickable(onClick = onCarteira) else Modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            PwRotulo(if (perfil?.modoTeste == true) "Ganhos de teste" else "Seus ganhos", Modifier.weight(1f))
+            PwRotulo(if (perfil?.modoTeste == true) "Seu dia (teste)" else "Seu dia", Modifier.weight(1f))
             if (onCarteira != null) {
-                Text("Carteira", color = c.ouro, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, fontFamily = Archivo)
+                Text("Holerite", color = c.ouro, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, fontFamily = Archivo)
                 androidx.compose.material3.Icon(PwIcones.ChevronRight, null, tint = c.ouro, modifier = Modifier.size(16.dp))
             }
         }
         Spacer(Modifier.height(4.dp))
-        PwValor(moeda(g?.hoje ?: 0.0), Modifier.fillMaxWidth(), tamanhoMax = 40)
-        Text(
-            "hoje · ${g?.corridasHoje ?: 0} corrida${if ((g?.corridasHoje ?: 0) == 1) "" else "s"} · ${"%.1f".format(br, g?.kmHoje ?: 0.0)} km",
-            color = c.texto2, fontFamily = Archivo, fontSize = 13.sp,
-        )
+        if (g?.valoresVisiveis != false) {
+            PwValor(moeda(g?.hoje ?: 0.0), Modifier.fillMaxWidth(), tamanhoMax = 40)
+            Text(
+                "hoje · ${g?.entregasHoje ?: 0} entrega${if ((g?.entregasHoje ?: 0) == 1) "" else "s"} · ${"%.1f".format(br, g?.kmHoje ?: 0.0)} km",
+                color = c.texto2, fontFamily = Archivo, fontSize = 13.sp,
+            )
+        } else {
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text("${g.entregasHoje}", style = androidx.compose.ui.text.TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 40.sp), color = c.ouro)
+                Spacer(Modifier.width(8.dp))
+                Text("entrega${if (g.entregasHoje == 1) "" else "s"} hoje", color = c.texto2, fontFamily = Archivo, fontSize = 15.sp, modifier = Modifier.padding(bottom = 8.dp))
+            }
+            Text("${g.corridasHoje} rota${if (g.corridasHoje == 1) "" else "s"} · ${"%.1f".format(br, g.kmHoje)} km rodados", color = c.texto2, fontFamily = Archivo, fontSize = 13.sp)
+        }
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Mini("Semana · ${g?.corridasSemana ?: 0}", moeda(g?.semana ?: 0.0), Modifier.weight(1f))
-            Mini("Mês · ${g?.corridasMes ?: 0}", moeda(g?.mes ?: 0.0), Modifier.weight(1f))
+            Mini("Período${periodo?.let { " · $it" } ?: ""}", if (g?.valoresVisiveis != false) moeda(g?.periodoTotal ?: 0.0) else "${g.entregasPeriodo} entregas", Modifier.weight(1f))
+            Mini("Rotas no período", "${g?.corridasPeriodo ?: 0} · ${"%.0f".format(br, g?.kmPeriodo ?: 0.0)} km", Modifier.weight(1f))
         }
     }
 }

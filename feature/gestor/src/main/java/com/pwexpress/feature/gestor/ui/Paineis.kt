@@ -332,8 +332,9 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
 
     val todas = dados.corridas.filter { it.teste == teste }
     val planejadas = todas.filter { it.planejada }.sortedBy { it.agendadaPara ?: Long.MAX_VALUE }
+    val esperando = todas.filter { it.status == Status.MONTADA }
     val listas = listOf(
-        todas.filter { it.ativa }, planejadas, todas.filter { it.status == Status.CONCLUIDA }, todas.filter { it.status == Status.CANCELADA }, todas,
+        todas.filter { it.ativa } + esperando, planejadas, todas.filter { it.status == Status.CONCLUIDA }, todas.filter { it.status == Status.CANCELADA }, todas,
     )
     val lista = listas[filtro]
     val ativas = listas[0]
@@ -344,7 +345,7 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
     }
 
     TelaComMapa(
-        titulo = if (selecionando) "${marcadas.size} selecionada${if (marcadas.size == 1) "" else "s"}" else "Corridas",
+        titulo = if (selecionando) "${marcadas.size} selecionada${if (marcadas.size == 1) "" else "s"}" else "Rotas",
         subtitulo = "${if (ativas.isEmpty()) "Nenhuma ativa" else if (ativas.size == 1) "1 ativa" else "${ativas.size} ativas"} agora${if (teste) " · modo teste" else ""}",
         mapa = { margem, enquadrar ->
             PwMapa(paradas = pinos, rota = null, minhaPosicao = null, marcadores = online, modifier = Modifier.fillMaxSize(), enquadrar = "${pinos.size}-$enquadrar", margemBaixo = margem)
@@ -363,7 +364,8 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
         item {
             PwFiltros(listOf("Ativas" to listas[0].size, "Planejadas" to planejadas.size, "Concluídas" to 0, "Canceladas" to 0, "Todas" to 0), filtro, { filtro = it })
             Spacer(Modifier.height(4.dp))
-            TextoDica("${lista.size} corrida${if (lista.size == 1) "" else "s"} · últimos 30 dias")
+            if (esperando.isNotEmpty() && filtro == 0) TextoDica("${esperando.size} rota${if (esperando.size == 1) "" else "s"} montada${if (esperando.size == 1) "" else "s"} esperando você soltar para os motoboys.")
+            TextoDica("${lista.size} rota${if (lista.size == 1) "" else "s"} · últimos 30 dias")
             PwErro(erro)
             if (!dados.carregado) PwCarregando()
             else if (lista.isEmpty()) PwVazio(

@@ -54,13 +54,10 @@ fun JanelaAtualizacao() {
     val c = Pw.cores
     val ctx = LocalContext.current
     val baixando = estado is EstadoAtualizacao.Baixando || estado is EstadoAtualizacao.Instalando
-    Dialog(onDismissRequest = { if (!baixando) Atualizador.fecharJanela() }, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = !baixando)) {
-        val forma = RoundedCornerShape(28.dp)
-        Column(
-            Modifier.padding(18.dp).fillMaxWidth().clip(forma).background(c.fundo2).border(1.dp, c.bordaForte, forma).padding(24.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
+    com.pwexpress.core.designsystem.PwTelaCheia(
+        "Atualização do app", { if (!baixando) Atualizador.fecharJanela() },
+        fecharVoltar = !baixando, centralizar = true,
+    ) {
             val fracao = (estado as? EstadoAtualizacao.Baixando)?.fracao ?: if (estado is EstadoAtualizacao.Instalando) 1f else 0f
             val anim by animateFloatAsState(fracao, label = "progresso")
             Box(contentAlignment = Alignment.Center) {
@@ -104,7 +101,6 @@ fun JanelaAtualizacao() {
                 }
                 EstadoAtualizacao.Ocioso -> PwBotaoVidro("Fechar", onClick = { Atualizador.fecharJanela() }, modifier = Modifier.fillMaxWidth())
             }
-        }
     }
 }
 

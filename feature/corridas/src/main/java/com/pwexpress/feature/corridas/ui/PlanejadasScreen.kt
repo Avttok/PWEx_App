@@ -23,6 +23,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -88,13 +89,17 @@ fun relativoTexto(ms: Long, agora: Long = System.currentTimeMillis()): String {
     return if (min >= 0) "em $t" else "há $t"
 }
 
-/** Corridas com hora marcada: as livres para reservar e as minhas reservas. */
+/**
+ * Rotas: o quadro com tudo o que dá para pegar agora (express e planejadas com o mesmo peso),
+ * as minhas reservas e o histórico.
+ */
 @Composable
 fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {}, comPlanejadas: Boolean = true) {
     val c = Pw.cores
     val lista by Corridas.planejadas.collectAsState()
+    val rotas by Corridas.rotas.collectAsState()
     val historico by Corridas.historico.collectAsState()
-    var aba by remember { mutableIntStateOf(if (comPlanejadas) 0 else 2) }
+    var aba by rememberSaveable { mutableIntStateOf(0) }
     var carregando by remember { mutableStateOf(true) }
     var erro by remember { mutableStateOf<String?>(null) }
     var agora by remember { mutableLongStateOf(System.currentTimeMillis()) }
@@ -104,17 +109,16 @@ fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {},
 
     LaunchedEffect(aba) { if (aba == 2) Corridas.carregarHistorico().onFailure { erro = it.message } }
     LaunchedEffect(Unit) {
-        if (!comPlanejadas) return@LaunchedEffect
         while (true) {
-            Corridas.carregarPlanejadas().onFailure { erro = it.message }.onSuccess { erro = null }
+            Corridas.carregarRotas().onFailure { erro = it.message }.onSuccess { erro = null }
+            if (comPlanejadas) Corridas.carregarPlanejadas()
             carregando = false
-            repeat(6) { delay(5_000); agora = System.currentTimeMillis() }
+            repeat(2) { delay(4_000); agora = System.currentTimeMillis() }
         }
     }
 
-    val livres = lista.filter { !it.minha && it.status == "agendada" }
+    val disponiveis = rotas.filter { comPlanejadas || !it.planejada }
     val minhas = lista.filter { it.minha }
-    val mostrar = if (aba == 0) livres else minhas
 
     fun acao(id: String, bloco: suspend () -> Result<Unit>, aoTerminar: () -> Unit = {}) {
         ocupado = id
@@ -123,46 +127,60 @@ fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {},
             ocupado = null
         }
     }
+    fun pegar(r: Corrida) {
+        ocupado = r.id
+        escopo.launch {
+            Corridas.pegarRota(r.id)
+                .onSuccess { ativa ->
+                    erro = null
+                    com.pwexpress.core.designsystem.PwToast.mostrar(if (ativa) "A rota é sua. Bora!" else "Reservada para você. Inicie perto do horário.", titulo = "Rota ${r.numeroExibicao}")
+                    if (ativa) onIniciada() else aba = 1
+                }
+                .onFailure { erro = it.message; Corridas.carregarRotas() }
+            ocupado = null
+        }
+    }
 
     PwPagina(modifier) {
-        PwCabeca(PwIcones.Route, "Corridas", if (aba == 2) "As corridas que você já fez" else "Com hora marcada: reserve e inicie no horário")
-        if (comPlanejadas) PwSegmentado(
-            listOf("Livres" to PwIcones.CalendarClock, "Reservas" to PwIcones.CalendarCheck, "Histórico" to PwIcones.History),
-            aba, { aba = it },
+        PwCabeca(PwIcones.Route, "Rotas", when (aba) { 0 -> "Pegue uma rota: quem pegar primeiro leva"; 1 -> "As que você reservou"; else -> "As rotas que você já fez" })
+        PwSegmentado(
+            listOfNotNull("Disponíveis" to PwIcones.Megaphone, ("Minhas" to PwIcones.CalendarCheck).takeIf { comPlanejadas }, "Histórico" to PwIcones.History),
+            if (!comPlanejadas && aba == 2) 1 else aba, { aba = if (!comPlanejadas && it == 1) 2 else it },
         )
         PwErro(erro)
-        if (aba == 2) {
-            if (com.pwexpress.core.perfil.Perfis.perfil.value?.modulo("trilhas_mapa") != false) MeusPercursos()
-            val h = historico
-            when {
-                h == null -> PwCarregando(texto = "Buscando suas corridas…")
-                h.isEmpty() -> PwVazio("Você ainda não fez nenhuma corrida${if (com.pwexpress.core.designsystem.TemaApp.modoTeste.value) " de teste" else ""}.", icone = PwIcones.History)
-                else -> h.forEach { CartaoFeita(it) }
+        when (aba) {
+            2 -> {
+                if (com.pwexpress.core.perfil.Perfis.perfil.value?.modulo("trilhas_mapa") != false) MeusPercursos()
+                val h = historico
+                when {
+                    h == null -> PwCarregando(texto = "Buscando suas rotas…")
+                    h.isEmpty() -> PwVazio("Você ainda não fez nenhuma rota${if (com.pwexpress.core.designsystem.TemaApp.modoTeste.value) " de teste" else ""}.", icone = PwIcones.History)
+                    else -> h.forEach { CartaoFeita(it) }
+                }
             }
-            return@PwPagina
-        }
-        when {
-            carregando && lista.isEmpty() -> PwCarregando(texto = "Buscando corridas planejadas…")
-            mostrar.isEmpty() -> PwVazio(
-                if (aba == 0) "Nenhuma corrida planejada livre agora. Quando o gestor planejar uma, você recebe um aviso."
-                else "Você não tem reservas. Reserve uma corrida na aba Livres.",
-                icone = PwIcones.CalendarClock,
-            )
-            else -> mostrar.forEach { corrida ->
-                CartaoPlanejada(
-                    corrida, agora, ocupado == corrida.id,
-                    onReservar = { acao(corrida.id, { Corridas.reservar(corrida.id) }) { aba = 1 } },
-                    onIniciar = { acao(corrida.id, { Corridas.iniciarPlanejada(corrida.id) }, onIniciada) },
-                    onDesistir = { desistindo = corrida },
-                )
+            1 -> when {
+                minhas.isEmpty() -> PwVazio("Você não tem reservas. As planejadas aparecem em Disponíveis.", icone = PwIcones.CalendarClock)
+                else -> minhas.forEach { corrida ->
+                    CartaoPlanejada(
+                        corrida, agora, ocupado == corrida.id,
+                        onReservar = {},
+                        onIniciar = { acao(corrida.id, { Corridas.iniciarPlanejada(corrida.id) }, onIniciada) },
+                        onDesistir = { desistindo = corrida },
+                    )
+                }
+            }
+            else -> when {
+                carregando && disponiveis.isEmpty() -> PwCarregando(texto = "Buscando rotas…")
+                disponiveis.isEmpty() -> PwVazio("Nenhuma rota disponível agora. Fique online: quando surgir uma, você recebe um aviso.", icone = PwIcones.Megaphone)
+                else -> disponiveis.forEach { r -> CartaoRota(r, agora, ocupado == r.id, onPegar = { pegar(r) }) }
             }
         }
     }
 
     desistindo?.let { cor ->
         var motivo by remember(cor.id) { mutableStateOf("") }
-        PwJanela("Desistir da corrida ${cor.numeroExibicao}?", onFechar = { desistindo = null }) {
-            Text("Ela volta a ficar livre e os outros motoboys são avisados.", color = c.texto2)
+        PwJanela("Desistir da rota ${cor.numeroExibicao}?", onFechar = { desistindo = null }) {
+            Text("Ela volta para o quadro e os outros motoboys são avisados.", color = c.texto2)
             PwCampo(motivo, { motivo = it }, "Motivo (opcional)")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PwBotaoVidro("Manter", onClick = { desistindo = null }, modifier = Modifier.weight(1f))
@@ -174,6 +192,69 @@ fun PlanejadasScreen(modifier: Modifier = Modifier, onIniciada: () -> Unit = {},
         }
     }
 }
+
+/** Uma rota do quadro: express ("Agora") e planejada (com horário) no mesmo formato. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun CartaoRota(r: Corrida, agora: Long, ocupado: Boolean, onPegar: () -> Unit) {
+    val c = Pw.cores
+    val coleta = r.paradas.firstOrNull { it.tipo == TipoParada.COLETA }
+    val entregas = r.paradas.filter { it.tipo == TipoParada.ENTREGA }
+    PwCartao(destaque = r.sugerida, cor = when { r.urgente -> c.vermelho.copy(alpha = 0.7f); r.sugerida -> c.ouro; else -> null }) {
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(r.numeroExibicao, color = c.texto2, fontWeight = FontWeight.Bold, fontFamily = Archivo, fontSize = 13.sp, modifier = Modifier.align(Alignment.CenterVertically))
+            if (r.sugerida) PwSelo("Melhor pra você", c.ouro, icone = PwIcones.Sparkles)
+            if (r.planejada) PwSelo("Planejada", c.azul, icone = PwIcones.CalendarClock) else PwSelo("Agora", c.verde, icone = PwIcones.Zap)
+            if (r.urgente) PwSelo("Urgente", c.vermelho, icone = PwIcones.Zap)
+            if (r.perigoso) PwSelo("Perigoso", c.vermelho, icone = PwIcones.FlaskConical)
+        }
+        Spacer(Modifier.height(8.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                val titulo = r.agendadaPara?.let { quandoTexto(it).replaceFirstChar { ch -> ch.uppercase() } } ?: "Para agora"
+                com.pwexpress.core.designsystem.TextoAjustado(titulo, TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, color = c.texto), 20, minimo = 14)
+                Text(
+                    listOfNotNull(r.agendadaPara?.let { relativoTexto(it, agora) }, r.distanciaAteColetaM?.let { "coleta a ${kmCurto(it)} de você" }).joinToString(" · "),
+                    color = if (r.planejada) c.azul else c.verde, fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1,
+                )
+            }
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.widthIn(max = 130.dp), horizontalAlignment = Alignment.End) {
+                if (r.valoresVisiveis && r.valorMotoboy != null) PwValor(moedaBr(r.valorMotoboy), tamanhoMax = 26)
+                else Text("${r.entregas}", style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 28.sp), color = c.ouro)
+                Text(if (r.valoresVisiveis && r.valorMotoboy != null) "${r.entregas} entrega${if (r.entregas == 1) "" else "s"}" else "entrega${if (r.entregas == 1) "" else "s"}", color = c.texto3, fontSize = 12.sp)
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        val forma = RoundedCornerShape(14.dp)
+        Column(Modifier.fillMaxWidth().clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            coleta?.let { p ->
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(PwIcones.ArrowUpFromLine, null, tint = c.ouro, modifier = Modifier.size(16.dp).padding(top = 2.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(p.endereco + if (r.coletas > 1) "  (+${r.coletas - 1} coleta${if (r.coletas > 2) "s" else ""})" else "", color = c.texto, fontSize = 14.sp, maxLines = 2)
+                }
+            }
+            entregas.take(3).forEachIndexed { i, p ->
+                Row(verticalAlignment = Alignment.Top) {
+                    Icon(PwIcones.ArrowDownToLine, null, tint = c.texto2, modifier = Modifier.size(16.dp).padding(top = 2.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(p.endereco, color = c.texto, fontSize = 13.5.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                }
+                if (i == 2 && entregas.size > 3) Text("+ ${entregas.size - 3} entrega${if (entregas.size > 4) "s" else ""}", color = c.texto3, fontSize = 12.5.sp)
+            }
+            Text(listOfNotNull(r.clientes.takeIf { it.isNotEmpty() }?.joinToString(", "), r.distanciaM?.let { "rota de ${kmCurto(it)}" }).joinToString(" · "),
+                color = c.texto3, fontSize = 12.5.sp, maxLines = 2)
+        }
+        Spacer(Modifier.height(12.dp))
+        PwBotaoOuro(
+            if (ocupado) (if (r.planejada) "Reservando…" else "Pegando…") else if (r.planejada) "Reservar" else "Pegar rota",
+            onClick = onPegar, icone = if (r.planejada) PwIcones.CalendarCheck else PwIcones.ChevronsRight, habilitado = !ocupado, altura = 56.dp,
+        )
+    }
+}
+
+private fun kmCurto(m: Int) = if (m < 1000) "$m m" else "%.1f km".format(br, m / 1000.0)
 
 @Composable
 private fun CartaoPlanejada(
@@ -201,7 +282,8 @@ private fun CartaoPlanejada(
             }
             Spacer(Modifier.width(10.dp))
             Column(Modifier.widthIn(max = 130.dp), horizontalAlignment = Alignment.End) {
-                PwValor(moedaBr(corrida.valorMotoboy), tamanhoMax = 26)
+                if (corrida.valoresVisiveis && corrida.valorMotoboy != null) PwValor(moedaBr(corrida.valorMotoboy), tamanhoMax = 26)
+                else Text("${corrida.entregas} entrega${if (corrida.entregas == 1) "" else "s"}", color = c.ouro, fontWeight = FontWeight.Bold, fontSize = 15.sp)
                 corrida.distanciaM?.let { Text(if (it < 1000) "$it m" else "%.1f km".format(br, it / 1000.0), color = c.texto3, fontSize = 12.sp) }
             }
         }
@@ -225,12 +307,12 @@ private fun CartaoPlanejada(
                     }
                 }
             }
-            corrida.empresaNome?.let { Text("Cliente: $it", color = c.texto3, fontSize = 12.5.sp) }
+            corrida.clientes.takeIf { it.isNotEmpty() }?.let { Text("Cliente${if (it.size > 1) "s" else ""}: ${it.joinToString(", ")}", color = c.texto3, fontSize = 12.5.sp) }
         }
         Spacer(Modifier.height(12.dp))
         when {
             !corrida.minha -> PwBotaoOuro(if (ocupado) "Reservando…" else "Reservar", onClick = onReservar, icone = PwIcones.CalendarCheck, habilitado = !ocupado)
-            podeIniciar -> PwBotaoOuro(if (ocupado) "Iniciando…" else "Iniciar corrida", onClick = onIniciar, icone = PwIcones.ChevronsRight, habilitado = !ocupado, altura = 60.dp)
+            podeIniciar -> PwBotaoOuro(if (ocupado) "Iniciando…" else "Iniciar rota", onClick = onIniciar, icone = PwIcones.ChevronsRight, habilitado = !ocupado, altura = 60.dp)
             else -> Text(
                 "Você pode iniciar ${corrida.iniciarAPartirDe?.let { quandoTexto(it) } ?: "perto do horário"}.",
                 color = c.texto2, fontSize = 13.sp,

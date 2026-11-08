@@ -92,6 +92,47 @@ object Corridas {
         Unit
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
+    // ------------------------------------------------------------------ quadro de rotas (express e planejadas, mesmo peso)
+
+    private val _rotas = MutableStateFlow<List<Corrida>>(emptyList())
+    /** Rotas que eu posso pegar agora: a sugerida para mim primeiro. */
+    val rotas: StateFlow<List<Corrida>> = _rotas.asStateFlow()
+
+    suspend fun carregarRotas(): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar("rotas_disponiveis", JsonObject(emptyMap()))
+        if (!r.ok) throw Exception(traduzir(r))
+        _rotas.value = (r.json() as? kotlinx.serialization.json.JsonArray)?.map { it.paraCorrida() }.orEmpty()
+        Unit
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
+    /** Pega a rota do quadro: express já vira a corrida ativa; planejada fica reservada para mim. */
+    suspend fun pegarRota(corridaId: String): Result<Boolean> = runCatching {
+        val r = PwCore.rpc.chamar("pegar_rota", buildJsonObject { put("p_corrida", corridaId) })
+        if (!r.ok) throw Exception(traduzir(r))
+        val c = r.json()?.paraCorrida()
+        val ativa = c != null && (c.status == "aceita" || c.status == "em_andamento")
+        if (ativa) _ativa.value = c
+        _rotas.value = _rotas.value.filterNot { it.id == corridaId }
+        carregarPlanejadas()
+        ativa
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
+    // ------------------------------------------------------------------ holerite
+
+    suspend fun meusHolerites(): Result<Pair<List<PeriodoHolerite>, Boolean>> = runCatching {
+        val r = PwCore.rpc.chamar("meus_holerites", buildJsonObject { put("p_quantos", 12) })
+        if (!r.ok) throw Exception(traduzir(r))
+        val o = r.json()?.jsonObject ?: throw Exception("Sem dados.")
+        val lista = (o["periodos"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonObject)?.paraPeriodo() }.orEmpty()
+        lista to ((o["valores_visiveis"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true")
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
+    suspend fun meuHolerite(inicio: String, fim: String): Result<Holerite> = runCatching {
+        val r = PwCore.rpc.chamar("meu_holerite", buildJsonObject { put("p_inicio", inicio); put("p_fim", fim) })
+        if (!r.ok) throw Exception(traduzir(r))
+        (r.json()?.jsonObject ?: throw Exception("Sem dados.")).paraHolerite()
+    }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
+
     // ------------------------------------------------------------------ histórico e carteira
 
     private val _historico = MutableStateFlow<List<CorridaFeita>?>(null)
@@ -251,6 +292,7 @@ object Corridas {
         "prazo_de_cancelamento_passou" to "O prazo para desistir já passou. Fale com o gestor.",
         "ainda_nao_pode_iniciar" to "Ainda é cedo para iniciar essa corrida.",
         "apenas_motoboy" to "Só motoboys podem fazer isso.",
+        "rota_ja_pegada" to "Outro motoboy pegou essa rota antes.",
     )
 
     private fun traduzir(r: HttpResposta): String {

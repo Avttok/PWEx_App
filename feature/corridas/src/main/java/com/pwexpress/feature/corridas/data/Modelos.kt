@@ -26,7 +26,13 @@ data class Parada(
     val status: StatusParada,
     /** Até 3 pontos de referência perto do endereço (definidos pelo gestor). */
     val referencias: List<Referencia> = emptyList(),
+    /** Rotas automáticas: de qual cliente/pedido é esta parada e o que levar. */
+    val cliente: String? = null,
+    val pedidoNumero: Long? = null,
+    val itens: List<ItemParada> = emptyList(),
 )
+
+data class ItemParada(val descricao: String, val quantidade: Int, val categoria: String?, val perigoso: Boolean, val fragil: Boolean)
 
 data class Referencia(val nome: String, val distanciaM: Int?, val tipo: String?, val relacao: String? = null)
 
@@ -54,10 +60,22 @@ data class Corrida(
     val cancelarReservaAte: Long? = null,
     val iniciarAPartirDe: Long? = null,
     val minha: Boolean = false,
+    /** O gestor deixa o motoboy ver quanto a rota paga? */
+    val valoresVisiveis: Boolean = true,
+    val urgente: Boolean = false,
+    val perigoso: Boolean = false,
+    val entregas: Int = 0,
+    val coletas: Int = 0,
+    /** Quadro de rotas: o sistema acha que esta é a melhor para mim. */
+    val sugerida: Boolean = false,
+    val distanciaAteColetaM: Int? = null,
+    val noQuadroDesde: Long? = null,
 ) {
     /** Reais "#12", de teste "T12" (sequências separadas). */
     val numeroExibicao: String get() = if (teste) "T$numero" else "#$numero"
-    val planejada: Boolean get() = status == "agendada" || status == "reservada"
+    val planejada: Boolean get() = status == "agendada" || status == "reservada" || agendadaPara != null
+    /** Clientes diferentes nesta rota. */
+    val clientes: List<String> get() = paradas.mapNotNull { it.cliente }.distinct().ifEmpty { listOfNotNull(empresaNome) }
 
     /** Parada em que o motoboy está agora (primeira não concluída). */
     val paradaAtual: Parada? get() = paradas.firstOrNull { it.status != StatusParada.CONCLUIDA }
@@ -102,7 +120,15 @@ internal fun JsonElement.paraCorrida(): Corrida {
         cancelarReservaAte = o.texto("cancelar_reserva_ate")?.let { instante(it) },
         iniciarAPartirDe = o.texto("iniciar_a_partir_de")?.let { instante(it) },
         minha = o.logico("minha"),
-    )
+        valoresVisiveis = o["valores_visiveis"]?.takeIf { it !is JsonNull }?.jsonPrimitive?.booleanOrNull ?: true,
+        urgente = o.logico("urgente"),
+        perigoso = o.logico("perigoso"),
+        entregas = o.inteiro("entregas") ?: 0,
+        coletas = o.inteiro("coletas") ?: 0,
+        sugerida = o.logico("sugerida"),
+        distanciaAteColetaM = o.inteiro("distancia_ate_coleta_m"),
+        noQuadroDesde = o.texto("no_quadro_desde")?.let { instante(it) },
+    ).let { c -> if (c.entregas == 0) c.copy(entregas = c.paradas.count { it.tipo == TipoParada.ENTREGA }, coletas = c.paradas.count { it.tipo == TipoParada.COLETA }) else c }
 }
 
 private fun JsonElement.paraParada(): Parada {
@@ -126,6 +152,12 @@ private fun JsonElement.paraParada(): Parada {
         referencias = (o["referencias"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { e ->
             val r = e as? JsonObject ?: return@mapNotNull null
             Referencia(r.texto("nome") ?: return@mapNotNull null, r.inteiro("distancia_m"), r.texto("tipo"), r.texto("relacao"))
+        }.orEmpty(),
+        cliente = o.texto("cliente"),
+        pedidoNumero = o.texto("pedido_numero")?.toLongOrNull(),
+        itens = (o["itens"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { e ->
+            val i = e as? JsonObject ?: return@mapNotNull null
+            ItemParada(i.texto("descricao") ?: return@mapNotNull null, i.inteiro("quantidade") ?: 1, i.texto("categoria"), i.logico("perigoso"), i.logico("fragil"))
         }.orEmpty(),
     )
 }
@@ -151,6 +183,7 @@ internal fun instante(iso: String): Long? = runCatching { java.time.OffsetDateTi
 data class CorridaFeita(
     val id: String, val numero: Long?, val teste: Boolean, val status: String, val valor: Double?, val distanciaM: Int?,
     val quando: Long?, val aceitaEm: Long?, val concluidaEm: Long?, val empresa: String?, val coleta: String?, val entrega: String?, val paradas: Int,
+    val entregas: Int = 0, val planejada: Boolean = false,
 ) {
     val concluida get() = status == "concluida"
     val numeroExibicao: String get() = numero?.let { if (teste) "T$it" else "#$it" } ?: "—"
@@ -167,5 +200,40 @@ internal fun JsonObject.paraCorridaFeita(): CorridaFeita? {
         valor = s("valor_motoboy")?.toDoubleOrNull(), distanciaM = s("distancia_m")?.toDoubleOrNull()?.toInt(),
         quando = t("quando"), aceitaEm = t("aceita_em"), concluidaEm = t("concluida_em"), empresa = s("empresa_nome"),
         coleta = ps.firstOrNull { tipo(it) == "coleta" }?.let(::end), entrega = ps.lastOrNull { tipo(it) == "entrega" }?.let(::end), paradas = ps.size,
+        entregas = s("entregas")?.toIntOrNull() ?: ps.count { tipo(it) == "entrega" }, planejada = s("planejada") == "true",
+    )
+}
+
+
+// ------------------------------------------------------------------ holerite
+
+/** Um período de pagamento (semana, quinzena…). `total` só vem quando o gestor deixa o motoboy ver. */
+data class PeriodoHolerite(val inicio: String, val fim: String, val status: String, val rotas: Int, val entregas: Int, val km: Double, val total: Double?, val pagoEm: Long?)
+
+data class RotaHolerite(val id: String, val numero: Long, val concluidaEm: Long?, val entregas: Int, val km: Double, val clientes: String?, val valor: Double?)
+
+data class Holerite(
+    val inicio: String, val fim: String, val status: String, val rotas: Int, val entregas: Int, val km: Double,
+    val valoresVisiveis: Boolean, val total: Double?, val ajustes: List<Pair<String, Double>>, val itens: List<RotaHolerite>,
+)
+
+internal fun JsonObject.paraPeriodo(): PeriodoHolerite {
+    fun s(k: String) = (this[k] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is JsonNull }?.content
+    return PeriodoHolerite(s("inicio").orEmpty(), s("fim").orEmpty(), s("status") ?: "aberto", s("rotas")?.toIntOrNull() ?: 0,
+        s("entregas")?.toIntOrNull() ?: 0, s("km")?.toDoubleOrNull() ?: 0.0, s("total")?.toDoubleOrNull(), s("pago_em")?.let { instante(it) })
+}
+
+internal fun JsonObject.paraHolerite(): Holerite {
+    fun s(o: JsonObject, k: String) = (o[k] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is JsonNull }?.content
+    return Holerite(
+        inicio = s(this, "inicio").orEmpty(), fim = s(this, "fim").orEmpty(), status = s(this, "status") ?: "aberto",
+        rotas = s(this, "rotas")?.toIntOrNull() ?: 0, entregas = s(this, "entregas")?.toIntOrNull() ?: 0, km = s(this, "km")?.toDoubleOrNull() ?: 0.0,
+        valoresVisiveis = s(this, "valores_visiveis") == "true", total = s(this, "total")?.toDoubleOrNull(),
+        ajustes = (this["ajustes"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { e -> (e as? JsonObject)?.let { a -> (s(a, "descricao") ?: "") to (s(a, "valor")?.toDoubleOrNull() ?: 0.0) } }.orEmpty(),
+        itens = (this["itens"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { e ->
+            val o = e as? JsonObject ?: return@mapNotNull null
+            RotaHolerite(s(o, "id") ?: return@mapNotNull null, s(o, "numero")?.toLongOrNull() ?: 0, s(o, "concluida_em")?.let { instante(it) },
+                s(o, "entregas")?.toIntOrNull() ?: 0, s(o, "km")?.toDoubleOrNull() ?: 0.0, s(o, "clientes"), s(o, "valor")?.toDoubleOrNull())
+        }.orEmpty(),
     )
 }

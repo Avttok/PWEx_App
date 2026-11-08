@@ -18,6 +18,7 @@ fun iso(s: String?): Long? = s?.let {
 }
 
 object Status {
+    const val MONTADA = "montada"
     const val AGENDADA = "agendada"
     const val RESERVADA = "reservada"
     const val AGUARDANDO = "aguardando_motoboy"
@@ -30,7 +31,7 @@ object Status {
     val ATIVAS = setOf(AGUARDANDO_PAGAMENTO, AGUARDANDO, SEM_MOTOBOY, ACEITA, EM_ANDAMENTO)
     val PLANEJADAS = setOf(AGENDADA, RESERVADA)
     val rotulo = mapOf(
-        AGENDADA to "Planejada · livre", RESERVADA to "Planejada · reservada", AGUARDANDO to "Procurando motoboy", AGUARDANDO_PAGAMENTO to "Aguardando pagamento",
+        MONTADA to "Rota montada · esperando você", AGENDADA to "Planejada · livre", RESERVADA to "Planejada · reservada", AGUARDANDO to "Procurando motoboy", AGUARDANDO_PAGAMENTO to "Aguardando pagamento",
         SEM_MOTOBOY to "Sem motoboy", ACEITA to "Aceita", EM_ANDAMENTO to "Em andamento", CONCLUIDA to "Concluída", CANCELADA to "Cancelada",
     )
 }
@@ -58,7 +59,12 @@ data class CorridaG(
     val exigeNome: Boolean, val exigeFoto: Boolean, val exigeAssinatura: Boolean, val exigeCodigo: Boolean, val codigoEntrega: String?,
     val criadaEm: Long, val concluidaEm: Long?, val agendadaPara: Long?, val reservadaEm: Long?, val serieId: String?, val atrasada: Boolean,
     val paradas: List<ParadaG>,
+    /** Rotas automáticas (roteirizador). */
+    val origem: String = "manual", val sugeridoMotoboyId: String? = null, val modoDespacho: String? = null, val quadroDesde: Long? = null,
+    val pagCalculo: JsonObject? = null, val pagAjuste: Double = 0.0, val pagAjusteMotivo: String? = null, val perigoso: Boolean = false,
 ) {
+    val automatica get() = origem == "roteirizador"
+    val entregas get() = paradas.count { !it.coleta }
     val numeroExibicao get() = if (teste) "T$numero" else "#$numero"
     val ativa get() = status in Status.ATIVAS
     val planejada get() = status in Status.PLANEJADAS
@@ -130,6 +136,42 @@ fun JsonObject.paraCorridaG() = CorridaG(
     agendadaPara = iso(str("agendada_para")), reservadaEm = iso(str("reservada_em")), serieId = str("serie_id"),
     atrasada = str("atraso_avisado_em") != null,
     paradas = arr("paradas").map { it.paraParadaG() }.sortedBy { it.ordem },
+    origem = str("origem") ?: "manual", sugeridoMotoboyId = str("sugerido_motoboy_id"), modoDespacho = str("modo_despacho"), quadroDesde = iso(str("quadro_desde")),
+    pagCalculo = obj("pag_calculo"), pagAjuste = dbl("pag_ajuste") ?: 0.0, pagAjusteMotivo = str("pag_ajuste_motivo"), perigoso = bool("tem_perigoso"),
+)
+
+// ------------------------------------------------------------------ pedidos (do site do cliente e do gestor)
+
+data class PontoPedidoG(val ordem: Int, val coleta: Boolean, val endereco: String, val contatoNome: String?)
+data class ItemPedidoG(val descricao: String, val quantidade: Int, val pesoKg: Double?)
+
+data class PedidoG(
+    val id: String, val numero: Long, val teste: Boolean, val empresaId: String?, val clienteNome: String?, val origem: String,
+    val tipo: String, val tipoPedido: String, val quando: Long?, val urgente: Boolean, val status: String, val observacoes: String?,
+    val distanciaM: Int?, val valorCalculado: Double?, val valorAjuste: Double, val ajusteMotivo: String?, val valor: Double?,
+    val cobranca: String, val pagamentoStatus: String, val criadoEm: Long, val recusaMotivo: String?,
+    val pontos: List<PontoPedidoG>, val itens: List<ItemPedidoG>,
+) {
+    val numeroExibicao get() = if (teste) "P-T$numero" else "P-$numero"
+    val planejado get() = tipo == "planejado"
+}
+
+object StatusPedido {
+    val rotulo = mapOf(
+        "recebido" to "Para revisar", "aprovado" to "Aprovado", "roteirizado" to "Na rota", "em_rota" to "Em rota",
+        "concluido" to "Concluído", "cancelado" to "Cancelado", "recusado" to "Recusado",
+    )
+}
+
+fun JsonObject.paraPedidoG() = PedidoG(
+    id = str("id")!!, numero = long("numero") ?: 0, teste = bool("teste"), empresaId = str("empresa_id"), clienteNome = str("cliente_nome"),
+    origem = str("origem") ?: "gestor", tipo = str("tipo") ?: "express", tipoPedido = str("tipo_pedido") ?: "padrao", quando = iso(str("quando")),
+    urgente = bool("urgente"), status = str("status") ?: "recebido", observacoes = str("observacoes"), distanciaM = int("distancia_estimada_m"),
+    valorCalculado = dbl("valor_calculado"), valorAjuste = dbl("valor_ajuste") ?: 0.0, ajusteMotivo = str("ajuste_motivo"), valor = dbl("valor"),
+    cobranca = str("cobranca") ?: "credito", pagamentoStatus = str("pagamento_status") ?: "nao_exigido", criadoEm = iso(str("criado_em")) ?: 0,
+    recusaMotivo = str("recusa_motivo"),
+    pontos = arr("pedido_pontos").map { PontoPedidoG(it.int("ordem") ?: 0, it.str("tipo") == "coleta", it.str("endereco").orEmpty(), it.str("contato_nome")) }.sortedBy { it.ordem },
+    itens = arr("pedido_itens").map { ItemPedidoG(it.str("descricao").orEmpty(), it.int("quantidade") ?: 1, it.dbl("peso_kg")) },
 )
 
 fun JsonObject.paraOfertaG() = OfertaG(str("id")!!, str("corrida_id")!!, str("motoboy_id")!!, int("distancia_m"), iso(str("expira_em")) ?: 0)

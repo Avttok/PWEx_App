@@ -133,12 +133,28 @@ object Alarme {
     }
 
     /** Notificações das corridas planejadas (vêm do servidor com o tipo e o horário). */
+    /** Rota nova no quadro: quem pegar primeiro leva (express) ou reserva (planejada). */
+    fun rotaNova(ctx: Context, corridaId: String?, planejada: Boolean, entregas: Int, sugerida: Boolean, agendadaPara: String?) {
+        val quando = agendadaPara?.takeIf { it.isNotBlank() }?.let { instante(it) }?.let { formatarQuando(it) }
+        val abrir = PwNotificacoes.abrirApp(ctx, 3600 + (corridaId?.hashCode() ?: 0) % 300, "rotas")
+        val ent = if (entregas == 1) "1 entrega" else "$entregas entregas"
+        val titulo = when {
+            sugerida -> if (planejada) "Rota planejada perto de você" else "Rota nova: você é o mais perto"
+            planejada -> "Nova rota planejada"
+            else -> "Nova rota disponível"
+        }
+        val texto = if (planejada) "${quando?.let { "Para $it · " } ?: ""}$ent · reserve antes dos outros" else "$ent · pegue antes dos outros"
+        val ver = NotificationCompat.Action.Builder(null, if (planejada) "Ver e reservar" else "Ver e pegar", abrir).build()
+        PwNotificacoes.aviso(ctx, 3600 + ((corridaId?.hashCode() ?: 0) and 0x1FF),
+            if (planejada) PwNotificacoes.CANAL_PLANEJADAS else PwNotificacoes.CANAL_AVISOS, titulo, texto, null, abrir, listOf(ver))
+    }
+
     fun planejada(ctx: Context, tipo: String, corridaId: String?, agendadaPara: String?) {
         val quando = agendadaPara?.let { instante(it) }?.let { formatarQuando(it) }
         val abrir = PwNotificacoes.abrirApp(ctx, 3100 + (corridaId?.hashCode() ?: 0) % 500, "planejadas")
         val (titulo, texto, longo) = when (tipo) {
             "planejada_nova" -> Triple("Nova corrida planejada", quando?.let { "Para $it · reserve antes dos outros" } ?: "Reserve antes dos outros",
-                "Uma corrida com hora marcada está livre${quando?.let { " para $it" } ?: ""}. Abra o app para ver o valor e reservar.")
+                "Uma corrida com hora marcada está livre${quando?.let { " para $it" } ?: ""}. Abra o app para ver e reservar.")
             "planejada_voltou" -> Triple("Corrida planejada livre de novo", quando?.let { "Para $it · alguém desistiu" } ?: "Alguém desistiu",
                 "Quem tinha reservado desistiu. Ela está livre de novo${quando?.let { " para $it" } ?: ""}.")
             "planejada_reservada" -> Triple("Corrida reservada para você", quando?.let { "Começa $it" } ?: "Veja os detalhes no app",

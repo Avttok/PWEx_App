@@ -91,7 +91,21 @@ fun GestorApp(
     }
     val comCarteira = modulo("carteira")
     val planejadas = dados.corridas.count { it.teste == teste && it.status in Status.PLANEJADAS }
-    val semMotoboy = dados.corridas.count { it.teste == teste && it.status == Status.SEM_MOTOBOY }
+    val semMotoboy = dados.corridas.count { it.teste == teste && (it.status == Status.SEM_MOTOBOY || it.status == Status.MONTADA) }
+    val paraRevisar = dados.pedidos.count { it.teste == teste && it.status == "recebido" }
+    val comPedidos = modulo("pedidos")
+    // pedido novo chegando: avisa (uma vez por pedido)
+    val vistos = remember { mutableSetOf<String>() }
+    var primeira by remember { mutableStateOf(true) }
+    LaunchedEffect(dados.pedidos) {
+        if (!dados.carregado) return@LaunchedEffect
+        val novos = dados.pedidos.filter { it.status == "recebido" && it.teste == teste && vistos.add(it.id) }
+        if (!primeira && novos.isNotEmpty()) com.pwexpress.core.designsystem.PwToast.mostrar(
+            if (novos.size == 1) "Pedido ${novos[0].numeroExibicao} chegou e espera sua revisão." else "${novos.size} pedidos novos esperando revisão.",
+            com.pwexpress.core.designsystem.TipoAviso.INFO, "Pedido novo",
+        )
+        primeira = false
+    }
 
     Box(modifier.fillMaxSize()) {
         val atual = pilha.lastOrNull()
@@ -108,6 +122,7 @@ fun GestorApp(
                     TelaG.Dev -> DevG(onVoltar = ::voltar)
                     null -> when (aba) {
                         "mapa" -> MapaG(onCorrida = { abrir(TelaG.Corrida(it)) })
+                        "pedidos" -> PedidosG()
                         "corridas" -> CorridasG(onAbrir = { abrir(TelaG.Corrida(it)) }, onNova = { abrir(TelaG.NovaCorrida) })
                         "empresas" -> EmpresasG(onAbrir = { abrir(TelaG.Empresa(it)) })
                         "equipe" -> EquipeG(onAbrir = { abrir(TelaG.Membro(it)) })
@@ -120,7 +135,8 @@ fun GestorApp(
             PwBarraAbas(
                 listOf(
                     PwAba("mapa", "Mapa", PwIcones.Mapa),
-                    PwAba("corridas", "Corridas", PwIcones.Route, planejadas + semMotoboy),
+                ) + (if (comPedidos) listOf(PwAba("pedidos", "Pedidos", PwIcones.ClipboardList, paraRevisar)) else emptyList()) + listOf(
+                    PwAba("corridas", "Rotas", PwIcones.Route, planejadas + semMotoboy),
                     PwAba("empresas", "Clientes", PwIcones.Building2),
                     PwAba("equipe", "Equipe", PwIcones.Users),
                 ) + (if (comCarteira) listOf(PwAba("financeiro", "Carteira", PwIcones.Wallet)) else emptyList()),

@@ -3,6 +3,7 @@ package com.pwexpress.feature.corridas.ui
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +57,9 @@ import com.pwexpress.core.designsystem.TextoAjustado
 import com.pwexpress.core.designsystem.moedaBr
 import com.pwexpress.core.perfil.Perfis
 import com.pwexpress.feature.corridas.data.CorridaFeita
+import com.pwexpress.feature.corridas.data.Holerite
+import com.pwexpress.feature.corridas.data.PeriodoHolerite
+import com.pwexpress.feature.corridas.data.RotaHolerite
 import com.pwexpress.feature.corridas.data.Corridas
 import java.time.Instant
 import java.time.LocalDate
@@ -69,105 +73,132 @@ private fun dia(ms: Long): LocalDate = Instant.ofEpochMilli(ms).atZone(zona).toL
 internal fun kmTexto(m: Int?): String = when { m == null -> "—"; m < 1000 -> "$m m"; else -> "%.1f km".format(br, m / 1000.0) }
 internal fun dataCurta(ms: Long?): String = ms?.let { Instant.ofEpochMilli(it).atZone(zona).format(DateTimeFormatter.ofPattern("dd/MM · HH:mm")) } ?: "—"
 
+private fun dataBr(iso: String): String = if (iso.length >= 10) "${iso.substring(8, 10)}/${iso.substring(5, 7)}" else iso
+private fun rotuloStatus(s: String) = when (s) { "fechado" -> "Fechado"; "pago" -> "Pago"; else -> "Em aberto" }
+
 /**
- * Carteira do motoboy: quanto ele ganhou, por período, com gráfico e extrato.
- * Mostra só o valor que é dele (nunca percentuais nem o que o cliente pagou).
+ * Holerite do motoboy: a folha de cada período (dia, semana, quinzena ou mês, o gestor escolhe).
+ * Mostra rotas, entregas e km; os valores só aparecem se o gestor permitir.
  */
 @Composable
 fun CarteiraScreen(modifier: Modifier = Modifier) {
     val c = Pw.cores
-    val ganhos by Perfis.ganhos.collectAsState()
-    val historico by Corridas.historico.collectAsState()
     val teste by TemaApp.modoTeste.collectAsState()
-    var periodo by rememberSaveable { mutableIntStateOf(1) }
+    var periodos by remember { mutableStateOf<List<PeriodoHolerite>?>(null) }
+    var escolhido by rememberSaveable { mutableIntStateOf(0) }
+    var holerite by remember { mutableStateOf<Holerite?>(null) }
     var erro by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(teste) {
         Perfis.carregar()
-        Corridas.carregarHistorico().onFailure { erro = it.message }.onSuccess { erro = null }
+        Corridas.meusHolerites().onSuccess { (l, _) -> periodos = l; erro = null }.onFailure { erro = it.message; periodos = periodos ?: emptyList() }
     }
-
-    val hoje = LocalDate.now()
-    val inicio = when (periodo) {
-        0 -> hoje
-        1 -> hoje.minusDays((hoje.dayOfWeek.value - 1).toLong())
-        2 -> hoje.withDayOfMonth(1)
-        else -> hoje.minusDays(29)
+    val atual = periodos?.getOrNull(escolhido)
+    LaunchedEffect(atual?.inicio, atual?.fim, teste) {
+        holerite = null
+        atual?.let { p -> Corridas.meuHolerite(p.inicio, p.fim).onSuccess { holerite = it }.onFailure { erro = it.message } }
     }
-    val feitas = historico.orEmpty().filter { it.concluida && it.concluidaEm != null }
-    val noPeriodo = feitas.filter { !dia(it.concluidaEm!!).isBefore(inicio) }
-    val total = noPeriodo.sumOf { it.valor ?: 0.0 }
-    val km = noPeriodo.sumOf { it.distanciaM ?: 0 }
-    val canceladas = historico.orEmpty().count { !it.concluida && it.quando != null && !dia(it.quando).isBefore(inicio) }
 
     PwPagina(modifier) {
-        PwCabeca(PwIcones.Wallet, "Carteira", if (teste) "Ganhos das corridas de teste" else "Seus ganhos")
+        PwCabeca(PwIcones.ReceiptText, "Holerite", if (teste) "Folha das rotas de teste" else "Sua folha de pagamento")
         PwErro(erro)
 
-        // ---------------------------------------------------- destaque do período
-        PwCartao(destaque = true) {
-            PwFiltros(listOf("Hoje" to 0, "Semana" to 0, "Mês" to 0, "30 dias" to 0), periodo, { periodo = it })
-            Spacer(Modifier.height(14.dp))
-            PwRotulo(listOf("Hoje", "Nesta semana", "Neste mês", "Últimos 30 dias")[periodo])
-            PwValor(moedaBr(total), Modifier.fillMaxWidth(), tamanhoMax = 44)
-            Text(
-                "${noPeriodo.size} corrida${if (noPeriodo.size == 1) "" else "s"}" + (if (canceladas > 0) " · $canceladas cancelada${if (canceladas == 1) "" else "s"}" else ""),
-                color = c.texto2, fontFamily = Archivo, fontSize = 13.sp,
-            )
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PwNumero("Média", if (noPeriodo.isEmpty()) "—" else moedaBr(total / noPeriodo.size), Modifier.weight(1f), icone = PwIcones.TrendingUp)
-                PwNumero("Rodados", kmTexto(km), Modifier.weight(1f), icone = PwIcones.Ruler)
-            }
-        }
-
-        // ---------------------------------------------------- gráfico dos últimos 7 dias
-        PwCartao {
-            PwRotulo("Últimos 7 dias")
-            Spacer(Modifier.height(10.dp))
-            val dias = (6 downTo 0).map { hoje.minusDays(it.toLong()) }
-            val valores = dias.map { d -> feitas.filter { dia(it.concluidaEm!!) == d }.sumOf { it.valor ?: 0.0 } }
-            GraficoBarras(valores, dias.map { it.format(DateTimeFormatter.ofPattern("EEE", br)).take(3).replaceFirstChar { ch -> ch.uppercase() } }, destaque = 6)
-        }
-
-        // ---------------------------------------------------- resumo (do servidor)
-        ganhos?.let { g ->
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PwNumero("Semana · ${g.corridasSemana}", moedaBr(g.semana), Modifier.weight(1f), icone = PwIcones.CalendarClock)
-                PwNumero("Mês · ${g.corridasMes}", moedaBr(g.mes), Modifier.weight(1f), icone = PwIcones.CalendarCheck)
-            }
-        }
-
-        // ---------------------------------------------------- para onde o dinheiro vai
-        CartaoChavesPix()
-
-        // ---------------------------------------------------- extrato
-        PwRotulo("Extrato")
         when {
-            historico == null && erro == null -> PwCarregando()
-            noPeriodo.isEmpty() -> PwVazio("Nenhuma corrida concluída neste período.", icone = PwIcones.Wallet)
-            else -> noPeriodo.forEach { LinhaExtrato(it) }
+            periodos == null -> PwCarregando()
+            periodos!!.isEmpty() -> PwVazio("Nenhum período ainda. As rotas concluídas aparecem aqui.", icone = PwIcones.ReceiptText)
+            else -> {
+                // ------------------------------------------------ períodos (mais recente primeiro)
+                androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(periodos!!.size) { i ->
+                        val p = periodos!![i]
+                        val sel = i == escolhido
+                        val forma = RoundedCornerShape(14.dp)
+                        Column(
+                            Modifier.clip(forma).background(if (sel) c.ouro.copy(alpha = 0.16f) else c.vidroSutil)
+                                .border(1.dp, if (sel) c.ouro else c.borda, forma)
+                                .clickable { escolhido = i }.padding(horizontal = 14.dp, vertical = 10.dp),
+                        ) {
+                            Text("${dataBr(p.inicio)} – ${dataBr(p.fim)}", color = if (sel) c.ouro else c.texto, fontWeight = FontWeight.Bold, fontSize = 13.sp, fontFamily = Archivo)
+                            Text(rotuloStatus(p.status) + " · ${p.entregas} entr.", color = c.texto3, fontSize = 11.5.sp)
+                        }
+                    }
+                }
+
+                // ------------------------------------------------ resumo do período
+                atual?.let { p ->
+                    PwCartao(destaque = true) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            PwRotulo("${dataBr(p.inicio)} a ${dataBr(p.fim)}", Modifier.weight(1f))
+                            com.pwexpress.core.designsystem.PwSelo(rotuloStatus(p.status), when (p.status) { "pago" -> c.verde; "fechado" -> c.ouro; else -> c.texto3 })
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        val total = holerite?.total ?: p.total
+                        if (total != null) {
+                            PwValor(moedaBr(total), Modifier.fillMaxWidth(), tamanhoMax = 44)
+                            Text(if (p.status == "pago") "pago" else if (p.status == "fechado") "a receber" else "até agora", color = c.texto2, fontFamily = Archivo, fontSize = 13.sp)
+                        } else {
+                            Row(verticalAlignment = Alignment.Bottom) {
+                                Text("${p.entregas}", style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 44.sp), color = c.ouro)
+                                Spacer(Modifier.width(8.dp))
+                                Text("entrega${if (p.entregas == 1) "" else "s"}", color = c.texto2, fontFamily = Archivo, fontSize = 15.sp, modifier = Modifier.padding(bottom = 9.dp))
+                            }
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            PwNumero("Rotas", "${p.rotas}", Modifier.weight(1f), icone = PwIcones.Route)
+                            PwNumero("Rodados", "%.1f km".format(br, p.km), Modifier.weight(1f), icone = PwIcones.Ruler)
+                        }
+                    }
+                }
+
+                // ------------------------------------------------ ajustes do gestor (bônus/descontos)
+                holerite?.takeIf { it.ajustes.isNotEmpty() }?.let { h ->
+                    PwCartao {
+                        PwRotulo("Ajustes")
+                        Spacer(Modifier.height(6.dp))
+                        h.ajustes.forEach { (motivo, v) ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                                Text(motivo.ifBlank { "Ajuste" }, color = c.texto, fontSize = 13.5.sp, modifier = Modifier.weight(1f))
+                                if (h.valoresVisiveis) Text((if (v >= 0) "+ " else "− ") + moedaBr(kotlin.math.abs(v)), color = if (v >= 0) c.verde else c.vermelho, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                            }
+                        }
+                    }
+                }
+
+                // ------------------------------------------------ para onde o dinheiro vai
+                CartaoChavesPix()
+
+                // ------------------------------------------------ rotas do período
+                PwRotulo("Rotas do período")
+                when {
+                    holerite == null -> PwCarregando()
+                    holerite!!.itens.isEmpty() -> PwVazio("Nenhuma rota concluída neste período.", icone = PwIcones.Route)
+                    else -> holerite!!.itens.forEach { LinhaExtrato(it) }
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun LinhaExtrato(f: CorridaFeita) {
+private fun LinhaExtrato(f: RotaHolerite) {
     val c = Pw.cores
     val forma = RoundedCornerShape(16.dp)
     Row(
         Modifier.fillMaxWidth().clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(c.verde.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
-            Icon(PwIcones.ArrowDownToLine, null, tint = c.verde, modifier = Modifier.size(18.dp))
+        Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(c.ouro.copy(alpha = 0.14f)), contentAlignment = Alignment.Center) {
+            Icon(PwIcones.Route, null, tint = c.ouro, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text("Corrida ${f.numeroExibicao}" + (f.empresa?.let { " · $it" } ?: ""), color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("${dataCurta(f.concluidaEm)} · ${kmTexto(f.distanciaM)}", color = c.texto3, fontSize = 12.sp, maxLines = 1)
+            Text("Rota #${f.numero}" + (f.clientes?.let { " · $it" } ?: ""), color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("${dataCurta(f.concluidaEm)} · ${f.entregas} entrega${if (f.entregas == 1) "" else "s"} · ${"%.1f".format(br, f.km)} km", color = c.texto3, fontSize = 12.sp, maxLines = 1)
         }
-        Spacer(Modifier.width(8.dp))
-        TextoAjustado("+ ${moedaBr(f.valor)}", TextStyle(color = c.verde, fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold), 15, Modifier.width(110.dp), minimo = 11)
+        if (f.valor != null) {
+            Spacer(Modifier.width(8.dp))
+            TextoAjustado(moedaBr(f.valor), TextStyle(color = c.verde, fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold), 15, Modifier.width(100.dp), minimo = 11)
+        }
     }
 }
 
@@ -210,7 +241,7 @@ internal fun CartaoFeita(f: CorridaFeita) {
             Spacer(Modifier.width(8.dp))
             com.pwexpress.core.designsystem.PwSelo(if (f.concluida) "Concluída" else "Cancelada", if (f.concluida) c.verde else c.texto3)
             Spacer(Modifier.weight(1f))
-            if (f.concluida) TextoAjustado(moedaBr(f.valor), TextStyle(color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold), 15, Modifier.width(110.dp), minimo = 11)
+            if (f.concluida && f.valor != null) TextoAjustado(moedaBr(f.valor), TextStyle(color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Bold), 15, Modifier.width(110.dp), minimo = 11)
         }
         Spacer(Modifier.height(6.dp))
         f.coleta?.let { Endereco(PwIcones.ArrowUpFromLine, it, c.ouro) }

@@ -11,6 +11,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -412,24 +414,54 @@ fun PwAvatar(nome: String, foto: String?, modifier: Modifier = Modifier, tamanho
 
 // ------------------------------------------------------------------ janelas
 
-/** Janela centralizada de vidro (fundo sólido para ler bem). */
+/**
+ * Janela cheia: ocupa a tela inteira, com barra de voltar e título no topo.
+ * Todo menu e aviso do app abre assim (nada de caixinha flutuando por cima).
+ */
 @Composable
-fun PwJanela(titulo: String, onFechar: () -> Unit, modifier: Modifier = Modifier, fecharFora: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
+fun PwTelaCheia(
+    titulo: String,
+    onFechar: () -> Unit,
+    modifier: Modifier = Modifier,
+    subtitulo: String? = null,
+    fecharVoltar: Boolean = true,
+    rolar: Boolean = true,
+    centralizar: Boolean = false,
+    rodape: (@Composable ColumnScope.() -> Unit)? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     val c = Pw.cores
-    Dialog(onDismissRequest = { if (fecharFora) onFechar() }, properties = DialogProperties(usePlatformDefaultWidth = false, dismissOnClickOutside = fecharFora, dismissOnBackPress = fecharFora)) {
-        val forma = RoundedCornerShape(26.dp)
-        Column(
-            modifier.padding(16.dp).widthIn(max = 520.dp).fillMaxWidth().clip(forma).background(c.fundo2).border(1.dp, c.bordaForte, forma)
-                .verticalScroll(rememberScrollState()).padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(titulo, style = androidx.compose.material3.MaterialTheme.typography.headlineSmall, color = c.texto, modifier = Modifier.weight(1f))
-                if (fecharFora) PwBotaoIcone(PwIcones.X, "Fechar", onFechar)
+    Dialog(onDismissRequest = { if (fecharVoltar) onFechar() }, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false, dismissOnClickOutside = false, dismissOnBackPress = fecharVoltar)) {
+        Column(Modifier.fillMaxSize().background(c.fundo).statusBarsPadding().navigationBarsPadding().imePadding()) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (fecharVoltar) PwBotaoIcone(PwIcones.ArrowLeft, "Voltar", onFechar) else Spacer(Modifier.size(42.dp))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(titulo, color = c.texto, fontWeight = FontWeight.Bold, fontFamily = Archivo, fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    subtitulo?.let { Text(it, color = c.texto3, fontSize = 12.5.sp, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                }
             }
-            content()
+            Box(Modifier.fillMaxWidth().height(1.dp).background(c.borda))
+            Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                Column(
+                    modifier.widthIn(max = 560.dp).fillMaxWidth().then(if (rolar) Modifier.verticalScroll(rememberScrollState()) else Modifier).padding(horizontal = 18.dp, vertical = 16.dp)
+                        .then(if (centralizar) Modifier.fillMaxSize() else Modifier),
+                    verticalArrangement = if (centralizar) Arrangement.spacedBy(12.dp, Alignment.CenterVertically) else Arrangement.spacedBy(12.dp),
+                    horizontalAlignment = if (centralizar) Alignment.CenterHorizontally else Alignment.Start,
+                    content = content,
+                )
+            }
+            if (rodape != null) {
+                Column(Modifier.widthIn(max = 560.dp).fillMaxWidth().align(Alignment.CenterHorizontally).padding(horizontal = 18.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp), content = rodape)
+            }
         }
     }
+}
+
+/** Janela de diálogo: agora abre como janela cheia (mesma API de antes). */
+@Composable
+fun PwJanela(titulo: String, onFechar: () -> Unit, modifier: Modifier = Modifier, fecharFora: Boolean = true, content: @Composable ColumnScope.() -> Unit) {
+    PwTelaCheia(titulo, onFechar, modifier, fecharVoltar = fecharFora, content = content)
 }
 
 /** Botão flutuante redondo dourado (ex.: nova corrida). */

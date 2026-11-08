@@ -10,6 +10,9 @@ data class Param(
 )
 
 val GRUPOS_CONFIG = listOf(
+    Grupo("pedidos", "Pedidos", "Como os pedidos dos clientes entram (revisão, Express, antecedência)."),
+    Grupo("rotas", "Rotas automáticas", "Como os pedidos viram rotas e chegam aos motoboys."),
+    Grupo("pagamento", "Pagamento do motoboy", "Por km da entrega de referência + entregas a mais. Exceções por motoboy no site."),
     Grupo("despacho", "Despacho", "Como as corridas são oferecidas aos motoboys."),
     Grupo("planejadas", "Corridas planejadas", "Corridas com hora marcada que os motoboys reservam pelo app."),
     Grupo("local", "Etapas por localização", "Exigir que o motoboy esteja no endereço para avançar."),
@@ -21,6 +24,32 @@ val GRUPOS_CONFIG = listOf(
 )
 
 val PARAMETROS = listOf(
+    Param("pedido_revisao_gestor", "pedidos", "Pedido novo passa pelo gestor", "Ligado: o pedido do cliente espera você aprovar (e ajustar o valor) antes de virar rota.", "Desligado: o pedido vai direto para o roteirizador.", "booleano", true, 0.0, null, null, null, 1.0, emptyList()),
+    Param("cliente_pode_express", "pedidos", "Cliente pode pedir Express", "Além do “Express liberado” do cadastro. Desligado: só pedidos agendados.", null, "booleano", true, 0.0, null, null, null, 1.0, emptyList()),
+    Param("agendada_antecedencia_cliente_min", "pedidos", "Antecedência do agendado", "O cliente só agenda para pelo menos esse tempo depois de agora.", null, "numero", false, 60.0, "min", 0.0, 2880.0, 15.0, emptyList()),
+    Param("roteirizador_ligado", "rotas", "Roteirizador automático", "Ligado: pedidos aprovados viram rotas sozinhos, a cada minuto.", "Desligado: nada vira rota até você ligar de novo.", "booleano", true, 0.0, null, null, null, 1.0, emptyList()),
+    Param("roteirizar_agrupar", "rotas", "Juntar pedidos numa rota", "Ligado: entregas perto umas das outras, na mesma janela, dividem a rota.", "Desligado: cada entrega vira uma rota própria.", "booleano", true, 0.0, null, null, null, 1.0, emptyList()),
+    Param("rota_janela_min", "rotas", "Janela de horário", "Pedidos com horários até essa diferença entre si podem dividir a rota.", null, "numero", false, 30.0, "min", 0.0, 240.0, 5.0, emptyList()),
+    Param("rota_raio_coleta_km", "rotas", "Coletas próximas", "Coletas a até essa distância entre si podem estar na mesma rota.", null, "numero", false, 2.0, "km", 0.0, 100.0, 0.5, emptyList()),
+    Param("rota_raio_entrega_km", "rotas", "Entregas próximas", "Uma entrega entra na rota se estiver a até essa distância de outra entrega dela.", null, "numero", false, 3.0, "km", 0.0, 100.0, 0.5, emptyList()),
+    Param("rota_max_entregas", "rotas", "Entregas por rota", "Limite de entregas numa mesma rota.", null, "numero", false, 5.0, null, 1.0, 40.0, 1.0, emptyList()),
+    Param("rota_max_coletas", "rotas", "Coletas por rota", "Limite de coletas diferentes numa mesma rota.", null, "numero", false, 3.0, null, 1.0, 20.0, 1.0, emptyList()),
+    Param("rota_max_km", "rotas", "Distância máxima da rota", "Da 1ª coleta até qualquer entrega. 0 = sem limite.", null, "numero", false, 0.0, "km", 0.0, 500.0, 1.0, emptyList()),
+    Param("rota_montar_antes_min", "rotas", "Planejados viram rota", "Quanto tempo antes do horário um pedido planejado já aparece como rota para reservar.", null, "numero", false, 1440.0, "min", 30.0, 10080.0, 30.0, emptyList()),
+    Param("express_agrupar_espera_min", "rotas", "Segurar o Express para juntar", "Espera esse tempo depois de aprovado para tentar juntar com outros. 0 = na hora.", null, "numero", false, 0.0, "min", 0.0, 60.0, 1.0, emptyList()),
+    Param("rota_exclusiva_cliente", "rotas", "Rota só deste cliente", "Ligado: não mistura com pedidos de outros clientes.", null, "booleano", false, 0.0, null, null, null, 1.0, emptyList()),
+    Param("perigoso_rota_exclusiva", "rotas", "Perigoso em rota separada", "Ligado: produtos perigosos (químicos, inflamáveis) nunca dividem a rota com os comuns.", null, "booleano", true, 0.0, null, null, null, 1.0, emptyList()),
+    Param("rota_revisao_gestor", "rotas", "Rota montada espera o gestor", "Ligado: a rota fica “montada” até você soltar para os motoboys.", "Desligado: a rota sai sozinha pelo modo de despacho.", "booleano", false, 0.0, null, null, null, 1.0, emptyList()),
+    Param("despacho_melhor_segundos", "rotas", "Vez do melhor motoboy", "No “Melhor primeiro”: quanto tempo só ele vê a rota.", null, "numero", false, 45.0, "s", 10.0, 600.0, 1.0, emptyList()),
+    Param("fator_rua", "rotas", "Fator de rua", "Linha reta × este fator até o mapa calcular a distância por ruas.", null, "numero", false, 1.3, "×", 1.0, 3.0, 0.05, emptyList()),
+    Param("pag_valor_km", "pagamento", "Valor do km", "Multiplica o km da entrega de referência.", null, "numero", false, 2.0, "R\$", 0.0, 50.0, 0.1, emptyList()),
+    Param("pag_entrega_extra", "pagamento", "Por entrega a mais", "Somado para cada entrega além da primeira.", null, "numero", false, 10.0, "R\$", 0.0, 500.0, 0.5, emptyList()),
+    Param("pag_coleta_extra", "pagamento", "Por coleta a mais", "Somado para cada coleta além da primeira.", null, "numero", false, 0.0, "R\$", 0.0, 500.0, 0.5, emptyList()),
+    Param("pag_fixo_rota", "pagamento", "Fixo por rota", "Somado em toda rota.", null, "numero", false, 0.0, "R\$", 0.0, 500.0, 0.5, emptyList()),
+    Param("pag_minimo", "pagamento", "Mínimo por rota", "Nenhuma rota paga menos que isso. 0 = sem mínimo.", null, "numero", false, 0.0, "R\$", 0.0, 500.0, 0.5, emptyList()),
+    Param("pag_km_percentil", "pagamento", "…percentil", "Só na regra “Percentil”. 50 = do meio; 75 = entre a do meio e a mais longe.", null, "numero", false, 75.0, "%", 1.0, 100.0, 5.0, emptyList()),
+    Param("motoboy_ve_valores", "pagamento", "Motoboy vê os valores", "Ligado: o motoboy vê quanto cada rota paga e os ganhos no app.", "Desligado: o app mostra rotas, entregas e km, sem valores.", "booleano", false, 0.0, null, null, null, 1.0, emptyList()),
+    Param("motoboy_ve_holerite_valor", "pagamento", "Motoboy vê o total do holerite fechado", "Ligado: depois que você fecha o holerite, ele vê o total a receber.", null, "booleano", true, 0.0, null, null, null, 1.0, emptyList()),
     Param("oferta_segundos", "despacho", "Tempo para aceitar", "Quanto tempo cada motoboy tem para aceitar a corrida antes dela passar ao próximo.", null, "numero", false, 30.0, "s", 10.0, 180.0, 1.0, emptyList()),
     Param("raio_motoboy_max_km", "despacho", "Raio máximo do motoboy", "Até quanto cada motoboy pode escolher no raio de disponibilidade dele. Corridas urgentes ignoram o raio.", null, "numero", false, 100.0, "km", 1.0, 500.0, 5.0, emptyList()),
     Param("offline_auto_min", "despacho", "Offline automático", "Disponível sem enviar posição há esse tempo vira offline sozinho; volta quando a posição chegar. 0 = desligado.", null, "numero", false, 30.0, "min", 0.0, 240.0, 5.0, emptyList()),

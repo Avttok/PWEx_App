@@ -106,18 +106,8 @@ fun JanelaConta(
     var trocandoTeste by remember { mutableStateOf(false) }
     val escopo = rememberCoroutineScope()
 
-    Dialog(onDismissRequest = onFechar, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
-        Box(
-            Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onFechar),
-        ) {
-            val forma = RoundedCornerShape(24.dp)
-            Column(
-                Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 62.dp, end = 12.dp, start = 12.dp).widthIn(max = 340.dp).fillMaxWidth()
-                    .clip(forma).background(c.fundo2).border(1.dp, c.bordaForte, forma)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { }
-                    .verticalScroll(rememberScrollState()).padding(10.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp),
-            ) {
+    com.pwexpress.core.designsystem.PwTelaCheia("Sua conta", onFechar) {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 // cabeça: foto, nome e e-mail (toque edita o perfil)
                 Row(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onPerfil).padding(8.dp),
@@ -189,7 +179,6 @@ fun JanelaConta(
                     CoracaoBatendo()
                 }
             }
-        }
     }
 }
 

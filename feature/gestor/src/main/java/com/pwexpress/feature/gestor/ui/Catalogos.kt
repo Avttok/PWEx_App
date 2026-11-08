@@ -230,7 +230,9 @@ private fun EditorCatalogo(cat: Catalogo, l: JsonObject?, clienteId: String?, on
         salvando = true
         escopo.launch {
             val r = if (cat == Catalogo.TIPOS && l != null) runCatching {
-                com.pwexpress.core.PwCore.rpc.rest("PATCH", "/rest/v1/tipos_pedido?chave=eq.${l.str("chave")}", linha.toString(), "return=representation"); linha
+                val resp = com.pwexpress.core.PwCore.rpc.rest("PATCH", "/rest/v1/tipos_pedido?chave=eq.${l.str("chave")}", linha.toString(), "return=representation")
+                if (!resp.ok) error(Gestao.traduzir(resp.corpo) ?: "Não deu para salvar (${resp.codigo}).")
+                linha
             } else Gestao.salvarLinha(cat.tabela, id, linha)
             r.onSuccess { PwToast.mostrar("Salvo.", TipoAviso.OK); onSalvo() }.onFailure { erro = it.message }
             salvando = false

@@ -1,10 +1,10 @@
-• Botão de status novo: orbe de vidro com anel de luz. Segure até o anel encher para ficar online ou offline (vibra no fim, sem toque sem querer). Online, um radar procura rotas
-• Versão do app definida pelo Dev: se o celular estiver numa versão não liberada, o app trava na tela de atualização até instalar a certa
-• Janela de atualização em tela cheia, com a logo no centro e o anel em degradê mostrando o download
-• Rotas: botão "Detalhes" antes de pegar ou reservar, com mapa, horário, distância, tempo, cada parada, itens e cuidados
-• Contador das abas (Rotas, Holerite…) centralizado no círculo
-• Modo teste: simulador de GPS (botão "Simulador GPS"): anda pela rota ou até onde você tocar no mapa, na velocidade escolhida
-• Perfil: veículo e CNH (o gestor cadastra; avisa quando a CNH vence)
-• Mapa: sem pontos de ônibus/trem poluindo; percurso de vermelho a verde (o mais recente)
-• Gestor: novo pedido pelo app (itens por categoria, orçamento na hora), voltar pedido para revisão, aba Veículo do motoboy, motoboys offline esmaecendo (somem após 24 h) e de teste com frasco violeta
-• Referências próximas mais confiáveis (vários servidores e raio maior)
+• Botão de status: troca assim que o anel enche (não precisa soltar) e o texto ONLINE/OFFLINE ficou menor, dentro do botão
+• Gestor no app agora tem tudo o que o site tem:
+  – Carteira com Faturas (gerar, ajustar, tirar pedido, emitir, marcar como paga, cancelar) e Folha (holerite de cada motoboy, ajustes, fechar, pagar, reabrir)
+  – Configurações completas, inclusive as de escolha (despacho, regra do km, período do holerite, cobrança…), e as Peças do lego: Exceções, Zonas, Horários de pico, Categorias (com o que cada uma pede) e Tipos de pedido
+  – Cliente: abas Regras e Zonas, modo teste e ícone; cadastros do site esperando aprovação
+  – Motoboy: aba Regras e ícone no mapa
+  – Pedido: regras só deste pedido (também no novo pedido)
+  – Rota aberta: mover entregas para outra rota ou para uma nova
+  – Mapa: simulador de posição para motoboys em modo teste (toque no mapa ou "Fazer a rota")
+  – Console Dev: Versão do app (escolher a build, forçar, ver quem está em qual versão)

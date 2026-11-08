@@ -199,6 +199,11 @@ private fun JanelaPedido(p: PedidoG, empresa: String?, onFechar: () -> Unit) {
                 PwBotaoPerigo("Confirmar recusa", onClick = { rodar("Pedido recusado.") { Gestao.revisarPedido(p.id, "recusar", null, motivo.ifBlank { null }) } }, cheio = true, modifier = Modifier.fillMaxWidth())
             }
         }
+        if (p.status in setOf("recebido", "aprovado")) {
+            var regras by remember { mutableStateOf(false) }
+            PwBotaoVidro("Regras deste pedido" + if (p.regras.isNotEmpty()) " (${p.regras.size})" else "", onClick = { regras = true }, icone = PwIcones.Layers, modifier = Modifier.fillMaxWidth())
+            if (regras) RegrasPedidoG(p.id, p.regras, onFechar = { regras = false })
+        }
         if (p.status in setOf("aprovado", "roteirizado", "em_rota")) {
             PwBotaoVidro("Voltar para revisão", onClick = {
                 rodar("Pedido voltou para revisão: as rotas dele foram desfeitas.", fechar = false) { Gestao.revisarPedido(p.id, "voltar_revisao", null, motivo.ifBlank { null }) }
@@ -236,6 +241,20 @@ internal fun BlocoRotaG(corrida: com.pwexpress.feature.gestor.data.CorridaG, ocu
             )
             Espaco(6)
             PwBotaoVidro("Enviar para o escolhido", onClick = { moto?.let { m -> acao { Gestao.liberarRota(corrida.id, null, m) } } }, icone = PwIcones.Send, modifier = Modifier.fillMaxWidth())
+        }
+    }
+
+    if (aberta && corrida.entregas > 0) {
+        val outras = dados.corridas.filter { it.id != corrida.id && it.teste == corrida.teste && it.motoboyId == null && it.status in setOf("montada", "agendada", "aguardando_motoboy", "sem_motoboy") }
+        PwCartao {
+            com.pwexpress.core.designsystem.PwRotulo("Mover entregas")
+            TextoDica("Separe uma entrega numa rota nova ou junte com outra rota aberta.")
+            corrida.paradas.filter { !it.coleta }.forEach { p ->
+                Espaco(6)
+                Text("${p.ordem + 1}. ${p.endereco.substringBefore(",")}", color = Pw.cores.texto, fontSize = 13.5.sp, maxLines = 1)
+                com.pwexpress.core.designsystem.PwSelecao("", listOf<Pair<String?, String>>(null to "Para uma rota nova") + outras.map { it.id to "Para a rota ${it.numeroExibicao}" }, "—",
+                    { destino -> acao { Gestao.moverEntrega(p.id, destino) } }, vazio = "Mover…")
+            }
         }
     }
 

@@ -36,6 +36,8 @@ sealed interface TelaG {
     data object Financeiro : TelaG
     data object Configuracoes : TelaG
     data object Dev : TelaG
+    data object Excecoes : TelaG
+    data class CatalogoT(val cat: Catalogo) : TelaG
 }
 
 /** Pedidos de navegação vindos de fora do painel (ex.: "Configurações" no menu da foto). */
@@ -120,7 +122,9 @@ fun GestorApp(
                     is TelaG.Empresa -> EmpresaG(atual.id, onVoltar = ::voltar)
                     is TelaG.Membro -> MembroG(atual.id, meuId = meuId, onVoltar = ::voltar)
                     TelaG.Financeiro -> FinanceiroG(onVoltar = ::voltar)
-                    TelaG.Configuracoes -> ConfiguracoesG(onVoltar = ::voltar)
+                    TelaG.Configuracoes -> ConfiguracoesG(onVoltar = ::voltar, onAbrir = { abrir(it) })
+                    TelaG.Excecoes -> ExcecoesG(onVoltar = ::voltar)
+                    is TelaG.CatalogoT -> CatalogoG(atual.cat, onVoltar = ::voltar)
                     TelaG.Dev -> DevG(onVoltar = ::voltar)
                     null -> when (aba) {
                         "mapa" -> MapaG(onCorrida = { abrir(TelaG.Corrida(it)) })

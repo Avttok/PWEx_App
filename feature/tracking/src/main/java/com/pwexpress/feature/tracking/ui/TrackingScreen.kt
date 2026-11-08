@@ -199,28 +199,35 @@ private fun BotaoStatus(modo: Modo, onAlternar: () -> Unit, onToque: () -> Unit)
     var apertado by remember { mutableStateOf(false) }
     val escala by androidx.compose.animation.core.animateFloatAsState(if (apertado) 0.94f else 1f, androidx.compose.animation.core.spring(0.5f, 380f), label = "escala")
     val tam = 236.dp
+    // o detector de toque não reinicia quando o modo muda (senão perde o "segurando")
+    val emRotaAgora = androidx.compose.runtime.rememberUpdatedState(emRota)
+    val onAlternarAgora = androidx.compose.runtime.rememberUpdatedState(onAlternar)
+    val onToqueAgora = androidx.compose.runtime.rememberUpdatedState(onToque)
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(tam + 40.dp).scale(escala)
-                .pointerInput(modo) {
+                .pointerInput(Unit) {
                     detectTapGestures(
                         onPress = {
                             apertado = true
-                            if (emRota) { tryAwaitRelease(); apertado = false; onToque(); return@detectTapGestures }
+                            if (emRotaAgora.value) { tryAwaitRelease(); apertado = false; onToqueAgora.value(); return@detectTapGestures }
                             vibrar.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.TextHandleMove)
-                            val enchendo = escopo.launch { segurar.animateTo(1f, tween(750, easing = androidx.compose.animation.core.LinearEasing)) }
+                            var trocou = false
+                            // troca assim que o anel enche, sem precisar soltar
+                            val enchendo = escopo.launch {
+                                segurar.animateTo(1f, tween(750, easing = androidx.compose.animation.core.LinearEasing))
+                                trocou = true
+                                vibrar.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
+                                onAlternarAgora.value()
+                            }
                             val soltou = tryAwaitRelease()
                             apertado = false
-                            if (segurar.value >= 0.999f) {
-                                vibrar.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
-                                onAlternar()
-                                escopo.launch { kotlinx.coroutines.delay(250); segurar.snapTo(0f) }
-                            } else {
+                            if (!trocou) {
                                 enchendo.cancel()
-                                if (soltou && segurar.value < 0.2f) onToque()
-                                escopo.launch { segurar.animateTo(0f, tween(260)) }
+                                if (soltou && segurar.value < 0.2f) onToqueAgora.value()
                             }
+                            escopo.launch { segurar.animateTo(0f, tween(if (trocou) 420 else 260)) }
                         },
                     )
                 }
@@ -295,12 +302,12 @@ private fun BotaoStatus(modo: Modo, onAlternar: () -> Unit, onToque: () -> Unit)
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
                         when (modo) { Modo.OFFLINE -> PwIcones.Power; Modo.DISPONIVEL -> PwIcones.Radar; Modo.EM_CORRIDA -> PwIcones.Route },
-                        null, tint = cor, modifier = Modifier.size(44.dp),
+                        null, tint = cor, modifier = Modifier.size(40.dp),
                     )
-                    Spacer(Modifier.height(8.dp))
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         when (modo) { Modo.OFFLINE -> "OFFLINE"; Modo.DISPONIVEL -> "ONLINE"; Modo.EM_CORRIDA -> "EM ROTA" },
-                        style = TextStyle(brush = Brush.linearGradient(listOf(cor3, cor, cor2)), fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 24.sp, letterSpacing = 2.sp),
+                        style = TextStyle(brush = Brush.linearGradient(listOf(cor3, cor, cor2)), fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 16.sp, letterSpacing = 1.2.sp),
                         maxLines = 1, softWrap = false,
                     )
                 }

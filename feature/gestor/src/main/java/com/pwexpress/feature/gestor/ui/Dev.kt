@@ -1,5 +1,13 @@
 package com.pwexpress.feature.gestor.ui
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.collectAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -85,8 +93,9 @@ fun DevG(onVoltar: () -> Unit) {
 
     PwPagina {
         Cabecalho("Console Dev", onVoltar, subtitulo = "O sistema inteiro, sem filtro")
-        PwFiltros(listOf("Módulos" to 0, "Sistema" to 0, "Aparelhos" to 0, "Registro" to 0), aba, { aba = it })
+        PwFiltros(listOf("Módulos" to 0, "Sistema" to 0, "Aparelhos" to 0, "Registro" to 0, "Versão do app" to 0), aba, { aba = it })
         PwErro(erro)
+        if (aba == 4) { VersaoAppG(); return@PwPagina }
         when (aba) {
             0 -> {
                 val l = modulos ?: run { PwCarregando(); return@PwPagina }
@@ -149,6 +158,87 @@ fun DevG(onVoltar: () -> Unit) {
                         TextoDica(listOfNotNull(x.str("por")?.let { "por $it" }, com.pwexpress.feature.gestor.data.iso(x.str("quando"))?.let { dataHora(it) }, x.str("motivo")?.let { "“$it”" }).joinToString(" · "))
                     }
                 }
+            }
+        }
+    }
+}
+
+
+/**
+ * Versão do app que deve rodar (igual ao site): uma build escolhida ou "sempre a mais nova".
+ * Com "forçar" ligado, qualquer outra versão trava na tela de atualização e o servidor recusa as chamadas dela.
+ */
+@Composable
+private fun VersaoAppG() {
+    val c = Pw.cores
+    val dados by Gestao.dados.collectAsState()
+    val escopo = rememberCoroutineScope()
+    var builds by remember { mutableStateOf<List<Pair<Int, String>>?>(null) }
+    var emUso by remember { mutableStateOf<List<JsonObject>>(emptyList()) }
+    var digitada by remember { mutableStateOf("") }
+    var erro by remember { mutableStateOf<String?>(null) }
+    fun cfg(k: String) = (dados.config[k] as? kotlinx.serialization.json.JsonPrimitive)?.content
+    val exigida = cfg("app_versao_exigida")?.toDoubleOrNull()?.toInt() ?: 0
+    val forcar = cfg("app_forcar_versao") != "false"
+    val devLivre = cfg("app_dev_livre") != "false"
+    LaunchedEffect(Unit) {
+        emUso = (Gestao.rpcJson("versoes_em_uso").getOrNull() as? kotlinx.serialization.json.JsonArray)?.mapNotNull { it as? JsonObject }.orEmpty()
+        builds = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            runCatching {
+                val req = okhttp3.Request.Builder().url("https://api.github.com/repos/${com.pwexpress.core.config.PwConfig.githubRepo}/releases?per_page=40")
+                    .header("Accept", "application/vnd.github+json").header("User-Agent", "PWExpress-app").build()
+                com.pwexpress.core.PwCore.http.client.newCall(req).execute().use { r ->
+                    if (!r.isSuccessful) error("GitHub ${r.code}")
+                    (kotlinx.serialization.json.Json.parseToJsonElement(r.body!!.string()) as kotlinx.serialization.json.JsonArray).mapNotNull { e ->
+                        val o = e as? JsonObject ?: return@mapNotNull null
+                        val tag = (o["tag_name"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return@mapNotNull null
+                        val b = tag.removePrefix("build-").toIntOrNull()?.takeIf { tag.startsWith("build-") } ?: return@mapNotNull null
+                        b to ((o["published_at"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.take(10).orEmpty())
+                    }.sortedByDescending { it.first }
+                }
+            }.onFailure { erro = "Lista do GitHub indisponível (${it.message}). Digite a build." }.getOrDefault(emptyList())
+        }
+    }
+    fun salvar(k: String, v: kotlinx.serialization.json.JsonElement) = escopo.launch {
+        Gestao.salvarConfig(k, v).onSuccess { Gestao.atualizar(); PwToast.mostrar("Salvo.", TipoAviso.OK) }.onFailure { erro = it.message }
+    }
+    PwCartao(destaque = true) {
+        PwRotulo("Rodando agora")
+        Text(if (exigida > 0) "Build $exigida" else "Sempre a mais nova", style = androidx.compose.ui.text.TextStyle(fontFamily = com.pwexpress.core.designsystem.ArchivoLargo,
+            fontWeight = FontWeight.Black, fontSize = 26.sp), color = c.texto)
+        TextoDica("Este celular: build ${com.pwexpress.core.update.Atualizador.versaoInstalada}")
+    }
+    com.pwexpress.core.designsystem.PwInterruptor("Forçar a versão", forcar, { salvar("app_forcar_versao", kotlinx.serialization.json.JsonPrimitive(it)) },
+        descricao = if (forcar) "Outra versão trava na tela de atualização e o servidor recusa as chamadas dela." else "Só avisa que há versão nova.")
+    com.pwexpress.core.designsystem.PwInterruptor("Dev pode usar qualquer versão", devLivre, { salvar("app_dev_livre", kotlinx.serialization.json.JsonPrimitive(it)) },
+        descricao = "Para testar uma build antes de liberar para todos.")
+    com.pwexpress.core.designsystem.PwBotaoVidro("Sempre a mais nova", onClick = { salvar("app_versao_exigida", kotlinx.serialization.json.JsonPrimitive(0)) },
+        icone = PwIcones.RefreshCw, modifier = Modifier.fillMaxWidth())
+    PwErro(erro)
+    PwRotulo("Escolher uma build")
+    when (val l = builds) {
+        null -> PwCarregando()
+        else -> l.forEach { (b, data) ->
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(if (b == exigida) c.ouro.copy(alpha = 0.14f) else c.vidroSutil)
+                .border(1.dp, if (b == exigida) c.ouro else c.borda, RoundedCornerShape(14.dp)).clickable { salvar("app_versao_exigida", kotlinx.serialization.json.JsonPrimitive(b)) }
+                .padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Build $b", color = c.texto, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Text(data, color = c.texto3, fontSize = 12.sp)
+                if (b == exigida) { Spacer(Modifier.width(8.dp)); Icon(PwIcones.Check, null, tint = c.ouro, modifier = Modifier.size(18.dp)) }
+            }
+        }
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        com.pwexpress.core.designsystem.PwCampo(digitada, { digitada = it.filter(Char::isDigit) }, "Build", teclado = androidx.compose.ui.text.input.KeyboardType.Number, modifier = Modifier.weight(1f))
+        com.pwexpress.core.designsystem.PwBotaoVidro("Usar", onClick = { digitada.toIntOrNull()?.let { salvar("app_versao_exigida", kotlinx.serialization.json.JsonPrimitive(it)) } })
+    }
+    if (emUso.isNotEmpty()) {
+        PwRotulo("Quem está em qual versão")
+        emUso.forEach { m ->
+            val v = (m["versao"] as? kotlinx.serialization.json.JsonPrimitive)?.content?.toIntOrNull()
+            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                Text((m["nome"] as? kotlinx.serialization.json.JsonPrimitive)?.content.orEmpty(), color = c.texto, modifier = Modifier.weight(1f))
+                Text(v?.let { "build $it" } ?: "antiga", color = if (exigida > 0 && v != exigida) c.vermelho else c.texto2, fontWeight = FontWeight.SemiBold)
             }
         }
     }

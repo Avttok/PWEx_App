@@ -1,0 +1,261 @@
+package com.pwexpress.feature.gestor.ui
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.pwexpress.core.designsystem.Pw
+import com.pwexpress.core.designsystem.PwCampo
+import com.pwexpress.core.designsystem.PwCartao
+import com.pwexpress.core.designsystem.PwErro
+import com.pwexpress.core.designsystem.PwIcones
+import com.pwexpress.core.designsystem.PwInterruptor
+import com.pwexpress.core.designsystem.PwPasso
+import com.pwexpress.core.designsystem.PwRotulo
+import com.pwexpress.core.designsystem.PwSegmentado
+import com.pwexpress.core.designsystem.PwSelecao
+import com.pwexpress.core.designsystem.PwTelaCheia
+import com.pwexpress.core.designsystem.PwToast
+import com.pwexpress.core.designsystem.PwVazio
+import com.pwexpress.core.designsystem.TipoAviso
+import com.pwexpress.core.designsystem.numeroBr
+import com.pwexpress.feature.gestor.data.GRUPOS_CONFIG
+import com.pwexpress.feature.gestor.data.Gestao
+import com.pwexpress.feature.gestor.data.PARAMETROS
+import com.pwexpress.feature.gestor.data.Param
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+
+/** Texto curto do valor de uma regra ("ligado", "R$ 2,00", "Quadro"…). */
+internal fun textoValor(p: Param, v: JsonElement?): String {
+    val prim = v as? JsonPrimitive
+    return when (p.tipo) {
+        "booleano" -> if ((prim?.content?.toBooleanStrictOrNull() ?: p.padraoBool)) "ligado" else "desligado"
+        "escolha" -> (prim?.content ?: p.padraoTxt)?.let { t -> p.opcoesTxt.firstOrNull { it.first == t }?.second ?: t } ?: "—"
+        "opcoes" -> (prim?.content?.toDoubleOrNull() ?: p.padraoNum).let { n -> p.opcoes.firstOrNull { it.first == n }?.second ?: numeroBr(n) }
+        else -> (prim?.content?.toDoubleOrNull() ?: p.padraoNum).let { n ->
+            if (p.unidade == "R$") "R$ ${numeroBr(n)}" else numeroBr(n) + (p.unidade?.let { " $it" } ?: "")
+        }
+    }
+}
+
+/**
+ * Um parâmetro com o controle certo para o tipo dele: interruptor, passo numérico, opções ou escolha.
+ * Igual ao site (o catálogo é gerado de lá).
+ */
+@Composable
+internal fun CampoParametro(p: Param, valor: JsonElement?, onSalvar: (JsonElement) -> Unit, bloqueado: Boolean = false, extra: (@Composable () -> Unit)? = null) {
+    val c = Pw.cores
+    val prim = valor as? JsonPrimitive
+    if (p.tipo == "booleano") {
+        val lig = prim?.content?.toBooleanStrictOrNull() ?: p.padraoBool
+        PwInterruptor(p.rotulo, lig, { if (!bloqueado) onSalvar(JsonPrimitive(it)) }, descricao = (if (lig) p.descricao else p.descricaoDesligado ?: p.descricao).ifEmpty { null })
+    } else {
+        Text(p.rotulo, color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        if (p.descricao.isNotEmpty()) TextoDica(p.descricao)
+        Espaco(8)
+        when (p.tipo) {
+            "escolha" -> {
+                val atual = prim?.content ?: p.padraoTxt
+                if (p.opcoesTxt.size <= 3) PwSegmentado(p.opcoesTxt.map { it.second to null }, p.opcoesTxt.indexOfFirst { it.first == atual }.coerceAtLeast(0),
+                    { i -> if (!bloqueado) onSalvar(JsonPrimitive(p.opcoesTxt[i].first)) })
+                else PwSelecao("", p.opcoesTxt.map { it.first to it.second }, atual, { v -> if (!bloqueado) onSalvar(JsonPrimitive(v)) })
+            }
+            "opcoes" -> {
+                val atual = prim?.content?.toDoubleOrNull() ?: p.padraoNum
+                if (p.opcoes.size <= 4) PwSegmentado(p.opcoes.map { it.second to null }, p.opcoes.indexOfFirst { it.first == atual }.coerceAtLeast(0), { i -> if (!bloqueado) onSalvar(JsonPrimitive(p.opcoes[i].first)) })
+                else PwSelecao("", p.opcoes.map { it.first to it.second }, atual, { v -> if (!bloqueado) onSalvar(JsonPrimitive(v)) })
+            }
+            else -> {
+                val atual = prim?.content?.toDoubleOrNull() ?: p.padraoNum
+                PwPasso(atual, { if (!bloqueado) onSalvar(JsonPrimitive(it)) }, Modifier.fillMaxWidth(), passo = p.passo, min = p.min ?: 0.0, max = p.max ?: 1e9, unidade = p.unidade)
+            }
+        }
+    }
+    if (bloqueado) TextoDica("Só o Dev altera.")
+    extra?.invoke()
+}
+
+/**
+ * Lista de regras com exceção (ou o padrão), por grupo. Serve para cliente, motoboy, tipo de pedido e pedido.
+ * [valores] = exceções já salvas; [onDefinir] com null volta ao padrão.
+ */
+@Composable
+internal fun EditorRegrasG(params: List<Param>, valores: Map<String, JsonElement>, onDefinir: (String, JsonElement?) -> Unit, busca: String = "") {
+    val c = Pw.cores
+    val dados by Gestao.dados.collectAsState()
+    val souDev = com.pwexpress.core.perfil.Perfis.perfil.collectAsState().value?.dev == true
+    val termo = busca.trim().lowercase()
+    val lista = if (termo.isEmpty()) params else params.filter { "${it.rotulo} ${it.descricao}".lowercase().contains(termo) }
+    if (lista.isEmpty()) { PwVazio("Nenhuma regra encontrada.", icone = PwIcones.Search); return }
+    GRUPOS_CONFIG.forEach { g ->
+        val doGrupo = lista.filter { it.grupo == g.chave }
+        if (doGrupo.isEmpty()) return@forEach
+        PwRotulo(g.titulo)
+        doGrupo.forEach { p ->
+            val tem = p.chave in valores
+            PwCartao(padding = PaddingValues(14.dp), cor = if (tem) c.ouro.copy(alpha = 0.55f) else null) {
+                CampoParametro(p, if (tem) valores[p.chave] else dados.config[p.chave], { onDefinir(p.chave, it) }, bloqueado = p.soDev && !souDev) {
+                    Espaco(6)
+                    if (tem) Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Exceção · padrão: ${textoValor(p, dados.config[p.chave])}", color = c.ouro, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        if (!(p.soDev && !souDev)) Text("usar o padrão", color = c.texto2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.clip(RoundedCornerShape(8.dp)).clickable { onDefinir(p.chave, null) }.padding(6.dp))
+                    } else Text("Usando o padrão · mude para criar a exceção", color = c.texto3, fontSize = 12.sp)
+                }
+            }
+        }
+    }
+}
+
+/** As peças do lego de um cliente, motoboy ou tipo de pedido (salva na hora). */
+@Composable
+internal fun RegrasDoAlvoG(escopo: String, alvo: String, nome: String) {
+    val escopoCo = rememberCoroutineScope()
+    val valores = remember(escopo, alvo) { mutableStateMapOf<String, JsonElement>() }
+    var carregado by remember(escopo, alvo) { mutableStateOf(false) }
+    var busca by remember { mutableStateOf("") }
+    LaunchedEffect(escopo, alvo) { valores.clear(); valores.putAll(Gestao.politicas(escopo, alvo)); carregado = true }
+    TextoDica("Regras só de $nome · ${if (valores.isEmpty()) "tudo no padrão" else "${valores.size} diferente${if (valores.size == 1) "" else "s"} do padrão"}. " +
+        when (escopo) { "cliente" -> "Valem para todos os pedidos dele (um pedido pode ter regras próprias)."; "motoboy" -> "Valem para todas as rotas dele."; else -> "Valem para todos os pedidos deste tipo." })
+    PwCampo(busca, { busca = it }, "Buscar regra")
+    if (!carregado) { com.pwexpress.core.designsystem.PwCarregando(); return }
+    EditorRegrasG(PARAMETROS.filter { escopo in it.escopos }, valores, { chave, v ->
+        escopoCo.launch {
+            Gestao.definirPolitica(escopo, alvo, chave, v).onSuccess {
+                if (v == null) valores.remove(chave) else valores[chave] = v
+            }.onFailure { PwToast.mostrar(it.message ?: "Erro", TipoAviso.ERRO) }
+        }
+    }, busca)
+}
+
+/** Exceções de todo mundo: escolha cliente, motoboy ou tipo e mude só o que for diferente. */
+@Composable
+internal fun ExcecoesG(onVoltar: () -> Unit) {
+    val dados by Gestao.dados.collectAsState()
+    var escopo by remember { mutableIntStateOf(0) }
+    var alvo by remember { mutableStateOf<String?>(null) }
+    var tipos by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var contagem by remember { mutableStateOf<Map<Pair<String, String>, Int>>(emptyMap()) }
+    LaunchedEffect(Unit) {
+        tipos = Gestao.catalogoPedido().first.map { it.chave to it.nome }
+        contagem = Gestao.contagemPoliticas()
+    }
+    val esc = listOf("cliente", "motoboy", "tipo")[escopo]
+    val alvos = when (esc) {
+        "cliente" -> dados.empresas.map { it.id to it.nome }
+        "motoboy" -> dados.equipe.filter { it.motoboy }.map { it.id to it.nome }
+        else -> tipos
+    }
+    LaunchedEffect(esc, alvos.size) { if (alvos.none { it.first == alvo }) alvo = alvos.firstOrNull()?.first }
+    com.pwexpress.core.designsystem.PwPagina {
+        Cabecalho("Exceções", onVoltar, subtitulo = "Vence: pedido > motoboy > cliente > tipo > padrão")
+        PwSegmentado(listOf("Cliente" to PwIcones.Building2, "Motoboy" to PwIcones.Bike, "Tipo" to PwIcones.ClipboardList), escopo, { escopo = it })
+        PwSelecao("", alvos.map { (id, n) -> id to (n + (contagem[esc to id]?.let { "  · $it exceç${if (it == 1) "ão" else "ões"}" } ?: "")) }, alvo, { alvo = it })
+        val a = alvo
+        if (a == null) PwVazio("Nada para escolher aqui ainda.") else RegrasDoAlvoG(esc, a, alvos.firstOrNull { it.first == a }?.second ?: "")
+    }
+}
+
+/** Regras que fazem sentido num pedido só (preço, junção em rotas, despacho, revisão). */
+internal val PARAMS_PEDIDO = PARAMETROS.filter { ("cliente" in it.escopos || "tipo" in it.escopos) && it.grupo !in setOf("pagamento", "faturas") && !it.soDev }
+
+/** Regras deste pedido (a peça mais alta do lego). Grava na hora e recalcula o orçamento. */
+@Composable
+internal fun RegrasPedidoG(pedidoId: String?, inicial: Map<String, JsonElement>, onFechar: () -> Unit, onMudar: (Map<String, JsonElement>) -> Unit = {}) {
+    val escopo = rememberCoroutineScope()
+    val valores = remember(pedidoId) { mutableStateMapOf<String, JsonElement>().apply { putAll(inicial) } }
+    var busca by remember { mutableStateOf("") }
+    var erro by remember { mutableStateOf<String?>(null) }
+    PwTelaCheia("Regras deste pedido", onFechar, subtitulo = if (valores.isEmpty()) "Tudo como o cliente/padrão" else "${valores.size} regra(s) própria(s)") {
+        TextoDica("Valem só para este pedido e vencem as do cliente, do tipo e o padrão. O orçamento é recalculado ao mudar.")
+        PwCampo(busca, { busca = it }, "Buscar regra")
+        PwErro(erro)
+        EditorRegrasG(PARAMS_PEDIDO, valores, { chave, v ->
+            val novo = valores.toMutableMap().apply { if (v == null) remove(chave) else put(chave, v) }
+            if (pedidoId == null) { if (v == null) valores.remove(chave) else valores[chave] = v; onMudar(novo); return@EditorRegrasG }
+            escopo.launch {
+                Gestao.definirRegrasPedido(pedidoId, JsonObject(novo)).onSuccess {
+                    if (v == null) valores.remove(chave) else valores[chave] = v
+                    erro = null; Gestao.atualizar()
+                }.onFailure { erro = it.message }
+            }
+        }, busca)
+    }
+}
+
+// ------------------------------------------------------------------ ícones
+
+/** Nomes que o gestor pode escolher (os mesmos do site) e o desenho que o app usa para cada um. */
+internal val ICONES_ESCOLHA = listOf(
+    "package", "package-2", "box", "file-text", "mail", "gift", "receipt", "store", "shopping-bag", "building-2", "warehouse", "landmark",
+    "house", "school", "hospital", "utensils", "pizza", "coffee", "pill", "heart", "smartphone", "laptop", "headphones", "camera",
+    "flask-conical", "flame", "droplet", "shield-check", "truck", "bike", "car", "map-pin", "clock", "zap", "star", "crown", "sparkles", "palette", "user-round", "users",
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+internal fun SeletorIconeG(atual: String?, onEscolher: (String?) -> Unit, onFechar: () -> Unit) {
+    val c = Pw.cores
+    PwTelaCheia("Escolher ícone", onFechar) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            ICONES_ESCOLHA.forEach { n ->
+                val sel = n == atual
+                Box(Modifier.size(56.dp).clip(RoundedCornerShape(16.dp)).background(if (sel) c.ouro.copy(alpha = 0.18f) else c.vidroSutil)
+                    .border(1.dp, if (sel) c.ouro else c.borda, RoundedCornerShape(16.dp)).clickable { onEscolher(n); onFechar() }, contentAlignment = Alignment.Center) {
+                    Icon(iconeDoNome(n), n, tint = if (sel) c.ouro else c.texto, modifier = Modifier.size(24.dp))
+                }
+            }
+        }
+        com.pwexpress.core.designsystem.PwBotaoVidro("Sem ícone", onClick = { onEscolher(null); onFechar() }, icone = PwIcones.X, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+/** Botão pequeno que mostra o ícone atual e abre o seletor. */
+@Composable
+internal fun BotaoIcone(atual: String?, onEscolher: (String?) -> Unit) {
+    val c = Pw.cores
+    var aberto by remember { mutableStateOf(false) }
+    Row(Modifier.clip(RoundedCornerShape(12.dp)).background(c.vidroSutil).border(1.dp, c.borda, RoundedCornerShape(12.dp)).clickable { aberto = true }.padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(iconeDoNome(atual), null, tint = c.ouro, modifier = Modifier.size(18.dp))
+        Spacer(Modifier.width(6.dp))
+        Text("Ícone", color = c.texto2, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
+    if (aberto) SeletorIconeG(atual, onEscolher, onFechar = { aberto = false })
+}
+
+@Suppress("unused") private val semUso = JsonNull

@@ -98,6 +98,7 @@ data class EmpresaG(
     val podeExpress: Boolean = true,
     val repassePct: Double? = null, val devPct: Double? = null,
     val pagamentoMetodos: List<String> = listOf("pix", "cartao"),
+    val modoTeste: Boolean = false, val icone: String? = null,
 ) {
     val documento get() = if (tipo == "pf") cpf else cnpj
 }
@@ -151,6 +152,7 @@ data class PedidoG(
     val distanciaM: Int?, val valorCalculado: Double?, val valorAjuste: Double, val ajusteMotivo: String?, val valor: Double?,
     val cobranca: String, val pagamentoStatus: String, val criadoEm: Long, val recusaMotivo: String?,
     val pontos: List<PontoPedidoG>, val itens: List<ItemPedidoG>,
+    val regras: JsonObject = JsonObject(emptyMap()),
 ) {
     val numeroExibicao get() = if (teste) "P-T$numero" else "P-$numero"
     val planejado get() = tipo == "planejado"
@@ -172,6 +174,7 @@ fun JsonObject.paraPedidoG() = PedidoG(
     recusaMotivo = str("recusa_motivo"),
     pontos = arr("pedido_pontos").map { PontoPedidoG(it.int("ordem") ?: 0, it.str("tipo") == "coleta", it.str("endereco").orEmpty(), it.str("contato_nome")) }.sortedBy { it.ordem },
     itens = arr("pedido_itens").map { ItemPedidoG(it.str("descricao").orEmpty(), it.int("quantidade") ?: 1, it.dbl("peso_kg")) },
+    regras = obj("regras") ?: JsonObject(emptyMap()),
 )
 
 fun JsonObject.paraOfertaG() = OfertaG(str("id")!!, str("corrida_id")!!, str("motoboy_id")!!, int("distancia_m"), iso(str("expira_em")) ?: 0)
@@ -191,6 +194,7 @@ fun JsonObject.paraEmpresaG() = EmpresaG(
     clienteVeAoVivo = bool("cliente_ve_ao_vivo"), observacoes = str("observacoes"),
     tipo = str("tipo") ?: "pj", cpf = str("cpf"), podeExpress = (this["pode_express"] as? kotlinx.serialization.json.JsonPrimitive)?.content != "false",
     repassePct = dbl("repasse_pct"), devPct = dbl("dev_pct"), pagamentoMetodos = strs("pagamento_metodos").ifEmpty { listOf("pix", "cartao") },
+    modoTeste = bool("modo_teste"), icone = str("icone"),
 )
 
 fun JsonObject.paraItemRegistro() = ItemRegistro(

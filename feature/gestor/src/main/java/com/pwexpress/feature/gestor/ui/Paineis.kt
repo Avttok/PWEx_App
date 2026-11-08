@@ -1,5 +1,7 @@
 package com.pwexpress.feature.gestor.ui
 
+import kotlinx.coroutines.launch
+
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -212,6 +214,32 @@ fun MapaG(onCorrida: (String) -> Unit) {
     }
     fun alternar(id: String) { seguindo = if (seguindo == id) null else id }
 
+    // simulador (só motoboy em modo teste): toque no mapa e ele "anda" até lá mandando pings pelo servidor
+    var simulando by remember { mutableStateOf<String?>(null) }
+    var andando by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    val escopoSim = androidx.compose.runtime.rememberCoroutineScope()
+    val simKmh = dados.cfgNum("simulador_velocidade_kmh", 35.0)
+    fun simularAte(mid: String, destino: List<Pair<Double, Double>>) {
+        andando?.cancel()
+        andando = escopoSim.launch {
+            val ini = dados.posicao(mid)?.let { p -> p.lat?.let { la -> p.lng?.let { lo -> la to lo } } } ?: destino.first()
+            val pts = listOf(ini) + destino
+            val passoM = simKmh / 3.6 * 3 // a cada 3 s
+            for (k in 0 until pts.size - 1) {
+                val a = pts[k]; val b = pts[k + 1]
+                val dist = com.pwexpress.feature.gestor.data.Geo.metros(a.first, a.second, b.first, b.second).toDouble()
+                val n = maxOf(1, (dist / passoM).toInt())
+                for (i in 1..n) {
+                    val t = i.toDouble() / n
+                    Gestao.simularPosicao(mid, a.first + (b.first - a.first) * t, a.second + (b.second - a.second) * t, simKmh / 3.6)
+                        .onFailure { erroSim -> com.pwexpress.core.designsystem.PwToast.mostrar(erroSim.message ?: "Erro", com.pwexpress.core.designsystem.TipoAviso.ERRO); return@launch }
+                    kotlinx.coroutines.delay(3000)
+                }
+            }
+            Gestao.atualizar()
+        }
+    }
+
     TelaComMapa(
         titulo = "Mapa",
         subtitulo = "$emServico em serviço · ${todos.size} motoboy${if (todos.size == 1) "" else "s"}" + (seguindo?.let { id -> " · seguindo ${dados.membro(id)?.nome?.substringBefore(" ") ?: ""}" } ?: ""),
@@ -220,6 +248,7 @@ fun MapaG(onCorrida: (String) -> Unit) {
                 paradas = emptyList(), rota = null, minhaPosicao = null, marcadores = marcadores, modifier = Modifier.fillMaxSize(),
                 enquadrar = enquadrar, onMarcador = ::alternar, seguir = seguindo.takeIf { destaque == null },
                 percursos = percursos, comPings = comPings, percursoTeste = teste, calor = pontosCalor, margemBaixo = margem,
+                onToque = simulando?.let { mid -> { la: Double, lo: Double -> simularAte(mid, listOf(la to lo)) } },
             )
         },
     ) {
@@ -272,6 +301,15 @@ fun MapaG(onCorrida: (String) -> Unit) {
                 }
                 corrida?.let { Detalhe(PwIcones.Package, "Corrida ${it.numeroExibicao} · ${Status.rotulo[it.status]}") }
                 if (semSinal(p, agora)) Detalhe(PwIcones.Alerta, "Sem sinal recente", c.vermelho)
+                if (sel && m.modoTeste && dados.cfgBool("simulador_ligado", true)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        PwPilula(if (simulando == m.id) "Simulador ligado · toque no mapa" else "Simular posição", PwIcones.FlaskConical,
+                            { simulando = if (simulando == m.id) null else m.id; if (simulando == null) andando?.cancel() }, ligada = simulando == m.id)
+                        val rotaSim = corrida?.rota?.let { com.pwexpress.core.mapa.decodificarPolyline(it) }.orEmpty()
+                        if (simulando == m.id && rotaSim.size >= 2) PwPilula("Fazer a rota", PwIcones.Route, { simularAte(m.id, rotaSim) })
+                        if (andando?.isActive == true) PwPilula("Parar", PwIcones.X, { andando?.cancel() })
+                    }
+                }
                 if (sel) {
                     Detalhe(PwIcones.LocateFixed, if (coordenadaValida(p?.lat, p?.lng)) "Seguindo no mapa · toque para soltar" else "Sem posição para seguir", c.ouro)
                     if (comTrilhas) ListaRegistros(regSel, destaque, { destaque = if (destaque == it) null else it }, dados)

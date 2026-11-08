@@ -137,6 +137,8 @@ fun NovoPedidoG(onVoltar: () -> Unit, onCriado: () -> Unit) {
     val paradas = remember { mutableStateListOf(ParadaForm(true), ParadaForm(false)) }
     val itens = remember { mutableStateListOf<ItemForm>() }
     var obs by remember { mutableStateOf("") }
+    var regras by remember { mutableStateOf<Map<String, kotlinx.serialization.json.JsonElement>>(emptyMap()) }
+    var editandoRegras by remember { mutableStateOf(false) }
     var marcando by remember { mutableStateOf<ParadaForm?>(null) }
     var rota by remember { mutableStateOf<RotaG?>(null) }
     var orc by remember { mutableStateOf<JsonObject?>(null) }
@@ -183,7 +185,7 @@ fun NovoPedidoG(onVoltar: () -> Unit, onCriado: () -> Unit) {
     val quandoIso = if (planejar) Instant.ofEpochMilli(quando).toString() else null
 
     // orçamento ao vivo
-    val chaveOrc = listOf(empresaId, tipoPedido, urgente, quandoIso, rota?.distanciaM, chaveRota, itens.joinToString { "${it.categoria?.id}${it.quantidade}${it.peso}${it.comp}${it.larg}${it.alt}" }).joinToString("§")
+    val chaveOrc = listOf(regras.toString(), empresaId, tipoPedido, urgente, quandoIso, rota?.distanciaM, chaveRota, itens.joinToString { "${it.categoria?.id}${it.quantidade}${it.peso}${it.comp}${it.larg}${it.alt}" }).joinToString("§")
     LaunchedEffect(chaveOrc) {
         if (paradas.any { it.lat == null }) { orc = null; return@LaunchedEffect }
         delay(450)
@@ -191,6 +193,7 @@ fun NovoPedidoG(onVoltar: () -> Unit, onCriado: () -> Unit) {
             empresaId?.let { put("empresa_id", it) }; put("tipo", if (planejar) "planejado" else "express"); put("tipo_pedido", tipoPedido)
             quandoIso?.let { put("quando", it) }; put("urgente", urgente); rota?.let { put("distancia_m", it.distanciaM) }
             put("pontos", pontosJson()); put("itens", itensJson())
+            if (regras.isNotEmpty()) put("regras", JsonObject(regras))
         })
     }
 
@@ -209,6 +212,7 @@ fun NovoPedidoG(onVoltar: () -> Unit, onCriado: () -> Unit) {
                 obs.trim().takeIf { it.isNotEmpty() }?.let { put("observacoes", it) }
                 rota?.let { put("distancia_m", it.distanciaM) }
                 put("pontos", pontosJson()); put("itens", itensJson())
+                if (regras.isNotEmpty()) put("regras", JsonObject(regras))
             }).onSuccess {
                 PwToast.mostrar("O roteirizador já está montando a rota.", TipoAviso.OK, "Pedido criado")
                 Gestao.atualizar(); onCriado()
@@ -296,6 +300,8 @@ fun NovoPedidoG(onVoltar: () -> Unit, onCriado: () -> Unit) {
                 rota?.let { TextoDica("${km(it.distanciaM)} · ${duracao(it.duracaoS)}") }
             } else TextoDica("Localize os endereços para calcular.")
         }
+        com.pwexpress.core.designsystem.PwBotaoVidro("Regras deste pedido" + if (regras.isNotEmpty()) " (${regras.size})" else "", onClick = { editandoRegras = true },
+            icone = PwIcones.Layers, modifier = Modifier.fillMaxWidth())
         PwErro(erro)
         PwBotaoOuro(if (enviando) "Criando…" else "Criar pedido", onClick = ::enviar, icone = PwIcones.Package2, habilitado = !enviando, altura = 58.dp)
     }
@@ -308,6 +314,7 @@ fun NovoPedidoG(onVoltar: () -> Unit, onCriado: () -> Unit) {
             escopo.launch { p.endereco = Geo.enderecoDoPonto(la, lo) }
         }
     }
+    if (editandoRegras) RegrasPedidoG(null, regras, onFechar = { editandoRegras = false }, onMudar = { regras = it })
     if (escolhendoHora) SeletorDataHora("Quando", quando, onFechar = { escolhendoHora = false }) { quando = it; escolhendoHora = false }
 }
 

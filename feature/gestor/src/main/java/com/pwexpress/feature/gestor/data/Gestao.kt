@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -49,9 +50,12 @@ object Gestao {
         val acessosCliente: Map<String, List<MembroG>> = emptyMap(),
         /** Pedidos dos últimos 30 dias (os "para revisar" ficam no topo da aba Pedidos). */
         val pedidos: List<PedidoG> = emptyList(),
+        /** Ícone escolhido para cada pessoa (perfis.icone). */
+        val icones: Map<String, String> = emptyMap(),
         val carregado: Boolean = false,
     ) {
         fun membro(id: String?) = equipe.firstOrNull { it.id == id }
+        fun membroIcone(id: String?): String? = icones[id]
         fun empresa(id: String?) = empresas.firstOrNull { it.id == id }
         fun posicao(id: String?) = posicoes.firstOrNull { it.id == id }
         fun cfgNum(k: String, padrao: Double) = (config[k] as? JsonPrimitive)?.content?.toDoubleOrNull() ?: padrao
@@ -103,6 +107,7 @@ object Gestao {
                             .exigirOk().lista().map { it.paraPedidoG() }
                     }.getOrDefault(_dados.value.pedidos)
                 }
+                val icones = async { runCatching { rpc.rest("GET", "/rest/v1/perfis?select=id,icone&icone=not.is.null").exigirOk().lista().associate { it.str("id")!! to it.str("icone")!! } }.getOrDefault(emptyMap()) }
                 val todos = equipe.await().map { it.paraMembroG() }
                 val vinc = vinculos.await()
                 _dados.value = Dados(
@@ -116,6 +121,7 @@ object Gestao {
                     config = cfg.await().associate { it.str("chave")!! to (it["valor"] ?: JsonNull) },
                     trilhas = trilha?.await() ?: _dados.value.trilhas,
                     pedidos = pedidos.await(),
+                    icones = icones.await(),
                     carregado = true,
                 )
             }
@@ -371,6 +377,60 @@ object Gestao {
                 put("cnh_numero", v.cnhNumero); put("cnh_categoria", v.cnhCategoria); put("cnh_validade", validade ?: "")
             })
         }).exigirOk(::traduzir).objeto()?.paraVeiculoG() ?: v
+    }
+
+    // ------------------------------------------------------------------ genéricos (catálogos, regras, RPCs do site)
+
+    /** Linhas de uma tabela (as regras de acesso do banco valem). [consulta] = filtros/ordem do PostgREST. */
+    suspend fun tabela(nome: String, consulta: String = "select=*"): List<JsonObject> = runCatching {
+        PwCore.rpc.rest("GET", "/rest/v1/$nome?$consulta").exigirOk().lista()
+    }.getOrDefault(emptyList())
+
+    /** Cria (sem id) ou atualiza uma linha; devolve a linha salva. */
+    suspend fun salvarLinha(nome: String, id: String?, linha: JsonObject): Result<JsonObject> = acao {
+        val r = if (id == null) PwCore.rpc.rest("POST", "/rest/v1/$nome", linha.toString(), "return=representation")
+                else PwCore.rpc.rest("PATCH", "/rest/v1/$nome?id=eq.$id", linha.toString(), "return=representation")
+        r.exigirOk(::traduzir).lista().firstOrNull() ?: linha
+    }
+
+    suspend fun apagarLinha(nome: String, id: String) = acao { PwCore.rpc.rest("DELETE", "/rest/v1/$nome?id=eq.$id").exigirOk(::traduzir); Unit }
+
+    /** Chama uma função do banco e devolve o JSON da resposta. */
+    suspend fun rpcJson(funcao: String, args: JsonObject = JsonObject(emptyMap())): Result<JsonElement> = acao {
+        PwCore.rpc.chamar(funcao, args).exigirOk(::traduzir).let { r -> if (r.corpo.isBlank()) JsonNull else Json.parseToJsonElement(r.corpo) }
+    }
+
+    /** Exceções (peças do lego) de um cliente, motoboy ou tipo de pedido. */
+    suspend fun politicas(escopo: String, alvo: String): Map<String, JsonElement> = tabela("politicas", "select=chave,valor&escopo=eq.$escopo&alvo=eq.${enc(alvo)}")
+        .associate { it.str("chave")!! to (it["valor"] ?: JsonNull) }
+
+    suspend fun contagemPoliticas(): Map<Pair<String, String>, Int> = tabela("politicas", "select=escopo,alvo")
+        .groupingBy { (it.str("escopo") ?: "") to (it.str("alvo") ?: "") }.eachCount()
+
+    /** valor null = volta ao padrão. */
+    suspend fun definirPolitica(escopo: String, alvo: String, chave: String, valor: JsonElement?) = acao {
+        PwCore.rpc.chamar("definir_politica", buildJsonObject {
+            put("p_escopo", escopo); put("p_alvo", alvo); put("p_chave", chave); put("p_valor", valor ?: JsonNull)
+        }).exigirOk(::traduzir); Unit
+    }
+
+    suspend fun definirRegrasPedido(id: String, regras: JsonObject) = acao {
+        PwCore.rpc.chamar("definir_regras_pedido", buildJsonObject { put("p_pedido", id); put("p_regras", regras) }).exigirOk(::traduzir); Unit
+    }
+
+    suspend fun moverEntrega(parada: String, destino: String?) = acao {
+        PwCore.rpc.chamar("mover_entrega", buildJsonObject { put("p_parada", parada); put("p_destino", destino?.let { JsonPrimitive(it) } ?: JsonNull) }).exigirOk(::traduzir); Unit
+    }
+
+    suspend fun definirIcone(tipo: String, id: String, icone: String?) = acao {
+        PwCore.rpc.chamar("definir_icone", buildJsonObject { put("p_tipo", tipo); put("p_id", id); put("p_icone", icone?.let { JsonPrimitive(it) } ?: JsonNull) }).exigirOk(::traduzir); Unit
+    }
+
+    suspend fun simularPosicao(motoboy: String, lat: Double, lng: Double, velocidadeMs: Double? = null, direcao: Double? = null) = acao {
+        PwCore.rpc.chamar("simular_posicao", buildJsonObject {
+            put("p_motoboy", motoboy); put("p_lat", lat); put("p_lng", lng)
+            put("p_velocidade_ms", velocidadeMs?.let { JsonPrimitive(it) } ?: JsonNull); put("p_direcao", direcao?.let { JsonPrimitive(it) } ?: JsonNull)
+        }).exigirOk(::traduzir); Unit
     }
 
     suspend fun roteirizarAgora() = acao { PwCore.rpc.chamar("roteirizar_agora", JsonObject(emptyMap())).exigirOk(::traduzir); Unit }

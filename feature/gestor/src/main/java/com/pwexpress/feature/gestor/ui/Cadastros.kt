@@ -6,6 +6,8 @@ import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -108,6 +110,7 @@ fun EmpresasG(onAbrir: (String?) -> Unit) {
     Box(Modifier.fillMaxSize()) {
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 190.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { TituloTela("Clientes", if (dados.empresas.size == 1) "1 cliente cadastrado" else "${dados.empresas.size} clientes cadastrados", PwIcones.Building2) }
+            item { CadastrosPendentesG() }
             if (dados.carregado && dados.empresas.isEmpty()) item { PwVazio("Nenhum cliente cadastrado ainda.", icone = PwIcones.Building2) }
             items(dados.empresas, key = { it.id }) { e ->
                 PwCartao(padding = PaddingValues(6.dp)) {
@@ -180,8 +183,35 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
         if (r != null) { lat = r.lat; lng = r.lng; erro = null } else erro = "Não encontrei esse endereço no mapa. Ajuste o texto ou toque no mapa."
     }
 
+    var aba by remember { mutableIntStateOf(0) }
     PwPagina {
         Cabecalho(if (e == null) "Novo cliente" else e.nome, onVoltar, subtitulo = "Dados, preço, pagamento e coleta padrão")
+        if (e != null) {
+            PwSegmentado(listOf("Dados" to PwIcones.Building2, "Regras" to PwIcones.Layers, "Zonas" to PwIcones.MapPin), aba, { aba = it })
+            when (aba) {
+                1 -> { RegrasDoAlvoG("cliente", e.id, e.nome); return@PwPagina }
+                2 -> {
+                    CatalogoG(Catalogo.ZONAS, null, clienteId = e.id)
+                    PwRotulo("Horários de pico só deste cliente")
+                    CatalogoG(Catalogo.HORARIOS, null, clienteId = e.id)
+                    return@PwPagina
+                }
+            }
+            PwCartao {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        PwInterruptor("Cliente em modo teste", e.modoTeste, { lig ->
+                            escopo.launch {
+                                Gestao.salvarLinha("empresas", e.id, kotlinx.serialization.json.buildJsonObject { put("modo_teste", lig) })
+                                    .onSuccess { Gestao.atualizar() }.onFailure { erro = it.message }
+                            }
+                        }, descricao = "Pedidos dele viram pedidos de teste (só para motoboys em teste, fora das faturas reais).", cor = c.violeta)
+                    }
+                }
+                Espaco(6)
+                BotaoIcone(e.icone) { nov -> escopo.launch { Gestao.definirIcone("empresa", e.id, nov).onSuccess { Gestao.atualizar() }.onFailure { erro = it.message } } }
+            }
+        }
         PwSegmentado(listOf("Empresa (CNPJ)" to PwIcones.Building2, "Pessoa (CPF)" to PwIcones.User), if (tipo == "pf") 1 else 0, { tipo = if (it == 1) "pf" else "pj" })
         if (tipo == "pf") PwCartao {
             PwRotulo("Pessoa física")
@@ -475,6 +505,7 @@ fun MembroG(id: String, meuId: String?, onVoltar: () -> Unit) {
             Triple("registro", "Registro", PwIcones.History),
             Triple("percursos", "Percursos", PwIcones.Route).takeIf { comPercursos },
             Triple("veiculo", "Veículo", PwIcones.Bike).takeIf { m.motoboy },
+            Triple("regras", "Regras", PwIcones.Layers).takeIf { m.motoboy },
             Triple("editar", "Editar", PwIcones.Pencil),
         )
         PwSegmentado(abas.map { it.second to it.third }, aba.coerceIn(0, abas.lastIndex), { aba = it })
@@ -483,6 +514,15 @@ fun MembroG(id: String, meuId: String?, onVoltar: () -> Unit) {
             "registro" -> RegistroG(m.id)
             "percursos" -> PercursosMembroG(m.id, m.modoTeste)
             "veiculo" -> VeiculoG(m.id)
+            "regras" -> {
+                val escopoI = rememberCoroutineScope()
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextoDica("Ícone no mapa (quando não há foto):")
+                    Spacer(Modifier.width(8.dp))
+                    BotaoIcone(dados.membroIcone(m.id)) { nov -> escopoI.launch { Gestao.definirIcone("perfil", m.id, nov).onSuccess { Gestao.atualizar() } } }
+                }
+                RegrasDoAlvoG("motoboy", m.id, m.nome)
+            }
             "editar" -> if (m.dev && !souDev) TextoDica("Conta Dev: só o Dev altera esta conta.") else EditarMembroG(m, eu = m.id == meuId, onExcluida = onVoltar, souDev = souDev)
         }
     }
@@ -705,6 +745,19 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
 
 @Composable
 fun FinanceiroG(onVoltar: (() -> Unit)?) {
+    var aba by remember { mutableIntStateOf(0) }
+    val abas: @Composable () -> Unit = {
+        PwSegmentado(listOf("Resumo" to PwIcones.TrendingUp, "Faturas" to PwIcones.ReceiptText, "Folha" to PwIcones.Users), aba, { aba = it })
+    }
+    when (aba) {
+        0 -> ResumoCarteiraG(onVoltar, abas)
+        1 -> FaturasG(onVoltar, abas)
+        else -> FolhaG(onVoltar, abas)
+    }
+}
+
+@Composable
+private fun ResumoCarteiraG(onVoltar: (() -> Unit)?, abas: @Composable () -> Unit) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
     val teste by TemaApp.modoTeste.collectAsState()
@@ -724,6 +777,7 @@ fun FinanceiroG(onVoltar: (() -> Unit)?) {
     PwPagina {
         val sub = if (teste) "Ganhos das corridas de teste" else "Corridas concluídas"
         if (onVoltar != null) Cabecalho("Carteira", onVoltar, subtitulo = sub) else TituloTela("Carteira", sub, PwIcones.Wallet)
+        abas()
         PwFiltros(listOf("Hoje" to 0, "7 dias" to 0, "Este mês" to 0, "30 dias" to 0), periodo, { periodo = it })
         val l = linhas ?: run { PwCarregando(); return@PwPagina }
         val total = l.sumOf { it.valor ?: 0.0 }; val moto = l.sumOf { it.valorMotoboy ?: 0.0 }; val gest = l.sumOf { it.valorGestao ?: 0.0 }; val dev = l.sumOf { it.valorDev ?: 0.0 }
@@ -792,7 +846,7 @@ fun FinanceiroG(onVoltar: (() -> Unit)?) {
 // =====================================================================
 
 @Composable
-fun ConfiguracoesG(onVoltar: () -> Unit) {
+fun ConfiguracoesG(onVoltar: () -> Unit, onAbrir: (TelaG) -> Unit = {}) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
     var grupo by remember { mutableIntStateOf(0) }
@@ -810,6 +864,16 @@ fun ConfiguracoesG(onVoltar: () -> Unit) {
         Cabecalho("Configurações", onVoltar, subtitulo = "Valem para todo o sistema · salvam sozinhas")
         PwCampo(busca, { busca = it }, "Buscar ajuste…")
         val termo = sem(busca.trim())
+        if (termo.isEmpty()) {
+            PwRotulo("Peças do lego")
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(Triple("Exceções", PwIcones.Layers, TelaG.Excecoes), Triple("Zonas de preço", PwIcones.MapPin, TelaG.CatalogoT(Catalogo.ZONAS)),
+                    Triple("Horários de pico", PwIcones.Clock, TelaG.CatalogoT(Catalogo.HORARIOS)), Triple("Categorias", PwIcones.Package2, TelaG.CatalogoT(Catalogo.CATEGORIAS)),
+                    Triple("Tipos de pedido", PwIcones.ClipboardList, TelaG.CatalogoT(Catalogo.TIPOS))).forEach { (t, i, tela) ->
+                    com.pwexpress.core.designsystem.PwPilula(t, i, { onAbrir(tela) })
+                }
+            }
+        }
         if (termo.isEmpty()) PwFiltros(GRUPOS_CONFIG.map { it.titulo to 0 }, grupo, { grupo = it })
         val g = GRUPOS_CONFIG.getOrNull(grupo)
         val lista = if (termo.isNotEmpty()) PARAMETROS.filter { sem("${it.rotulo} ${it.descricao}").contains(termo) } else PARAMETROS.filter { it.grupo == g?.chave }
@@ -825,23 +889,12 @@ fun ConfiguracoesG(onVoltar: () -> Unit) {
                 Text(if (cfg.logico("acrescimo_distancia", true)) "100 × (1 + ${com.pwexpress.core.designsystem.numeroBr(fc)} + ${com.pwexpress.core.designsystem.numeroBr(fe)}) = ${moedaBr(100 * (1 + fc + fe))}" else "Acréscimo desligado: fica R$ 100,00.", color = c.texto, fontWeight = FontWeight.Bold)
             }
         }
+        val souDev = com.pwexpress.core.perfil.Perfis.perfil.collectAsState().value?.dev == true
         lista.forEach { p ->
-            val v = dados.config[p.chave]
             val st = estado?.takeIf { it.first == p.chave }?.second
             PwCartao(padding = PaddingValues(14.dp)) {
-                if (p.tipo == "booleano") {
-                    val lig = (v as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: p.padraoBool
-                    PwInterruptor(p.rotulo, lig, { salvar(p, JsonPrimitive(it)) }, descricao = (if (lig) p.descricao else p.descricaoDesligado ?: p.descricao).ifEmpty { null })
-                } else {
-                    Text(p.rotulo, color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
-                    if (p.descricao.isNotEmpty()) TextoDica(p.descricao)
-                    Espaco(8)
-                    val atual = (v as? JsonPrimitive)?.content?.toDoubleOrNull() ?: p.padraoNum
-                    if (p.tipo == "opcoes") {
-                        PwSegmentado(p.opcoes.map { it.second to null }, p.opcoes.indexOfFirst { it.first == atual }.coerceAtLeast(0), { i -> salvar(p, JsonPrimitive(p.opcoes[i].first)) })
-                    } else {
-                        PwPasso(atual, { salvar(p, JsonPrimitive(it)) }, Modifier.fillMaxWidth(), passo = p.passo, min = p.min ?: 0.0, max = p.max ?: 1e9, unidade = p.unidade)
-                    }
+                CampoParametro(p, dados.config[p.chave], { salvar(p, it) }, bloqueado = p.soDev && !souDev) {
+                    if (p.escopos.isNotEmpty()) TextoDica("Pode ter exceção por " + p.escopos.joinToString(", ") { mapOf("tipo" to "tipo de pedido", "cliente" to "cliente", "motoboy" to "motoboy")[it] ?: it } + ".")
                 }
                 when (st) {
                     null, "salvando" -> {}
@@ -904,3 +957,59 @@ internal fun VeiculoG(id: String) {
         }
     }, icone = PwIcones.Check, habilitado = !salvando)
 }
+
+
+/** Empresas que se cadastraram pelo site e esperam aprovação. */
+@Composable
+private fun CadastrosPendentesG() {
+    val c = Pw.cores
+    val escopo = rememberCoroutineScope()
+    var lista by remember { mutableStateOf<List<kotlinx.serialization.json.JsonObject>>(emptyList()) }
+    var versao by remember { mutableIntStateOf(0) }
+    var aberto by remember { mutableStateOf<kotlinx.serialization.json.JsonObject?>(null) }
+    LaunchedEffect(versao) { lista = Gestao.tabela("cadastros_cliente", "select=*&status=eq.pendente&order=criado_em") }
+    if (lista.isEmpty()) return
+    PwCartao(cor = c.ouro.copy(alpha = 0.6f)) {
+        PwRotulo("Cadastros esperando aprovação · ${lista.size}")
+        lista.forEach { cd ->
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { aberto = cd }.padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(cd.str("nome").orEmpty(), color = c.texto, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    TextoDica(listOfNotNull(cd.str("documento")?.let { if (it.length == 11) formatarCpf(it) else formatarCnpj(it) }, cd.str("email"), cd.str("telefone")).joinToString(" · "))
+                }
+                Icon(PwIcones.ChevronRight, null, tint = c.texto3, modifier = Modifier.size(18.dp))
+            }
+        }
+    }
+    aberto?.let { cd ->
+        var express by remember(cd) { mutableStateOf(dados_cfgBool("cadastro_express_liberado")) }
+        var credito by remember(cd) { mutableStateOf(false) }
+        var motivo by remember(cd) { mutableStateOf("") }
+        var erro by remember(cd) { mutableStateOf<String?>(null) }
+        fun revisar(aprovar: Boolean) = escopo.launch {
+            Gestao.rpcJson("revisar_cadastro", kotlinx.serialization.json.buildJsonObject {
+                put("p_id", cd.str("id")!!); put("p_aprovar", aprovar); put("p_motivo", motivo.ifBlank { null })
+                put("p_opcoes", kotlinx.serialization.json.buildJsonObject { put("pode_express", express); put("cobranca", if (credito) "credito" else "pre_pago") })
+            }).onSuccess {
+                com.pwexpress.core.designsystem.PwToast.mostrar(if (aprovar) "Cliente aprovado: já pode pedir pelo site." else "Cadastro recusado.", com.pwexpress.core.designsystem.TipoAviso.OK)
+                aberto = null; versao++; Gestao.atualizar()
+            }.onFailure { erro = it.message }
+        }
+        com.pwexpress.core.designsystem.PwTelaCheia(cd.str("nome").orEmpty(), { aberto = null }, subtitulo = "Cadastro pelo site") {
+            PwCartao {
+                listOf("Responsável" to cd.str("responsavel"), "Documento" to cd.str("documento")?.let { if (it.length == 11) formatarCpf(it) else formatarCnpj(it) },
+                    "E-mail" to cd.str("email"), "Telefone" to cd.str("telefone"), "Endereço" to cd.str("endereco"), "Observações" to cd.str("observacoes"))
+                    .filter { it.second != null }.forEach { (r, v) -> TextoDica(r); Text(v!!, color = c.texto); Espaco(4) }
+            }
+            PwInterruptor("Já pode pedir Express", express, { express = it })
+            PwInterruptor("Cobrança no crédito (fatura)", credito, { credito = it }, descricao = if (credito) "Paga por fatura no ciclo." else "Paga antes de sair (pré-pago).")
+            PwCampo(motivo, { motivo = it }, "Motivo (se recusar)")
+            PwErro(erro)
+            PwBotaoOuro("Aprovar", onClick = { revisar(true) }, icone = PwIcones.Check)
+            PwBotaoPerigo("Recusar", onClick = { revisar(false) }, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+@Composable
+private fun dados_cfgBool(k: String): Boolean = Gestao.dados.collectAsState().value.cfgBool(k, false)

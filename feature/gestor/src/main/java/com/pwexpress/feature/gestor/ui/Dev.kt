@@ -126,6 +126,7 @@ fun DevG(onVoltar: () -> Unit) {
                         if (par.size == 1) Spacer(Modifier.weight(1f))
                     }
                 }
+                ZerarPedidosG(onFeito = { escopo.launch { carregar() } })
             }
             2 -> {
                 val ap = painel?.arr("aparelhos") ?: run { PwCarregando(); return@PwPagina }
@@ -241,5 +242,40 @@ private fun VersaoAppG() {
                 Text(v?.let { "build $it" } ?: "antiga", color = if (exigida > 0 && v != exigida) c.vermelho else c.texto2, fontWeight = FontWeight.SemiBold)
             }
         }
+    }
+}
+
+
+/** Zera os pedidos (teste, reais ou ambos) e a numeração volta ao 1. */
+@Composable
+private fun ZerarPedidosG(onFeito: () -> Unit) {
+    val c = Pw.cores
+    val escopo = rememberCoroutineScope()
+    var alvo by remember { mutableIntStateOf(0) }
+    var confirmar by remember { mutableStateOf("") }
+    var rodando by remember { mutableStateOf(false) }
+    val alvos = listOf("teste" to "Só teste", "reais" to "Só reais", "ambos" to "Ambos")
+    PwCartao(cor = c.vermelho.copy(alpha = 0.5f)) {
+        com.pwexpress.core.designsystem.PwRotulo("Zerar pedidos")
+        TextoDica("Apaga os pedidos escolhidos, as rotas deles e as faturas que ficarem vazias. A numeração volta ao 1. As rotas apagadas ficam copiadas no registro de exclusões. Não dá para desfazer.")
+        Spacer(Modifier.size(8.dp))
+        com.pwexpress.core.designsystem.PwSegmentado(alvos.map { it.second to null }, alvo, { alvo = it })
+        Spacer(Modifier.size(8.dp))
+        com.pwexpress.core.designsystem.PwCampo(confirmar, { confirmar = it.uppercase() }, "Digite ZERAR para confirmar")
+        Spacer(Modifier.size(8.dp))
+        com.pwexpress.core.designsystem.PwBotaoPerigo(if (rodando) "Zerando…" else "Zerar ${alvos[alvo].second.lowercase()}", onClick = {
+            if (confirmar != "ZERAR" || rodando) return@PwBotaoPerigo
+            rodando = true
+            escopo.launch {
+                Gestao.rpcJson("resetar_pedidos", kotlinx.serialization.json.buildJsonObject {
+                    put("p_alvo", kotlinx.serialization.json.JsonPrimitive(alvos[alvo].first)); put("p_confirmar", kotlinx.serialization.json.JsonPrimitive("ZERAR"))
+                }).onSuccess { j ->
+                    val o = j as? JsonObject
+                    PwToast.mostrar("${o?.long("pedidos") ?: 0} pedidos, ${o?.long("rotas") ?: 0} rotas e ${o?.long("faturas") ?: 0} faturas apagados. O próximo pedido é o nº 1.", TipoAviso.OK, "Pedidos zerados")
+                    confirmar = ""; Gestao.atualizar(); onFeito()
+                }.onFailure { PwToast.mostrar(if (it.message.orEmpty().contains("resetar_pedidos")) "Rode a migração 20261110000005_reset_pedidos.sql." else it.message ?: "Erro", TipoAviso.ERRO) }
+                rodando = false
+            }
+        }, cheio = true, modifier = Modifier.fillMaxWidth())
     }
 }

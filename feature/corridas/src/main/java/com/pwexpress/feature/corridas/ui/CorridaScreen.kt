@@ -92,7 +92,7 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
     var erro by remember { mutableStateOf<String?>(null) }
     var comprovanteAberto by remember { mutableStateOf(false) }
     var posicao by remember { mutableStateOf<Posicao?>(null) }
-    var minimizado by remember { mutableStateOf(false) }
+    var minimizado by com.pwexpress.core.designsystem.lembrarLigado("corrida_minimizada", false)
 
     // posição ao vivo enquanto a tela está aberta
     LaunchedEffect(Unit) {

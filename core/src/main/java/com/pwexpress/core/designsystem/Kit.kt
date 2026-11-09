@@ -667,3 +667,20 @@ fun PwToasts(modifier: Modifier = Modifier) {
         }
     }
 }
+
+/** Estado liga/desliga que o app lembra entre aberturas (ex.: gaveta minimizada ou expandida). */
+@Composable
+fun lembrarLigado(chave: String, padrao: Boolean): androidx.compose.runtime.MutableState<Boolean> {
+    val ctx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val prefs = androidx.compose.runtime.remember { ctx.getSharedPreferences("pwex_ui", android.content.Context.MODE_PRIVATE) }
+    val estado = androidx.compose.runtime.remember(chave) { androidx.compose.runtime.mutableStateOf(prefs.getBoolean(chave, padrao)) }
+    return androidx.compose.runtime.remember(chave) {
+        object : androidx.compose.runtime.MutableState<Boolean> {
+            override var value: Boolean
+                get() = estado.value
+                set(v) { estado.value = v; prefs.edit().putBoolean(chave, v).apply() }
+            override fun component1() = value
+            override fun component2(): (Boolean) -> Unit = { value = it }
+        }
+    }
+}

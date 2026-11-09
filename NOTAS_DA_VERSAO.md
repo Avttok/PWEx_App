@@ -1,3 +1,6 @@
-• Detalhe do pedido mostra por que ele ainda não virou rota (pagamento, horário, roteirizador desligado…) ou em que pé a rota está
-• Botão "Montar rota agora" no pedido aprovado
-• A regra "Montar rota sem esperar o pagamento" colocada no próprio pedido agora vale
+• Janela de atualização mais limpa: anel inteiro, sem o X, um botão dourado para fechar
+• Gestor: menu de baixo com Mapa, Pedidos (pedidos + rotas), Pessoas (clientes + equipe), Carteira e Ajustes
+• Busca e filtros em Pedidos, Rotas, Clientes e Equipe
+• Menu da conta reorganizado (Configurações no alto, Console Dev no fim)
+• O app lembra se a lista do mapa estava aberta ou minimizada
+• Dev: zerar pedidos (teste, reais ou ambos)

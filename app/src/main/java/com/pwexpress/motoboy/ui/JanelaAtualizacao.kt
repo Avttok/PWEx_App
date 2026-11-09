@@ -101,20 +101,18 @@ fun JanelaAtualizacao() {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.CenterVertically),
             ) {
-                if (podeFechar) {
-                    Row(Modifier.fillMaxWidth()) {
-                        Spacer(Modifier.weight(1f))
-                        com.pwexpress.core.designsystem.PwBotaoIcone(PwIcones.X, "Fechar", { Atualizador.fecharJanela() })
-                    }
-                }
                 Spacer(Modifier.height(8.dp))
-                // logo no centro, anel em degradê girando (ou o progresso do download)
+                // logo no centro: anel fechado com brilho que gira devagar; no download, o anel vira o progresso
                 Box(Modifier.size(210.dp), contentAlignment = Alignment.Center) {
                     val grad = Brush.sweepGradient(listOf(c.ouroEscuro, c.ouroClaro, c.ouro, c.ouroEscuro))
                     Canvas(Modifier.size(210.dp).rotate(if (baixando) -90f else angulo)) {
                         val esp = 7.dp.toPx()
-                        drawCircle(c.borda, style = Stroke(esp))
-                        drawArc(grad, 0f, if (baixando) 360f * anim else 300f, false, style = Stroke(esp, cap = StrokeCap.Round))
+                        if (baixando) {
+                            drawCircle(c.borda, style = Stroke(esp))
+                            drawArc(grad, 0f, 360f * anim, false, style = Stroke(esp, cap = StrokeCap.Round))
+                        } else {
+                            drawCircle(grad, style = Stroke(esp))
+                        }
                     }
                     Box(Modifier.size(170.dp).clip(androidx.compose.foundation.shape.CircleShape)
                         .background(Brush.radialGradient(listOf(c.ouro.copy(alpha = 0.22f * pulso), Color.Transparent))))
@@ -141,12 +139,15 @@ fun JanelaAtualizacao() {
                         PwErro(e.mensagem, Modifier.widthIn(max = 420.dp))
                         Instalar(ctx)
                         if (e.versao != null) PwBotaoOuro("Tentar de novo", onClick = { Atualizador.baixar() }, icone = PwIcones.RefreshCw, modifier = Modifier.widthIn(max = 420.dp))
-                        if (podeFechar) PwBotaoVidro("Fechar", onClick = { Atualizador.fecharJanela() }, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth())
+                        if (podeFechar) PwBotaoOuro("Fechar", onClick = { Atualizador.fecharJanela() }, icone = PwIcones.Check, modifier = Modifier.widthIn(max = 420.dp))
                     }
-                    EstadoAtualizacao.Verificando -> { Titulo("Procurando atualização…"); Barra(null) }
+                    EstadoAtualizacao.Verificando -> {
+                        Titulo("Procurando atualização…"); Barra(null)
+                        if (podeFechar) PwBotaoOuro("Fechar", onClick = { Atualizador.fecharJanela() }, icone = PwIcones.Check, modifier = Modifier.widthIn(max = 420.dp))
+                    }
                     EstadoAtualizacao.EmDia -> if (!obrigatoria) {
                         Titulo("O app está em dia")
-                        Texto("Você já tem tudo o que há de novo (build ${Atualizador.versaoInstalada}).")
+                        Texto("Você já tem tudo o que há de novo.")
                         PwBotaoOuro("Ótimo", onClick = { Atualizador.fecharJanela() }, icone = PwIcones.Check, modifier = Modifier.widthIn(max = 420.dp))
                     }
                     else -> {
@@ -154,27 +155,26 @@ fun JanelaAtualizacao() {
                         val b = bloqueio
                         when {
                             b != null && b.maisNova -> {
-                                Titulo("Volte para a versão ${b.exigida}")
-                                Texto("Este celular está com a build ${Atualizador.versaoInstalada}, mais nova que a liberada pelo Dev (build ${b.exigida}). O Android só volta versão reinstalando: baixe a versão certa, desinstale este app e instale a baixada.")
-                                PwBotaoOuro("Baixar a build ${b.exigida}", onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(b.versao.urlApk)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
+                                Titulo("Instale a versão liberada")
+                                Texto("Este celular está com uma versão diferente da liberada. O Android só troca para ela reinstalando: baixe a versão certa, desinstale este app e instale a baixada.")
+                                PwBotaoOuro("Baixar a versão liberada", onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(b.versao.urlApk)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                                     icone = PwIcones.Download, altura = 58.dp, modifier = Modifier.widthIn(max = 420.dp))
                                 PwBotaoVidro("Desinstalar este app", onClick = { runCatching { ctx.startActivity(Intent(Intent.ACTION_DELETE, Uri.parse("package:${ctx.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } },
                                     icone = PwIcones.Trash2, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth())
                             }
                             v != null -> {
                                 Titulo(if (obrigatoria) "Atualize para continuar" else "Há uma nova versão")
-                                Texto(if (obrigatoria) "O Dev liberou a build ${v.build}. Enquanto não atualizar, o app fica parado: nada de rotas nem localização."
-                                      else "Build ${v.build}. Leva só um minuto e o app continua de onde parou.")
+                                Texto(if (obrigatoria) "Enquanto não atualizar, o app fica parado: nada de rotas nem localização."
+                                      else "Leva só um minuto e o app continua de onde parou.")
                                 Notas(v.notas)
                                 Instalar(ctx)
                                 PwBotaoOuro("Atualizar agora", onClick = { Atualizador.baixar() }, icone = PwIcones.Download, altura = 58.dp, modifier = Modifier.widthIn(max = 420.dp))
                                 if (podeFechar) PwBotaoVidro("Depois", onClick = { Atualizador.fecharJanela() }, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth())
                             }
-                            else -> if (podeFechar) PwBotaoVidro("Fechar", onClick = { Atualizador.fecharJanela() }, modifier = Modifier.widthIn(max = 420.dp).fillMaxWidth())
+                            else -> if (podeFechar) PwBotaoOuro("Fechar", onClick = { Atualizador.fecharJanela() }, icone = PwIcones.Check, modifier = Modifier.widthIn(max = 420.dp))
                         }
                     }
                 }
-                Text("Instalada: build ${Atualizador.versaoInstalada}", color = c.texto3, fontSize = 12.sp, fontFamily = Archivo)
             }
         }
     }

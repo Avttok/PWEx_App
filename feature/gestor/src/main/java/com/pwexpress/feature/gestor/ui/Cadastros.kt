@@ -109,12 +109,28 @@ import kotlinx.serialization.json.put
 @Composable
 fun EmpresasG(onAbrir: (String?) -> Unit) {
     val dados by Gestao.dados.collectAsState()
+    var busca by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var tipo by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
+    val filtros: List<Pair<String, (com.pwexpress.feature.gestor.data.EmpresaG) -> Boolean>> = listOf(
+        "Todos" to { _ -> true }, "Empresas" to { e -> e.tipo != "pf" }, "Pessoas" to { e -> e.tipo == "pf" },
+        "Express" to { e -> e.podeExpress }, "Só agendados" to { e -> !e.podeExpress }, "Teste" to { e -> e.modoTeste },
+    )
+    val lista = dados.empresas.filter { e ->
+        filtros[tipo].second(e) && combinaBusca(busca, e.nome, e.razaoSocial, e.nomeFantasia, e.documento, e.documento?.filter { it.isDigit() }, e.email, e.telefone, e.endereco)
+    }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 190.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { TituloTela("Clientes", if (dados.empresas.size == 1) "1 cliente cadastrado" else "${dados.empresas.size} clientes cadastrados", PwIcones.Building2) }
             item { CadastrosPendentesG() }
+            if (dados.empresas.size > 0) item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CampoBusca(busca, { busca = it }, "Buscar por nome, CNPJ/CPF, e-mail, telefone…")
+                    PwFiltros(filtros.map { (r, f) -> r to (if (r == "Todos") 0 else dados.empresas.count(f)) }, tipo, { tipo = it })
+                }
+            }
             if (dados.carregado && dados.empresas.isEmpty()) item { PwVazio("Nenhum cliente cadastrado ainda.", icone = PwIcones.Building2) }
-            items(dados.empresas, key = { it.id }) { e ->
+            else if (dados.carregado && lista.isEmpty()) item { PwVazio("Nenhum cliente encontrado.", icone = PwIcones.Search) }
+            items(lista, key = { it.id }) { e ->
                 PwCartao(padding = PaddingValues(6.dp)) {
                     PwLinha(
                         e.nome,
@@ -378,10 +394,25 @@ fun EquipeG(onAbrir: (String) -> Unit) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
     var criando by remember { mutableStateOf(false) }
+    var busca by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var tipo by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
+    fun online(m: com.pwexpress.feature.gestor.data.MembroG) = m.motoboy && (dados.posicao(m.id)?.status ?: "offline") != "offline"
+    val filtros: List<Pair<String, (com.pwexpress.feature.gestor.data.MembroG) -> Boolean>> = listOf(
+        "Todos" to { _ -> true }, "Motoboys" to { m -> m.motoboy }, "Online" to { m -> online(m) }, "Offline" to { m -> m.motoboy && !online(m) },
+        "Gestores" to { m -> m.gestor || m.dev }, "Teste" to { m -> m.modoTeste }, "Bloqueados" to { m -> m.bloqueado },
+    )
+    val lista = dados.equipe.filter { m -> filtros[tipo].second(m) && combinaBusca(busca, m.nome, m.email) }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 190.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { TituloTela("Equipe", if (dados.equipe.size == 1) "1 pessoa" else "${dados.equipe.size} pessoas", PwIcones.Users) }
-            items(dados.equipe, key = { it.id }) { m ->
+            item {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CampoBusca(busca, { busca = it }, "Buscar por nome ou e-mail…")
+                    PwFiltros(filtros.map { (r, f) -> r to (if (r == "Todos") 0 else dados.equipe.count(f)) }, tipo, { tipo = it })
+                }
+            }
+            if (dados.carregado && lista.isEmpty()) item { PwVazio("Ninguém encontrado.", icone = PwIcones.Search) }
+            items(lista, key = { it.id }) { m ->
                 val p = dados.posicao(m.id)
                 val forma = RoundedCornerShape(20.dp)
                 Row(
@@ -848,7 +879,7 @@ private fun ResumoCarteiraG(onVoltar: (() -> Unit)?, abas: @Composable () -> Uni
 // =====================================================================
 
 @Composable
-fun ConfiguracoesG(onVoltar: () -> Unit, onAbrir: (TelaG) -> Unit = {}) {
+fun ConfiguracoesG(onVoltar: (() -> Unit)?, onAbrir: (TelaG) -> Unit = {}) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
     var grupo by remember { mutableIntStateOf(0) }
@@ -863,7 +894,8 @@ fun ConfiguracoesG(onVoltar: () -> Unit, onAbrir: (TelaG) -> Unit = {}) {
     }
 
     PwPagina {
-        Cabecalho("Configurações", onVoltar, subtitulo = "Valem para todo o sistema · salvam sozinhas")
+        if (onVoltar != null) Cabecalho("Configurações", onVoltar, subtitulo = "Valem para todo o sistema · salvam sozinhas")
+        else TituloTela("Configurações", "Valem para todo o sistema · salvam sozinhas", PwIcones.Settings2)
         PwCampo(busca, { busca = it }, "Buscar ajuste…")
         val termo = sem(busca.trim())
         if (termo.isEmpty()) {

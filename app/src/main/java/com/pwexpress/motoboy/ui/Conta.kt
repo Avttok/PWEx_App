@@ -125,6 +125,7 @@ fun JanelaConta(
                 Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(c.borda))
 
                 ItemMenu(PwIcones.UserRoundPen, "Editar perfil", onClick = onPerfil)
+                ItemMenu(PwIcones.Settings2, "Configurações", subtitulo = if (painel == Painel.GESTOR) "Do sistema inteiro" else "Raio, aparelho e GPS", onClick = onConfiguracoes)
                 val escuro = c.escuro
                 ItemMenu(if (escuro) PwIcones.Moon else PwIcones.Sun, if (escuro) "Tema noturno" else "Tema claro",
                     onClick = { TemaApp.definir(if (escuro) PreferenciaTema.CLARO else PreferenciaTema.ESCURO) }) {
@@ -163,13 +164,8 @@ fun JanelaConta(
                         Interruptor(info.economia) { com.pwexpress.feature.tracking.Tracking.definirEconomia(it) }
                     }
                 }
-                ItemMenu(PwIcones.Settings2, "Configurações", subtitulo = if (painel == Painel.GESTOR) "Do sistema inteiro" else "Raio, aparelho e GPS", onClick = onConfiguracoes)
-                if (perfil?.dev == true) ItemMenu(PwIcones.CodeXml, "Console Dev", cor = c.dev, onClick = onDev)
-                if (podeTrocar) {
-                    if (painel == Painel.MOTOBOY) ItemMenu(PwIcones.ShieldCheck, "Painel do gestor", onClick = { onTrocar(Painel.GESTOR) })
-                    else ItemMenu(PwIcones.Bike, "MotoApp", onClick = { onTrocar(Painel.MOTOBOY) })
-                }
                 if (perfil?.modulo("atualizacao_app") != false) ItemMenu(PwIcones.Download, "Verificar atualização", onClick = { onFechar(); Atualizador.abrirJanela(); Atualizador.verificar(automatico = false) })
+                if (perfil?.dev == true) ItemMenu(PwIcones.CodeXml, "Console Dev", cor = c.dev, onClick = onDev)
                 Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(c.borda))
                 ItemMenu(PwIcones.LogOut, "Sair da conta", cor = c.vermelho, corTexto = c.vermelho, onClick = onSair)
                 // easter egg, igual ao rodapé do site

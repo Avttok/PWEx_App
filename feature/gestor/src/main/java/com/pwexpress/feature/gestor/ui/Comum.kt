@@ -211,3 +211,19 @@ internal fun Espaco(h: Int = 4) = Spacer(Modifier.height(h.dp))
 internal fun TextoDica(texto: String) {
     Text(texto, color = Pw.cores.texto3, fontSize = 12.5.sp, lineHeight = 17.sp, fontFamily = Archivo)
 }
+
+/** Texto sem acento e minúsculo, para busca. */
+internal fun normalBusca(t: String) = java.text.Normalizer.normalize(t, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase()
+
+/** Todas as palavras da busca aparecem em algum dos campos (sem acento, sem caixa). */
+internal fun combinaBusca(termo: String, vararg campos: String?): Boolean {
+    val palavras = normalBusca(termo).split(' ').filter { it.isNotBlank() }
+    if (palavras.isEmpty()) return true
+    val tudo = campos.filterNotNull().joinToString(" ") { normalBusca(it) }
+    return palavras.all { it in tudo }
+}
+
+/** Campo de busca padrão das listas. */
+@Composable
+internal fun CampoBusca(valor: String, onMudar: (String) -> Unit, rotulo: String) =
+    com.pwexpress.core.designsystem.PwCampo(valor, onMudar, rotulo, modifier = Modifier.fillMaxWidth())

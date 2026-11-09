@@ -80,6 +80,7 @@ private val BARRA = 92.dp
  */
 @Composable
 private fun TelaComMapa(
+    chave: String,
     titulo: String,
     subtitulo: String,
     mapa: @Composable (margemBaixo: Int, enquadrar: Int) -> Unit,
@@ -87,7 +88,7 @@ private fun TelaComMapa(
     lista: LazyListScope.() -> Unit,
 ) {
     val c = Pw.cores
-    var mostrando by rememberSaveable { mutableStateOf(true) }
+    var mostrando by com.pwexpress.core.designsystem.lembrarLigado("gaveta_$chave", true)
     var enquadrar by remember { mutableIntStateOf(0) }
     val locaisPref by Estabelecimentos.visiveis.collectAsState()
     val comLocais = modulo("estabelecimentos")
@@ -241,6 +242,7 @@ fun MapaG(onCorrida: (String) -> Unit) {
     }
 
     TelaComMapa(
+        chave = "mapa",
         titulo = "Mapa",
         subtitulo = "$emServico em serviço · ${todos.size} motoboy${if (todos.size == 1) "" else "s"}" + (seguindo?.let { id -> " · seguindo ${dados.membro(id)?.nome?.substringBefore(" ") ?: ""}" } ?: ""),
         mapa = { margem, enquadrar ->
@@ -372,7 +374,11 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
     var limpando by remember { mutableStateOf(false) }
     val podeApagar = modulo("excluir_corridas")
 
-    val todas = dados.corridas.filter { it.teste == teste }
+    var busca by rememberSaveable { mutableStateOf("") }
+    val todas = dados.corridas.filter { it.teste == teste }.filter { cor ->
+        busca.isBlank() || combinaBusca(busca, cor.numeroExibicao, cor.numero.toString(), cor.motoboyId?.let { dados.membro(it)?.nome }, cor.motoboyNomeArquivado,
+            cor.clienteNome, dados.empresa(cor.empresaId)?.nome, cor.observacoes, cor.paradas.joinToString(" ") { "${it.endereco} ${it.contatoNome ?: ""} ${it.recebedorNome ?: ""}" })
+    }
     val planejadas = todas.filter { it.planejada }.sortedBy { it.agendadaPara ?: Long.MAX_VALUE }
     val esperando = todas.filter { it.status == Status.MONTADA }
     val listas = listOf(
@@ -387,6 +393,7 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
     }
 
     TelaComMapa(
+        chave = "rotas",
         titulo = if (selecionando) "${marcadas.size} selecionada${if (marcadas.size == 1) "" else "s"}" else "Rotas",
         subtitulo = "${if (ativas.isEmpty()) "Nenhuma ativa" else if (ativas.size == 1) "1 ativa" else "${ativas.size} ativas"} agora${if (teste) " · modo teste" else ""}",
         mapa = { margem, enquadrar ->
@@ -404,6 +411,8 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
         },
     ) {
         item {
+            CampoBusca(busca, { busca = it }, "Buscar nº, motoboy, cliente, endereço…")
+            Spacer(Modifier.height(6.dp))
             PwFiltros(listOf("Ativas" to listas[0].size, "Planejadas" to planejadas.size, "Concluídas" to 0, "Canceladas" to 0, "Todas" to 0), filtro, { filtro = it })
             Spacer(Modifier.height(4.dp))
             if (esperando.isNotEmpty() && filtro == 0) TextoDica("${esperando.size} rota${if (esperando.size == 1) "" else "s"} montada${if (esperando.size == 1) "" else "s"} esperando você soltar para os motoboys.")

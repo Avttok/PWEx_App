@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -58,6 +60,8 @@ fun GestorApp(
     meuId: String?,
 ) {
     var aba by rememberSaveable { mutableStateOf("mapa") }
+    var subOperacao by rememberSaveable { mutableStateOf(0) }   // 0 pedidos · 1 rotas
+    var subPessoas by rememberSaveable { mutableStateOf(0) }    // 0 clientes · 1 equipe
     val pilha = remember { mutableStateListOf<TelaG>() }
     val dados by Gestao.dados.collectAsState()
     val teste by TemaApp.modoTeste.collectAsState()
@@ -70,6 +74,10 @@ fun GestorApp(
         }
     }
 
+    LaunchedEffect(aba) {
+        when (aba) { "pedidos" -> { aba = "operacao"; subOperacao = 0 }; "corridas" -> { aba = "operacao"; subOperacao = 1 }
+                     "empresas" -> { aba = "pessoas"; subPessoas = 0 }; "equipe" -> { aba = "pessoas"; subPessoas = 1 } }
+    }
     fun abrir(t: TelaG) { if (pilha.lastOrNull() != t) pilha.add(t) }
     val pedido by GestorNav.pedido.collectAsState()
     LaunchedEffect(pedido) { pedido?.let { abrir(it); GestorNav.pedido.value = null } }
@@ -117,7 +125,7 @@ fun GestorApp(
             Box(Modifier.weight(1f)) {
                 when (atual) {
                     is TelaG.Corrida -> DetalheCorridaG(atual.id, onVoltar = ::voltar)
-                    TelaG.NovoPedido -> NovoPedidoG(onVoltar = ::voltar, onCriado = { voltar(); aba = "pedidos" })
+                    TelaG.NovoPedido -> NovoPedidoG(onVoltar = ::voltar, onCriado = { voltar(); aba = "operacao"; subOperacao = 0 })
                     TelaG.NovaCorrida -> NovaCorridaG(onVoltar = ::voltar, onCriada = { id -> voltar(); abrir(TelaG.Corrida(id)) })
                     is TelaG.Empresa -> EmpresaG(atual.id, onVoltar = ::voltar)
                     is TelaG.Membro -> MembroG(atual.id, meuId = meuId, onVoltar = ::voltar)
@@ -128,10 +136,18 @@ fun GestorApp(
                     TelaG.Dev -> DevG(onVoltar = ::voltar)
                     null -> when (aba) {
                         "mapa" -> MapaG(onCorrida = { abrir(TelaG.Corrida(it)) })
-                        "pedidos" -> PedidosG(onNovo = { abrir(TelaG.NovoPedido) })
-                        "corridas" -> CorridasG(onAbrir = { abrir(TelaG.Corrida(it)) }, onNova = { abrir(TelaG.NovaCorrida) })
-                        "empresas" -> EmpresasG(onAbrir = { abrir(TelaG.Empresa(it)) })
-                        "equipe" -> EquipeG(onAbrir = { abrir(TelaG.Membro(it)) })
+                        "operacao" -> ComSubAbas(
+                            if (comPedidos) listOf("Pedidos" to PwIcones.ClipboardList, "Rotas" to PwIcones.Route) else listOf("Rotas" to PwIcones.Route),
+                            if (comPedidos) subOperacao else 0, { subOperacao = it },
+                            listOf(paraRevisar, planejadas + semMotoboy).let { if (comPedidos) it else it.drop(1) },
+                        ) { i ->
+                            if (comPedidos && i == 0) PedidosG(onNovo = { abrir(TelaG.NovoPedido) })
+                            else CorridasG(onAbrir = { abrir(TelaG.Corrida(it)) }, onNova = { abrir(TelaG.NovaCorrida) })
+                        }
+                        "pessoas" -> ComSubAbas(listOf("Clientes" to PwIcones.Building2, "Equipe" to PwIcones.Users), subPessoas, { subPessoas = it }) { i ->
+                            if (i == 0) EmpresasG(onAbrir = { abrir(TelaG.Empresa(it)) }) else EquipeG(onAbrir = { abrir(TelaG.Membro(it)) })
+                        }
+                        "config" -> ConfiguracoesG(onVoltar = null, onAbrir = { abrir(it) })
                         else -> FinanceiroG(onVoltar = null)
                     }
                 }
@@ -141,14 +157,34 @@ fun GestorApp(
             PwBarraAbas(
                 listOf(
                     PwAba("mapa", "Mapa", PwIcones.Mapa),
-                ) + (if (comPedidos) listOf(PwAba("pedidos", "Pedidos", PwIcones.ClipboardList, paraRevisar)) else emptyList()) + listOf(
-                    PwAba("corridas", "Rotas", PwIcones.Route, planejadas + semMotoboy),
-                    PwAba("empresas", "Clientes", PwIcones.Building2),
-                    PwAba("equipe", "Equipe", PwIcones.Users),
-                ) + (if (comCarteira) listOf(PwAba("financeiro", "Carteira", PwIcones.Wallet)) else emptyList()),
+                    PwAba("operacao", if (comPedidos) "Pedidos" else "Rotas", if (comPedidos) PwIcones.ClipboardList else PwIcones.Route, (if (comPedidos) paraRevisar else 0) + planejadas + semMotoboy),
+                    PwAba("pessoas", "Pessoas", PwIcones.Users),
+                ) + (if (comCarteira) listOf(PwAba("financeiro", "Carteira", PwIcones.Wallet)) else emptyList()) +
+                    PwAba("config", "Ajustes", PwIcones.Settings2),
                 aba, { aba = it },
                 Modifier.align(Alignment.BottomCenter),
             )
         }
+    }
+}
+
+/** Duas telas numa aba só: um seletor em cima (com contadores) e a tela escolhida embaixo. */
+@Composable
+private fun ComSubAbas(
+    opcoes: List<Pair<String, androidx.compose.ui.graphics.vector.ImageVector>>,
+    selecionada: Int,
+    onSelecionar: (Int) -> Unit,
+    contadores: List<Int> = emptyList(),
+    conteudo: @Composable (Int) -> Unit,
+) {
+    Column(Modifier.fillMaxSize()) {
+        if (opcoes.size > 1) {
+            com.pwexpress.core.designsystem.PwSegmentado(
+                opcoes.mapIndexed { i, (r, ic) -> (contadores.getOrNull(i)?.takeIf { it > 0 }?.let { "$r · $it" } ?: r) to ic },
+                selecionada, onSelecionar,
+                Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp, bottom = 6.dp),
+            )
+        }
+        Box(Modifier.weight(1f)) { conteudo(selecionada) }
     }
 }

@@ -69,7 +69,17 @@ fun PedidosG(onNovo: () -> Unit = {}) {
     var ocupado by remember { mutableStateOf(false) }
     val escopo = rememberCoroutineScope()
 
-    val todos = dados.pedidos.filter { it.teste == teste }
+    var busca by rememberSaveable { mutableStateOf("") }
+    var tipo by rememberSaveable { mutableIntStateOf(0) }
+    val tipos: List<Pair<String, (PedidoG) -> Boolean>> = listOf("Todos" to { _ -> true }, "Agora" to { p -> !p.planejado }, "Planejados" to { p -> p.planejado },
+        "Urgentes" to { p -> p.urgente }, "Aguardando pagamento" to { p -> p.cobranca == "pre_pago" && p.pagamentoStatus == "pendente" })
+    // motoboy de cada pedido: pelas rotas que levam os endereços dele
+    fun motoboys(p: PedidoG): String = dados.corridas.filter { cor -> cor.teste == p.teste && cor.paradas.any { pa -> p.pontos.any { it.endereco == pa.endereco } } && cor.criadaEm >= p.criadoEm - 60_000 }
+        .mapNotNull { cor -> cor.motoboyId?.let { dados.membro(it)?.nome } ?: cor.motoboyNomeArquivado }.joinToString(" ")
+    val todos = dados.pedidos.filter { it.teste == teste }.filter { p ->
+        tipos[tipo].second(p) && (busca.isBlank() || combinaBusca(busca, p.numeroExibicao, p.numero.toString(), dados.empresa(p.empresaId)?.nome, p.clienteNome, p.observacoes,
+            p.tipoPedido, StatusPedido.rotulo[p.status], p.pontos.joinToString(" ") { "${it.endereco} ${it.contatoNome ?: ""}" }, p.itens.joinToString(" ") { it.descricao }, motoboys(p)))
+    }
     val listas = listOf(
         todos.filter { it.status == "recebido" }.sortedWith(compareByDescending<PedidoG> { it.urgente }.thenBy { it.quando ?: it.criadoEm }),
         todos.filter { it.status in setOf("aprovado", "roteirizado", "em_rota") },
@@ -85,10 +95,12 @@ fun PedidosG(onNovo: () -> Unit = {}) {
             }, tamanho = 38.dp)
             PwBotaoIcone(PwIcones.Plus, "Novo pedido", onNovo, ativo = true, tamanho = 38.dp)
         }
+        CampoBusca(busca, { busca = it }, "Buscar nº, cliente, endereço, motoboy…")
         PwFiltros(listOf("Revisar" to listas[0].size, "Em andamento" to listas[1].size, "Concluídos" to 0, "Cancelados" to 0), filtro, { filtro = it })
+        PwFiltros(tipos.map { it.first to 0 }, tipo, { tipo = it })
         when {
             !dados.carregado -> PwCarregando()
-            lista.isEmpty() -> PwVazio(if (filtro == 0) "Nenhum pedido esperando revisão." else "Nenhum pedido aqui.", icone = PwIcones.ClipboardList)
+            lista.isEmpty() -> PwVazio(if (busca.isNotBlank() || tipo > 0) "Nenhum pedido encontrado." else if (filtro == 0) "Nenhum pedido esperando revisão." else "Nenhum pedido aqui.", icone = PwIcones.ClipboardList)
             else -> lista.forEach { p -> CartaoPedido(p, dados.empresa(p.empresaId)?.nome) { aberto = p.id } }
         }
     }

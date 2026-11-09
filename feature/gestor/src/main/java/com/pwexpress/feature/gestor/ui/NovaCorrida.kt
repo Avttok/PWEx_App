@@ -91,6 +91,21 @@ internal class ParadaForm(coleta: Boolean) {
     var instrucoes by mutableStateOf("")
     val refs = mutableStateListOf<RefG>()
     var aberta by mutableStateOf(false)
+    // confirmações deste ponto (false = segue o padrão da rota) e horário em que atende
+    var exigeFoto by mutableStateOf(false)
+    var exigeNome by mutableStateOf(false)
+    var exigeAssinatura by mutableStateOf(false)
+    var exigeCodigo by mutableStateOf(false)
+    var janelaDe by mutableStateOf("")
+    var janelaAte by mutableStateOf("")
+}
+
+/** "9", "930", "09:30" → "09:30"; inválido → null. */
+internal fun horaValida(t: String): String? {
+    val d = t.filter(Char::isDigit)
+    if (d.isEmpty()) return null
+    val (h, m) = when (d.length) { 1, 2 -> d.toInt() to 0; 3 -> d.take(1).toInt() to d.drop(1).toInt(); else -> d.take(2).toInt() to d.drop(2).take(2).toInt() }
+    return if (h in 0..23 && m in 0..59) String.format(java.util.Locale.US, "%02d:%02d", h, m) else null
 }
 
 private val DIAS = listOf("D", "S", "T", "Q", "Q", "S", "S")
@@ -434,7 +449,7 @@ private fun Chip(texto: String, onClick: () -> Unit) {
 }
 
 @Composable
-internal fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) -> Unit, onRemover: () -> Unit, onMarcar: () -> Unit) {
+internal fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) -> Unit, onRemover: () -> Unit, onMarcar: () -> Unit, comOpcoes: Boolean = false) {
     val c = Pw.cores
     val escopo = rememberCoroutineScope()
     var sugestoes by remember { mutableStateOf<List<EnderecoG>>(emptyList()) }
@@ -481,6 +496,19 @@ internal fun CartaoParadaForm(p: ParadaForm, i: Int, total: Int, onMover: (Int) 
             PwCampo(p.contato, { p.contato = it }, "Nome do contato")
             PwCampo(p.telefone, { p.telefone = it }, "Telefone", teclado = KeyboardType.Phone)
             PwCampo(p.instrucoes, { p.instrucoes = it }, "Instruções (portaria, bloco…)")
+            if (comOpcoes) {
+                PwRotulo(if (p.coleta) "Na coleta, confirmar com" else "Na entrega, confirmar com")
+                TextoDica("Desligado = segue o padrão da rota.")
+                PwInterruptor("Foto", p.exigeFoto, { p.exigeFoto = it }, icone = PwIcones.Camera)
+                PwInterruptor(if (p.coleta) "Nome de quem entregou" else "Nome de quem recebeu", p.exigeNome, { p.exigeNome = it }, icone = PwIcones.UserRound)
+                PwInterruptor("Assinatura", p.exigeAssinatura, { p.exigeAssinatura = it }, icone = PwIcones.PenLine)
+                PwInterruptor("Código de 4 dígitos", p.exigeCodigo, { p.exigeCodigo = it }, icone = PwIcones.KeyRound)
+                PwRotulo("Atende das … às …")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PwCampo(p.janelaDe, { p.janelaDe = it.take(5) }, "Das", dica = "09:00", teclado = KeyboardType.Number, modifier = Modifier.weight(1f))
+                    PwCampo(p.janelaAte, { p.janelaAte = it.take(5) }, "Às", dica = "12:00", teclado = KeyboardType.Number, modifier = Modifier.weight(1f))
+                }
+            }
             if (comRefs) PwRotulo("Pontos de referência ${p.refs.size}/3")
             if (comRefs) p.refs.toList().forEach { r ->
                 Row(verticalAlignment = Alignment.CenterVertically) {

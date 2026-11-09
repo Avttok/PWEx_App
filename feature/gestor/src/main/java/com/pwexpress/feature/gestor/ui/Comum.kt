@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.unit.sp
 import com.pwexpress.core.designsystem.Archivo
 import com.pwexpress.core.designsystem.ArchivoLargo
@@ -227,3 +228,21 @@ internal fun combinaBusca(termo: String, vararg campos: String?): Boolean {
 @Composable
 internal fun CampoBusca(valor: String, onMudar: (String) -> Unit, rotulo: String) =
     com.pwexpress.core.designsystem.PwCampo(valor, onMudar, rotulo, modifier = Modifier.fillMaxWidth())
+
+
+/** Selos do que um ponto pede: confirmações e horário em que atende. */
+@androidx.compose.runtime.Composable
+internal fun SelosPontoG(foto: Boolean, nome: Boolean, assinatura: Boolean, codigo: Boolean, cod: String? = null, de: String? = null, ate: String? = null) {
+    val c = com.pwexpress.core.designsystem.Pw.cores
+    if (!(foto || nome || assinatura || codigo) && de == null && ate == null) return
+    androidx.compose.foundation.layout.Row(
+        Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()),
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+    ) {
+        if (foto) com.pwexpress.core.designsystem.PwSelo("Foto", c.texto2, icone = com.pwexpress.core.designsystem.PwIcones.Camera)
+        if (nome) com.pwexpress.core.designsystem.PwSelo("Nome", c.texto2, icone = com.pwexpress.core.designsystem.PwIcones.UserRound)
+        if (assinatura) com.pwexpress.core.designsystem.PwSelo("Assinatura", c.texto2, icone = com.pwexpress.core.designsystem.PwIcones.PenLine)
+        if (codigo) com.pwexpress.core.designsystem.PwSelo("Código" + (cod?.let { " $it" } ?: ""), c.texto2, icone = com.pwexpress.core.designsystem.PwIcones.KeyRound)
+        if (de != null || ate != null) com.pwexpress.core.designsystem.PwSelo("${de ?: "…"}–${ate ?: "…"}", c.texto2, icone = com.pwexpress.core.designsystem.PwIcones.Clock)
+    }
+}

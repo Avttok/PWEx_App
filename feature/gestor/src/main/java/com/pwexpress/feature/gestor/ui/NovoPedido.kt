@@ -168,6 +168,9 @@ fun NovoPedidoG(onVoltar: () -> Unit, onCriado: () -> Unit) {
                 put("tipo", if (p.coleta) "coleta" else "entrega"); put("endereco", p.endereco)
                 p.lat?.let { put("lat", it) }; p.lng?.let { put("lng", it) }
                 put("contato_nome", p.contato); put("contato_telefone", p.telefone); put("instrucoes", p.instrucoes)
+                if (p.exigeFoto) put("exige_foto", true); if (p.exigeNome) put("exige_nome", true)
+                if (p.exigeAssinatura) put("exige_assinatura", true); if (p.exigeCodigo) put("exige_codigo", true)
+                horaValida(p.janelaDe)?.let { put("janela_de", it) }; horaValida(p.janelaAte)?.let { put("janela_ate", it) }
                 put("referencias", buildJsonArray { p.refs.forEach { r -> add(buildJsonObject { put("nome", r.nome); r.distanciaM?.let { put("distancia_m", it) }; r.tipo?.let { put("tipo", it) }; r.relacao?.let { put("relacao", it) } }) } })
             })
         }
@@ -257,7 +260,7 @@ fun NovoPedidoG(onVoltar: () -> Unit, onCriado: () -> Unit) {
         paradas.forEachIndexed { i, p ->
             CartaoParadaForm(p, i, paradas.size,
                 onMover = { d -> val j = i + d; if (j in paradas.indices) { val x = paradas.removeAt(i); paradas.add(j, x) } },
-                onRemover = { paradas.remove(p) }, onMarcar = { marcando = p })
+                onRemover = { paradas.remove(p) }, onMarcar = { marcando = p }, comOpcoes = true)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             com.pwexpress.core.designsystem.PwBotaoVidro("Entrega", onClick = { paradas.add(ParadaForm(false)) }, icone = PwIcones.Plus, modifier = Modifier.weight(1f))

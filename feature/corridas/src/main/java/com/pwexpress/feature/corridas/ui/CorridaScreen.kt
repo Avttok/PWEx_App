@@ -70,6 +70,7 @@ import com.pwexpress.feature.corridas.data.Posicao
 import com.pwexpress.feature.corridas.data.PosicaoAtual
 import com.pwexpress.feature.corridas.data.StatusParada
 import com.pwexpress.feature.corridas.data.TipoParada
+import com.pwexpress.feature.corridas.data.exigencias
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -212,6 +213,13 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
                     Text(parada.endereco, style = MaterialTheme.typography.titleLarge, color = c.texto)
                     parada.contatoNome?.let { Text("Contato: $it", color = c.texto2) }
                     parada.instrucoes?.let { Text(it, color = c.ouro) }
+                    if (parada.janelaDe != null || parada.janelaAte != null) {
+                        Text("Atende das ${parada.janelaDe ?: "…"} às ${parada.janelaAte ?: "…"}", color = c.texto2, fontSize = 13.sp)
+                    }
+                    corrida.exigencias(parada).takeIf { it.alguma }?.let { e ->
+                        Text("Confirmar com: " + listOfNotNull("foto".takeIf { e.foto }, "nome".takeIf { e.nome }, "assinatura".takeIf { e.assinatura }, "código".takeIf { e.codigo }).joinToString(", "),
+                            color = c.texto2, fontSize = 13.sp)
+                    }
                     ReferenciasParada(parada.referencias)
                     ItensParada(parada)
                     parada.contatoTelefone?.let { tel ->
@@ -256,7 +264,6 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
     }
 }
 
-private val Corrida.precisaComprovante get() = exigeNome || exigeFoto || exigeAssinatura || exigeCodigo
 
 /** Ação principal da parada (+ "ignorar localização" do admin em corrida de teste). */
 @Composable
@@ -271,10 +278,12 @@ private fun BotaoAcao(
 ) {
     val c = Pw.cores
     val coleta = parada.tipo == TipoParada.COLETA
+    val precisa = corrida.exigencias(parada).alguma
     val (rotulo, icone, acao) = when {
         parada.status != StatusParada.CHEGOU -> Triple("Cheguei no local", PwIcones.MapPin, { onAvancar("chegou", false) })
+        coleta && precisa -> Triple("Confirmar coleta", PwIcones.PackageCheck, onComprovante)
         coleta -> Triple("Coletado", PwIcones.PackageCheck, { onAvancar("concluir", false) })
-        corrida.precisaComprovante -> Triple("Finalizar entrega", PwIcones.Check, onComprovante)
+        precisa -> Triple("Finalizar entrega", PwIcones.Check, onComprovante)
         else -> Triple("Entregue", PwIcones.CircleCheck, { onAvancar("concluir", false) })
     }
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -295,7 +304,7 @@ private fun BotaoAcao(
                 "Ignorar localização (teste)",
                 onClick = {
                     if (parada.status != StatusParada.CHEGOU) onAvancar("chegou", true)
-                    else if (corrida.precisaComprovante && !coleta) onComprovante()
+                    else if (precisa) onComprovante()
                     else onAvancar("concluir", true)
                 },
                 icone = PwIcones.FlaskConical,
@@ -357,6 +366,8 @@ private fun ComprovanteEntrega(corrida: Corrida, parada: Parada, posicaoInicial:
     var enviando by remember { mutableStateOf(false) }
     var etapa by remember { mutableStateOf("") }
     var erro by remember { mutableStateOf<String?>(null) }
+    val ex = corrida.exigencias(parada)
+    val coleta = parada.tipo == TipoParada.COLETA
 
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val arq = arquivoFoto
@@ -371,10 +382,10 @@ private fun ComprovanteEntrega(corrida: Corrida, parada: Parada, posicaoInicial:
 
     fun finalizar() {
         erro = when {
-            corrida.exigeNome && nome.isBlank() -> "Informe o nome de quem recebeu."
-            corrida.exigeCodigo && codigo.length != 4 -> "Digite o código de 4 dígitos."
-            corrida.exigeFoto && foto == null -> "Tire a foto do comprovante."
-            corrida.exigeAssinatura && assinatura.vazia -> "Colete a assinatura."
+            ex.nome && nome.isBlank() -> if (coleta) "Informe o nome de quem entregou." else "Informe o nome de quem recebeu."
+            ex.codigo && codigo.length != 4 -> "Digite o código de 4 dígitos."
+            ex.foto && foto == null -> "Tire a foto do comprovante."
+            ex.assinatura && assinatura.vazia -> "Colete a assinatura."
             else -> null
         }
         if (erro != null) return
@@ -383,12 +394,12 @@ private fun ComprovanteEntrega(corrida: Corrida, parada: Parada, posicaoInicial:
             var fotoPath: String? = null
             var assinaturaPath: String? = null
             val f = foto
-            if (corrida.exigeFoto && f != null) {
+            if (ex.foto && f != null) {
                 etapa = "Enviando foto…"
                 fotoPath = Corridas.enviarComprovante(corrida.id, parada.id, "foto", f, "image/jpeg")
                     .onFailure { erro = it.message }.getOrNull() ?: run { enviando = false; return@launch }
             }
-            if (corrida.exigeAssinatura) {
+            if (ex.assinatura) {
                 etapa = "Enviando assinatura…"
                 val png = withContext(Dispatchers.Default) { assinatura.exportarPng() }
                 assinaturaPath = Corridas.enviarComprovante(corrida.id, parada.id, "assinatura", png, "image/png")
@@ -414,22 +425,22 @@ private fun ComprovanteEntrega(corrida: Corrida, parada: Parada, posicaoInicial:
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Comprovante de entrega", style = MaterialTheme.typography.headlineSmall, color = c.texto, modifier = Modifier.weight(1f))
+            Text(if (coleta) "Comprovante de coleta" else "Comprovante de entrega", style = MaterialTheme.typography.headlineSmall, color = c.texto, modifier = Modifier.weight(1f))
             TextButton(onClick = onFechar, enabled = !enviando) { Text("Voltar", color = c.texto2) }
         }
         Text(parada.endereco, color = c.texto2)
 
-        if (corrida.exigeNome) {
-            OutlinedTextField(nome, { nome = it }, label = { Text("Nome de quem recebeu") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        if (ex.nome) {
+            OutlinedTextField(nome, { nome = it }, label = { Text(if (coleta) "Nome de quem entregou" else "Nome de quem recebeu") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         }
-        if (corrida.exigeCodigo) {
+        if (ex.codigo) {
             OutlinedTextField(
-                codigo, { codigo = it.filter(Char::isDigit).take(4) }, label = { Text("Código de entrega (4 dígitos)") },
+                codigo, { codigo = it.filter(Char::isDigit).take(4) }, label = { Text(if (coleta) "Código da coleta (4 dígitos)" else "Código de entrega (4 dígitos)") },
                 singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 modifier = Modifier.fillMaxWidth(),
             )
         }
-        if (corrida.exigeFoto) {
+        if (ex.foto) {
             PwCartao {
                 Titulo(PwIcones.Camera, "Foto")
                 foto?.let { bytes ->
@@ -446,7 +457,7 @@ private fun ComprovanteEntrega(corrida: Corrida, parada: Parada, posicaoInicial:
                 }, icone = PwIcones.Camera, modifier = Modifier.fillMaxWidth())
             }
         }
-        if (corrida.exigeAssinatura) {
+        if (ex.assinatura) {
             PwCartao {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.weight(1f)) { Titulo(PwIcones.PenLine, "Assinatura") }
@@ -457,7 +468,7 @@ private fun ComprovanteEntrega(corrida: Corrida, parada: Parada, posicaoInicial:
         }
 
         erro?.let { Text(it, color = c.vermelho) }
-        PwBotaoOuro(if (enviando) etapa else "Confirmar entrega", onClick = { finalizar() }, habilitado = !enviando, icone = PwIcones.CircleCheck, altura = 64.dp)
+        PwBotaoOuro(if (enviando) etapa else if (coleta) "Confirmar coleta" else "Confirmar entrega", onClick = { finalizar() }, habilitado = !enviando, icone = PwIcones.CircleCheck, altura = 64.dp)
         Spacer(Modifier.size(12.dp))
     }
 }

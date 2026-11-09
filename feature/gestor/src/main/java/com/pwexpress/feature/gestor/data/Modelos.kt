@@ -43,6 +43,9 @@ data class ParadaG(
     val contatoNome: String?, val contatoTelefone: String?, val instrucoes: String?, val status: String,
     val concluidaEm: Long?, val recebedorNome: String?, val fotoPath: String?, val assinaturaPath: String?,
     val distanciaChegadaM: Int?, val localIgnorado: Boolean, val referencias: List<RefG>,
+    /** Confirmações pedidas neste ponto (null = segue o padrão da rota), código próprio e horário em que atende. */
+    val exigeFoto: Boolean? = null, val exigeNome: Boolean? = null, val exigeAssinatura: Boolean? = null, val exigeCodigo: Boolean? = null,
+    val codigo: String? = null, val janelaDe: String? = null, val janelaAte: String? = null,
 )
 
 data class CorridaG(
@@ -119,7 +122,12 @@ fun JsonObject.paraParadaG() = ParadaG(
     recebedorNome = str("recebedor_nome"), fotoPath = str("foto_path"), assinaturaPath = str("assinatura_path"),
     distanciaChegadaM = int("distancia_chegada_m"), localIgnorado = bool("local_ignorado"),
     referencias = arr("referencias").mapNotNull { r -> r.str("nome")?.let { RefG(it, r.int("distancia_m"), r.str("tipo"), r.dbl("lat"), r.dbl("lng"), r.str("relacao")) } },
+    exigeFoto = boolOuNulo("exige_foto"), exigeNome = boolOuNulo("exige_nome"), exigeAssinatura = boolOuNulo("exige_assinatura"), exigeCodigo = boolOuNulo("exige_codigo"),
+    codigo = str("codigo"), janelaDe = str("janela_de")?.take(5), janelaAte = str("janela_ate")?.take(5),
 )
+
+/** true/false do JSON, ou null quando vazio. */
+internal fun JsonObject.boolOuNulo(k: String): Boolean? = (this[k] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content?.toBooleanStrictOrNull()
 
 fun JsonObject.paraCorridaG() = CorridaG(
     id = str("id")!!, numero = long("numero") ?: 0, teste = bool("teste"), status = str("status").orEmpty(),
@@ -146,6 +154,8 @@ fun JsonObject.paraCorridaG() = CorridaG(
 data class PontoPedidoG(
     val ordem: Int, val coleta: Boolean, val endereco: String, val contatoNome: String?, val lat: Double? = null, val lng: Double? = null, val status: String = "pendente",
     val id: String = "", val contatoTelefone: String? = null, val instrucoes: String? = null, val concluidoEm: Long? = null, val recebedorNome: String? = null,
+    val exigeFoto: Boolean = false, val exigeNome: Boolean = false, val exigeAssinatura: Boolean = false, val exigeCodigo: Boolean = false,
+    val janelaDe: String? = null, val janelaAte: String? = null,
 )
 data class ItemPedidoG(
     val descricao: String, val quantidade: Int, val pesoKg: Double?,
@@ -185,7 +195,9 @@ fun JsonObject.paraPedidoG() = PedidoG(
     recusaMotivo = str("recusa_motivo"),
     pontos = arr("pedido_pontos").map {
         PontoPedidoG(it.int("ordem") ?: 0, it.str("tipo") == "coleta", it.str("endereco").orEmpty(), it.str("contato_nome"), it.dbl("lat"), it.dbl("lng"), it.str("status") ?: "pendente",
-            it.str("id").orEmpty(), it.str("contato_telefone"), it.str("instrucoes"), iso(it.str("concluido_em")), it.str("recebedor_nome"))
+            it.str("id").orEmpty(), it.str("contato_telefone"), it.str("instrucoes"), iso(it.str("concluido_em")), it.str("recebedor_nome"),
+            it.boolOuNulo("exige_foto") == true, it.boolOuNulo("exige_nome") == true, it.boolOuNulo("exige_assinatura") == true, it.boolOuNulo("exige_codigo") == true,
+            it.str("janela_de")?.take(5), it.str("janela_ate")?.take(5))
     }.sortedBy { it.ordem },
     itens = arr("pedido_itens").map {
         ItemPedidoG(it.str("descricao").orEmpty(), it.int("quantidade") ?: 1, it.dbl("peso_kg"), it.str("categoria_id"), it.dbl("comprimento_cm"), it.dbl("largura_cm"), it.dbl("altura_cm"),

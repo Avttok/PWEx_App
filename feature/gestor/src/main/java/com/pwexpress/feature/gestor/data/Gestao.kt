@@ -529,3 +529,4 @@ object Gestao {
 fun Map<String, JsonElement>.numero(k: String, padrao: Double) = (this[k] as? JsonPrimitive)?.content?.toDoubleOrNull() ?: padrao
 fun Map<String, JsonElement>.logico(k: String, padrao: Boolean) = (this[k] as? JsonPrimitive)?.content?.toBooleanStrictOrNull() ?: padrao
 
+fun Map<String, JsonElement>.textoCfg(k: String, padrao: String) = (this[k] as? JsonPrimitive)?.content ?: padrao

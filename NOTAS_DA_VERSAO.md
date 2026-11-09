@@ -1,3 +1,5 @@
+• Divisão da rota: o motoboy leva a % definida e o gestor o resto; o gestor escolhe de onde sai a parte do Dev
+• O motoboy nunca recebe mais que a rota paga (vale por km, percentual e com ajuste)
 • Cada coleta ou entrega pode pedir a sua confirmação: foto, nome, assinatura ou código (o cliente escolhe no pedido)
 • Coletas também podem pedir comprovante
 • O horário em que cada endereço atende aparece na corrida

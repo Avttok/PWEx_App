@@ -335,7 +335,14 @@ private fun LinhasCalculo(calc: kotlinx.serialization.json.JsonObject) {
             Text(b, color = c.texto, fontSize = 13.sp, fontWeight = if (forte) FontWeight.Bold else FontWeight.SemiBold)
         }
     }
-    if (s("modo") == "percentual") { Linha("Percentual: ${numeroBr(n("pct") ?: 0.0)}% da rota", moedaBr(n("total")), true); return }
+    val limitado = s("limitado") == "true"
+    val avisoTeto = "Limitado a ${moedaBr(n("teto"))}: o motoboy nunca leva mais que a rota paga (valor da rota menos a parte do Dev)."
+    if (s("modo") == "percentual") {
+        val origem = when (s("dev_origem")) { "total" -> " · Dev sai antes de dividir"; "proporcional" -> " · Dev sai das duas partes"; "gestor" -> " · Dev sai da parte do gestor"; else -> "" }
+        Linha("Percentual: ${numeroBr(n("pct") ?: 0.0)}% da rota$origem", moedaBr(n("total")), true)
+        if (limitado) TextoDica(avisoTeto)
+        return
+    }
     val dist = (calc["distancias_km"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull() }.orEmpty()
     val regra = (REGRA[s("regra")] ?: s("regra").orEmpty()) + if (s("regra") == "percentil") " ${s("percentil")}%" else ""
     Linha("Km de referência ($regra)", "${numeroBr(n("km_referencia") ?: 0.0)} km × ${moedaBr(n("valor_km"))}")
@@ -344,7 +351,9 @@ private fun LinhasCalculo(calc: kotlinx.serialization.json.JsonObject) {
     if ((n("coletas_extras") ?: 0.0) > 0 && (n("valor_coleta_extra") ?: 0.0) > 0) Linha("Coletas a mais", "${n("coletas_extras")!!.toInt()} × ${moedaBr(n("valor_coleta_extra"))}")
     if ((n("fixo") ?: 0.0) > 0) Linha("Fixo por rota", moedaBr(n("fixo")))
     if ((n("minimo") ?: 0.0) > 0) Linha("Mínimo", moedaBr(n("minimo")))
-    Linha("Calculado", moedaBr(n("total")), true)
+    if (limitado && n("calculado") != null) Linha("Pelo cálculo", moedaBr(n("calculado")))
+    Linha(if (limitado) "Fica (teto da rota)" else "Calculado", moedaBr(n("total")), true)
+    if (limitado) TextoDica(avisoTeto)
 }
 
 

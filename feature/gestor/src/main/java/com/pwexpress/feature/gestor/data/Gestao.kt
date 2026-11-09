@@ -433,6 +433,10 @@ object Gestao {
         }).exigirOk(::traduzir); Unit
     }
 
+    suspend fun confirmarPagamentoPedido(id: String, metodo: String) = acao {
+        PwCore.rpc.chamar("confirmar_pagamento_pedido", buildJsonObject { put("p_pedido", id); put("p_metodo", metodo) }).exigirOk(::traduzir); Unit
+    }
+
     suspend fun roteirizarAgora() = acao { PwCore.rpc.chamar("roteirizar_agora", JsonObject(emptyMap())).exigirOk(::traduzir); Unit }
 
     /** modo: quadro | melhor_primeiro | cascata; ou motoboy para entregar direto. */

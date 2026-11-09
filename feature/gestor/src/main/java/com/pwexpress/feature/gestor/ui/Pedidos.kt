@@ -120,7 +120,14 @@ private fun CartaoPedido(p: PedidoG, empresa: String?, onClick: () -> Unit) {
             ).joinToString(" · "),
             color = c.texto3, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
-        if (p.urgente) { Spacer(Modifier.size(4.dp)); PwSelo("URGENTE", c.vermelho, icone = PwIcones.Flame) }
+        val esperaPag = p.cobranca == "pre_pago" && p.pagamentoStatus == "pendente" && p.status !in setOf("cancelado", "recusado", "concluido")
+        if (p.urgente || esperaPag) {
+            Spacer(Modifier.size(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (p.urgente) PwSelo("URGENTE", c.vermelho, icone = PwIcones.Flame)
+                if (esperaPag) PwSelo("Aguardando pagamento", androidx.compose.ui.graphics.Color(0xFF38BDF8), icone = PwIcones.Wallet)
+            }
+        }
     }
 }
 
@@ -184,12 +191,26 @@ private fun JanelaPedido(p: PedidoG, empresa: String?, onFechar: () -> Unit) {
                     modifier = Modifier.clickable { rodar("Recalculado.", fechar = false) { Gestao.revisarPedido(p.id, "recalcular") } }.padding(vertical = 6.dp))
             }
         }
+        if (p.cobranca == "pre_pago" && p.pagamentoStatus == "pendente" && p.status !in setOf("cancelado", "recusado", "concluido")) {
+            PwCartao(cor = androidx.compose.ui.graphics.Color(0xFF38BDF8).copy(alpha = 0.6f)) {
+                com.pwexpress.core.designsystem.PwRotulo("Cliente pré-pago · aguardando pagamento")
+                TextoDica((if (p.status == "recebido") "Depois de aprovado, o pedido" else "O pedido") + " só vira rota quando o pagamento for confirmado. " +
+                    "Ou ligue “Montar rota sem esperar o pagamento” nas regras deste pedido ou do cliente.")
+                Spacer(Modifier.size(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PwBotaoVidro("PIX recebido", onClick = { rodar("Pagamento confirmado: o pedido segue para as rotas.", fechar = false) { Gestao.confirmarPagamentoPedido(p.id, "pix") } },
+                        icone = PwIcones.Check, modifier = Modifier.weight(1f))
+                    PwBotaoVidro("Cartão", onClick = { rodar("Pagamento confirmado: o pedido segue para as rotas.", fechar = false) { Gestao.confirmarPagamentoPedido(p.id, "cartao") } },
+                        icone = PwIcones.Wallet, modifier = Modifier.weight(1f))
+                }
+            }
+        }
         PwErro(erro)
         p.recusaMotivo?.let { TextoDica("Motivo da recusa: $it") }
 
         if (p.status == "recebido") {
             PwBotaoOuro(if (ocupado) "Aprovando…" else "Aprovar" + if (mudou) " com ${moedaBr(valorNum)}" else "", onClick = {
-                rodar("Aprovado: vai para as rotas.") { Gestao.revisarPedido(p.id, "aprovar", if (mudou) valorNum else null, motivo.ifBlank { null }) }
+                rodar(if (p.cobranca == "pre_pago" && p.pagamentoStatus == "pendente") "Aprovado. Cliente pré-pago: a rota sai quando o pagamento for confirmado." else "Aprovado: vai para as rotas.") { Gestao.revisarPedido(p.id, "aprovar", if (mudou) valorNum else null, motivo.ifBlank { null }) }
             }, icone = PwIcones.Check, habilitado = !ocupado)
         }
         if (p.status in setOf("recebido", "aprovado")) {

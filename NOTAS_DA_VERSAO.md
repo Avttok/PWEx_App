@@ -1,6 +1,5 @@
-• Janela de atualização mais limpa: anel inteiro, sem o X, um botão dourado para fechar
-• Gestor: menu de baixo com Mapa, Pedidos (pedidos + rotas), Pessoas (clientes + equipe), Carteira e Ajustes
-• Busca e filtros em Pedidos, Rotas, Clientes e Equipe
-• Menu da conta reorganizado (Configurações no alto, Console Dev no fim)
-• O app lembra se a lista do mapa estava aberta ou minimizada
-• Dev: zerar pedidos (teste, reais ou ambos)
+• Conquistas: 66 medalhas para motoboys (corridas, entregas, km, horas online, tempo de conta, noite, sequência de dias…) no perfil e no menu da conta
+• Novas cores do app: azul, verde, preto no branco e branco no preto
+• Botão online/offline troca de cor assim que o anel enche, com animação de troca
+• Raio com bolinha grande para puxar
+• Ajuste +/− na folha do motoboy voltou a funcionar

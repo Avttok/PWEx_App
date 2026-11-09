@@ -117,7 +117,16 @@ object PwCores {
 enum class PreferenciaTema { SISTEMA, CLARO, ESCURO }
 
 /** Cor principal: dourado (todos), vermelho (Dev) ou violeta (modo teste, sempre vence). */
-enum class Marca { OURO, VERMELHO, VIOLETA }
+enum class Marca { OURO, VERMELHO, VIOLETA, AZUL, VERDE, BRANCO, PRETO }
+
+/** Cores que qualquer usuário escolhe no menu da conta. Os dois "preto/branco" fixam claro ou noturno. */
+enum class EstiloTema(val rotulo: String, val amostra: Color, val fundoAmostra: Color) {
+    OURO("Dourado", Color(0xFFD4AF37), Color(0xFF0F0F12)),
+    AZUL("Azul", Color(0xFF3B82F6), Color(0xFF0F0F12)),
+    VERDE("Verde", Color(0xFF10B981), Color(0xFF0F0F12)),
+    PRETO_NO_BRANCO("Preto no branco", Color(0xFF111111), Color(0xFFFFFFFF)),
+    BRANCO_NO_PRETO("Branco no preto", Color(0xFFFFFFFF), Color(0xFF000000)),
+}
 
 /** Guarda a escolha do usuário (sistema / claro / noturno). */
 object TemaApp {
@@ -138,11 +147,21 @@ object TemaApp {
     val modoTeste: StateFlow<Boolean> = _modoTeste.asStateFlow()
     fun definirModoTeste(ligado: Boolean) { _modoTeste.value = ligado }
 
+    /** Cores escolhidas pelo usuário (guardadas no aparelho). */
+    private val _estilo = MutableStateFlow(EstiloTema.OURO)
+    val estilo: StateFlow<EstiloTema> = _estilo.asStateFlow()
+    fun definirEstilo(e: EstiloTema) {
+        _estilo.value = e
+        ctx?.getSharedPreferences("pwex_tema", Context.MODE_PRIVATE)?.edit { putString("estilo", e.name) }
+    }
+
     fun init(context: Context) {
         ctx = context.applicationContext
         val salvo = ctx!!.getSharedPreferences("pwex_tema", Context.MODE_PRIVATE).getString("tema", null)
         _pref.value = PreferenciaTema.entries.firstOrNull { it.name == salvo } ?: PreferenciaTema.SISTEMA
         _vermelho.value = ctx!!.getSharedPreferences("pwex_tema", Context.MODE_PRIVATE).getBoolean("vermelho", false)
+        val est = ctx!!.getSharedPreferences("pwex_tema", Context.MODE_PRIVATE).getString("estilo", null)
+        _estilo.value = EstiloTema.entries.firstOrNull { it.name == est } ?: EstiloTema.OURO
     }
 
     fun definir(p: PreferenciaTema) {
@@ -191,10 +210,13 @@ private val tipografia = Typography(
 @Composable
 fun PwTheme(content: @Composable () -> Unit) {
     val pref by TemaApp.preferencia.collectAsState()
-    val escuro = when (pref) {
-        PreferenciaTema.SISTEMA -> isSystemInDarkTheme()
-        PreferenciaTema.CLARO -> false
-        PreferenciaTema.ESCURO -> true
+    val estilo by TemaApp.estilo.collectAsState()
+    val escuro = when {
+        estilo == EstiloTema.BRANCO_NO_PRETO -> true
+        estilo == EstiloTema.PRETO_NO_BRANCO -> false
+        pref == PreferenciaTema.SISTEMA -> isSystemInDarkTheme()
+        pref == PreferenciaTema.CLARO -> false
+        else -> true
     }
     val teste by TemaApp.modoTeste.collectAsState()
     val vermelho by TemaApp.vermelho.collectAsState()
@@ -218,6 +240,41 @@ fun PwTheme(content: @Composable () -> Unit) {
             brilho1 = Color(if (escuro) 0x2EEF4444 else 0x38DC2626),
             brilho2 = Color(if (escuro) 0x12EF4444 else 0x1ADC2626),
             marca = Marca.VERMELHO,
+        )
+        estilo == EstiloTema.AZUL -> base.copy(
+            ouro = if (escuro) Color(0xFF60A5FA) else Color(0xFF2563EB),
+            ouroClaro = if (escuro) Color(0xFFBFDBFE) else Color(0xFF60A5FA),
+            ouroEscuro = if (escuro) Color(0xFF1D4ED8) else Color(0xFF1E3A8A),
+            sobreOuro = if (escuro) Color(0xFF06101F) else Color(0xFFFFFFFF),
+            brilho1 = Color(if (escuro) 0x2960A5FA else 0x382563EB),
+            brilho2 = Color(if (escuro) 0x1260A5FA else 0x1A2563EB),
+            marca = Marca.AZUL,
+        )
+        estilo == EstiloTema.VERDE -> base.copy(
+            ouro = if (escuro) Color(0xFF34D399) else Color(0xFF059669),
+            ouroClaro = if (escuro) Color(0xFFA7F3D0) else Color(0xFF34D399),
+            ouroEscuro = if (escuro) Color(0xFF047857) else Color(0xFF065F46),
+            sobreOuro = if (escuro) Color(0xFF03140D) else Color(0xFFFFFFFF),
+            brilho1 = Color(if (escuro) 0x2934D399 else 0x38059669),
+            brilho2 = Color(if (escuro) 0x1234D399 else 0x1A059669),
+            marca = Marca.VERDE,
+        )
+        estilo == EstiloTema.BRANCO_NO_PRETO -> base.copy(
+            fundo = Color(0xFF000000), fundo2 = Color(0xFF0A0A0A),
+            vidro = Color(0xE00C0C0C), vidroForte = Color(0xF2141414),
+            texto = Color(0xFFFFFFFF), texto2 = Color(0xFFB8B8B8), texto3 = Color(0xFF7C7C7C),
+            ouro = Color(0xFFF2F2F2), ouroClaro = Color(0xFFFFFFFF), ouroEscuro = Color(0xFF9A9A9A), sobreOuro = Color(0xFF000000),
+            brilho1 = Color(0x1FFFFFFF), brilho2 = Color(0x0AFFFFFF),
+            marca = Marca.BRANCO,
+        )
+        estilo == EstiloTema.PRETO_NO_BRANCO -> base.copy(
+            fundo = Color(0xFFFFFFFF), fundo2 = Color(0xFFF4F4F5),
+            vidro = Color(0xE6FFFFFF), vidroForte = Color(0xF7FFFFFF), vidroSutil = Color(0x08000000),
+            borda = Color(0x1A000000), bordaForte = Color(0x33000000),
+            texto = Color(0xFF0A0A0A), texto2 = Color(0xFF52525B), texto3 = Color(0xFF8A8A8E),
+            ouro = Color(0xFF111111), ouroClaro = Color(0xFF52525B), ouroEscuro = Color(0xFF000000), sobreOuro = Color(0xFFFFFFFF),
+            brilho1 = Color(0x14000000), brilho2 = Color(0x08000000),
+            marca = Marca.PRETO,
         )
         else -> base
     }

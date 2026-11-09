@@ -114,7 +114,7 @@ fun PerfilScreen(
     }
 
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        com.pwexpress.core.designsystem.PwCabecalho("Editar perfil", onVoltar, subtitulo = email)
+        com.pwexpress.core.designsystem.PwCabecalho("Seu perfil", onVoltar, subtitulo = email)
 
         // ---------------------------------------------------------- foto e nome
         PwCartao(destaque = true) {
@@ -149,6 +149,13 @@ fun PerfilScreen(
             Spacer(Modifier.height(10.dp))
             val mudou = novaFoto != null || (nome.trim().isNotEmpty() && nome.trim() != perfil?.nome)
             PwBotaoOuro(if (salvando) "Salvando…" else "Salvar", onClick = { salvar() }, icone = PwIcones.Check, habilitado = mudou && !salvando)
+        }
+
+        // ---------------------------------------------------------- conquistas (motoboy)
+        if (perfil?.motoboy == true) {
+            val stats by com.pwexpress.core.perfil.Conquistas.minhas.collectAsState()
+            LaunchedEffect(Unit) { com.pwexpress.core.perfil.Conquistas.carregar() }
+            PwCartao { com.pwexpress.core.perfil.GradeConquistas(stats) }
         }
 
         // ---------------------------------------------------------- veículo (motoboy)

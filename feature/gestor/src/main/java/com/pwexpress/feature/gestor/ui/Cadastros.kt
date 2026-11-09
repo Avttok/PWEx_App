@@ -538,6 +538,7 @@ fun MembroG(id: String, meuId: String?, onVoltar: () -> Unit) {
             Triple("registro", "Registro", PwIcones.History),
             Triple("percursos", "Percursos", PwIcones.Route).takeIf { comPercursos },
             Triple("veiculo", "Veículo", PwIcones.Bike).takeIf { m.motoboy },
+            Triple("medalhas", "", PwIcones.Trophy).takeIf { m.motoboy },
             Triple("regras", "Regras", PwIcones.Layers).takeIf { m.motoboy },
             Triple("editar", "Editar", PwIcones.Pencil),
         )
@@ -547,6 +548,13 @@ fun MembroG(id: String, meuId: String?, onVoltar: () -> Unit) {
             "registro" -> RegistroG(m.id)
             "percursos" -> PercursosMembroG(m.id, m.modoTeste)
             "veiculo" -> VeiculoG(m.id)
+            "medalhas" -> {
+                var stats by remember(m.id) { mutableStateOf<kotlinx.serialization.json.JsonObject?>(null) }
+                var erroC by remember(m.id) { mutableStateOf<String?>(null) }
+                androidx.compose.runtime.LaunchedEffect(m.id) { com.pwexpress.core.perfil.Conquistas.carregar(m.id).onSuccess { stats = it }.onFailure { erroC = it.message } }
+                PwErro(erroC)
+                PwCartao { com.pwexpress.core.perfil.GradeConquistas(stats) }
+            }
             "regras" -> {
                 val escopoI = rememberCoroutineScope()
                 Row(verticalAlignment = Alignment.CenterVertically) {

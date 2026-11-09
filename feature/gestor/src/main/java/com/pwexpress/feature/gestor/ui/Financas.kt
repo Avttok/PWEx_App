@@ -152,8 +152,9 @@ private fun DetalheFatura(f: JsonObject, cliente: String, onFechar: () -> Unit, 
     val st = f.str("status") ?: "rascunho"
     LaunchedEffect(id) { pedidos = Gestao.tabela("pedidos", "select=id,numero,concluido_em,valor&fatura_id=eq.$id&order=concluido_em") }
     fun acao(a: String, msg: String, extra: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit = {}) {
+        val corpo = buildJsonObject { put("p_fatura", id); put("p_acao", a); extra() }
         escopo.launch {
-            Gestao.rpcJson("editar_fatura", buildJsonObject { put("p_fatura", id); put("p_acao", a); extra() })
+            Gestao.rpcJson("editar_fatura", corpo)
                 .onSuccess { PwToast.mostrar(msg, TipoAviso.OK); onMudou() }.onFailure { erro = it.message }
         }
     }
@@ -324,8 +325,9 @@ private fun HoleriteG(linha: JsonObject, ini: String, fim: String, teste: Boolea
         h = Gestao.rpcJson("holerite", buildJsonObject { put("p_motoboy", mid); put("p_inicio", ini); put("p_fim", fim); put("p_teste", teste) }).getOrNull() as? JsonObject
     }
     fun rodar(msg: String, f: String, args: kotlinx.serialization.json.JsonObjectBuilder.() -> Unit) {
+        val corpo = buildJsonObject(args)   // monta já: os campos podem ser limpos logo depois
         escopo.launch {
-            Gestao.rpcJson(f, buildJsonObject(args)).onSuccess { PwToast.mostrar(msg, TipoAviso.OK); erro = null; versao++; onMudou() }.onFailure { erro = it.message }
+            Gestao.rpcJson(f, corpo).onSuccess { PwToast.mostrar(msg, TipoAviso.OK); erro = null; versao++; onMudou() }.onFailure { erro = it.message }
         }
     }
     val st = h?.str("status") ?: "aberto"
@@ -362,8 +364,8 @@ private fun HoleriteG(linha: JsonObject, ini: String, fim: String, teste: Boolea
                 PwCampo(valor, { valor = it }, "R$ (+/−)", modifier = Modifier.weight(1f))
             }
             PwBotaoVidro("Adicionar ajuste", onClick = {
-                val v = valor.replace(',', '.').toDoubleOrNull()
-                if (desc.isBlank() || v == null) { erro = "Descreva e informe o valor."; return@PwBotaoVidro }
+                val v = valor.replace('−', '-').replace('–', '-').replace("R$", "").replace(" ", "").replace(',', '.').toDoubleOrNull()?.takeIf { it != 0.0 }
+                if (desc.isBlank() || v == null) { erro = "Descreva e informe um valor diferente de zero (use − para desconto)."; return@PwBotaoVidro }
                 rodar("Ajuste adicionado.", "ajuste_holerite") { put("p_motoboy", mid); put("p_inicio", ini); put("p_fim", fim); put("p_descricao", desc.trim()); put("p_valor", v); put("p_teste", teste) }
                 desc = ""; valor = ""
             }, icone = PwIcones.Plus, modifier = Modifier.fillMaxWidth())

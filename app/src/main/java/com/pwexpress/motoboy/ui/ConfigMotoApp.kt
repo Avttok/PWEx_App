@@ -1,6 +1,8 @@
 package com.pwexpress.motoboy.ui
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -21,6 +23,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -65,6 +68,7 @@ fun ConfigMotoApp(onVoltar: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 /** Até onde o motoboy aceita ir buscar uma corrida, desenhado no mapa. */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 private fun CartaoRaio() {
     val c = Pw.cores
@@ -87,16 +91,30 @@ private fun CartaoRaio() {
         PwRotulo("Raio de disponibilidade")
         Spacer(Modifier.height(4.dp))
         Text(
-            if (km < 1f) "Sem limite" else "Até ${km.toInt()} km",
+            if (km < 1f) "Sem raio definido" else "Até ${km.toInt()} km",
             style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 26.sp), color = c.texto,
         )
         Text(
             if (km < 1f) "Você recebe corridas de qualquer distância." else "Corridas com coleta mais longe que isso não chegam para você (a não ser as urgentes).",
             color = c.texto2, fontSize = 13.sp, fontFamily = Archivo,
         )
+        // bolinha grande para puxar e trilho grosso (o padrão do Android é fino demais)
+        val fracao = (km / RAIO_MAX).coerceIn(0f, 1f)
         Slider(
             value = km, onValueChange = { km = it.toInt().toFloat() }, valueRange = 0f..RAIO_MAX,
-            colors = SliderDefaults.colors(thumbColor = c.ouro, activeTrackColor = c.ouro, inactiveTrackColor = c.bordaForte),
+            modifier = Modifier.height(48.dp),
+            thumb = {
+                Box(
+                    Modifier.size(30.dp).shadow(6.dp, androidx.compose.foundation.shape.CircleShape)
+                        .clip(androidx.compose.foundation.shape.CircleShape).background(c.gradOuro)
+                        .border(3.dp, c.fundo2, androidx.compose.foundation.shape.CircleShape),
+                )
+            },
+            track = {
+                Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(99.dp)).background(c.bordaForte)) {
+                    Box(Modifier.fillMaxWidth(fracao).height(10.dp).clip(RoundedCornerShape(99.dp)).background(c.gradOuro))
+                }
+            },
         )
         PwSegmentado(listOf("De onde eu estiver" to PwIcones.LocateFixed, "Ponto fixo" to PwIcones.MapPin), if (fixo) 1 else 0, { fixo = it == 1 })
         Spacer(Modifier.height(10.dp))
@@ -140,4 +158,4 @@ private fun CartaoRaio() {
 }
 
 /** Texto curto do raio para o atalho do Início. */
-fun textoRaio(km: Double?, modo: String): String = if (km == null || km < 1) "Sem raio" else "Raio ${km.toInt()} km" + if (modo == "fixo") " · base" else ""
+fun textoRaio(km: Double?, modo: String): String = if (km == null || km < 1) "Sem raio definido" else "Raio ${km.toInt()} km" + if (modo == "fixo") " · base" else ""

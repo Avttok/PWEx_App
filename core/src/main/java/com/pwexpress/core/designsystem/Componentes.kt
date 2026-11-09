@@ -203,7 +203,7 @@ fun BotaoTema(modifier: Modifier = Modifier) {
 @Composable
 fun PwSeloLogo(tamanho: Dp, modifier: Modifier = Modifier, descricao: String? = "PW Express") {
     val marca = Pw.cores.marca
-    val res = when (marca) { Marca.VIOLETA -> R.drawable.pwex_marca_violeta; Marca.VERMELHO -> R.drawable.pwex_marca_vermelho; else -> R.drawable.pwex_marca_ouro }
+    val res = when (marca) { Marca.VIOLETA -> R.drawable.pwex_marca_violeta; Marca.VERMELHO -> R.drawable.pwex_marca_vermelho; Marca.AZUL -> R.drawable.pwex_marca_azul; Marca.VERDE -> R.drawable.pwex_marca_verde; Marca.BRANCO -> R.drawable.pwex_marca_branco; Marca.PRETO -> R.drawable.pwex_marca_preto; Marca.OURO -> R.drawable.pwex_marca_ouro }
     Image(painterResource(res), descricao, modifier.size(tamanho), contentScale = androidx.compose.ui.layout.ContentScale.Fit)
 }
 
@@ -264,7 +264,7 @@ fun PwCabeca(icone: ImageVector, titulo: String, subtitulo: String? = null, modi
             Text(titulo, style = MaterialTheme.typography.headlineSmall, color = Pw.cores.texto, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (subtitulo != null) Text(subtitulo, style = MaterialTheme.typography.bodyMedium, color = Pw.cores.texto2, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        acoes()
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp), content = acoes)
     }
 }
 

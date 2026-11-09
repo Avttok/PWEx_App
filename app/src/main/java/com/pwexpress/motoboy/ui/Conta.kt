@@ -123,14 +123,20 @@ fun JanelaConta(
                     }
                 }
                 Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(c.borda))
+                if (perfil?.motoboy == true) {
+                    com.pwexpress.core.perfil.FaixaConquistas(onVerTodas = onPerfil)
+                    Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(c.borda))
+                }
 
-                ItemMenu(PwIcones.UserRoundPen, "Editar perfil", onClick = onPerfil)
                 ItemMenu(PwIcones.Settings2, "Configurações", subtitulo = if (painel == Painel.GESTOR) "Do sistema inteiro" else "Raio, aparelho e GPS", onClick = onConfiguracoes)
                 val escuro = c.escuro
-                ItemMenu(if (escuro) PwIcones.Moon else PwIcones.Sun, if (escuro) "Tema noturno" else "Tema claro",
+                val estilo by TemaApp.estilo.collectAsState()
+                val mono = estilo == com.pwexpress.core.designsystem.EstiloTema.PRETO_NO_BRANCO || estilo == com.pwexpress.core.designsystem.EstiloTema.BRANCO_NO_PRETO
+                if (!mono) ItemMenu(if (escuro) PwIcones.Moon else PwIcones.Sun, if (escuro) "Tema noturno" else "Tema claro",
                     onClick = { TemaApp.definir(if (escuro) PreferenciaTema.CLARO else PreferenciaTema.ESCURO) }) {
                     Interruptor(escuro) { TemaApp.definir(if (it) PreferenciaTema.ESCURO else PreferenciaTema.CLARO) }
                 }
+                EscolherCores(estilo)
                 if (perfil?.dev == true) {
                     val vermelho by TemaApp.vermelho.collectAsState()
                     ItemMenu(PwIcones.Palette, "Tema vermelho", subtitulo = if (vermelho) "A cor do Dev" else "Dourado, como todos", cor = c.dev, onClick = {}) {
@@ -221,4 +227,36 @@ private fun CoracaoBatendo() {
         label = "batida",
     )
     Icon(PwIcones.Heart, "com amor", tint = Pw.cores.ouro, modifier = Modifier.size(12.dp).scale(escala))
+}
+
+
+/** Bolinhas com as cores do app: dourado, azul, verde, preto no branco e branco no preto. */
+@Composable
+private fun EscolherCores(atual: com.pwexpress.core.designsystem.EstiloTema) {
+    val c = Pw.cores
+    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(PwIcones.Palette, null, tint = c.ouro, modifier = Modifier.size(20.dp))
+            Spacer(Modifier.width(12.dp))
+            Text("Cores do app", color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 15.sp, modifier = Modifier.weight(1f))
+            Text(atual.rotulo, color = c.texto3, fontSize = 12.5.sp)
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+            com.pwexpress.core.designsystem.EstiloTema.entries.forEach { e ->
+                val ativo = e == atual
+                val anel by androidx.compose.animation.core.animateDpAsState(if (ativo) 3.dp else 1.dp, label = "anel")
+                Box(
+                    Modifier.size(44.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                        .border(anel, if (ativo) c.ouro else c.bordaForte, androidx.compose.foundation.shape.CircleShape)
+                        .clickable { com.pwexpress.core.designsystem.TemaApp.definirEstilo(e) }
+                        .padding(5.dp).clip(androidx.compose.foundation.shape.CircleShape)
+                        .background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(e.fundoAmostra, e.fundoAmostra, e.amostra, e.amostra), start = androidx.compose.ui.geometry.Offset.Zero, end = androidx.compose.ui.geometry.Offset.Infinite)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (ativo) Icon(PwIcones.Check, e.rotulo, tint = if (e == com.pwexpress.core.designsystem.EstiloTema.PRETO_NO_BRANCO) Color.White else Color.Black, modifier = Modifier.size(16.dp))
+                }
+            }
+        }
+    }
 }

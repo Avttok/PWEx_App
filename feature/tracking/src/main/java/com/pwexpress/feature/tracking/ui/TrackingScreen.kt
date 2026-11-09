@@ -44,6 +44,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.togetherWith
 import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -194,10 +196,13 @@ private fun BotaoStatus(modo: Modo, onAlternar: () -> Unit, onToque: () -> Unit)
     val ligar = remember { androidx.compose.animation.core.Animatable(if (online || emRota) 1f else 0f) }
     LaunchedEffect(online, emRota) { ligar.animateTo(if (online || emRota) 1f else 0f, tween(700)) }
     val segurar = remember { androidx.compose.animation.core.Animatable(0f) }
+    // onda que sai do anel na hora da troca (0 → 1)
+    val onda = remember { androidx.compose.animation.core.Animatable(1f) }
     val vibrar = androidx.compose.ui.platform.LocalHapticFeedback.current
     val escopo = androidx.compose.runtime.rememberCoroutineScope()
     var apertado by remember { mutableStateOf(false) }
-    val escala by androidx.compose.animation.core.animateFloatAsState(if (apertado) 0.94f else 1f, androidx.compose.animation.core.spring(0.5f, 380f), label = "escala")
+    val escalaToque by androidx.compose.animation.core.animateFloatAsState(if (apertado) 0.94f else 1f, androidx.compose.animation.core.spring(0.5f, 380f), label = "escala")
+    val escala = escalaToque * (1f + 0.07f * kotlin.math.sin(Math.PI * onda.value).toFloat())
     val tam = 236.dp
     // o detector de toque não reinicia quando o modo muda (senão perde o "segurando")
     val emRotaAgora = androidx.compose.runtime.rememberUpdatedState(emRota)
@@ -220,6 +225,9 @@ private fun BotaoStatus(modo: Modo, onAlternar: () -> Unit, onToque: () -> Unit)
                                 trocou = true
                                 vibrar.performHapticFeedback(androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress)
                                 onAlternarAgora.value()
+                                // a cor nova aparece já: o anel de "segurar" some e a onda sai do botão
+                                escopo.launch { segurar.animateTo(0f, tween(320)) }
+                                escopo.launch { onda.snapTo(0f); onda.animateTo(1f, tween(950, easing = androidx.compose.animation.core.FastOutSlowInEasing)) }
                             }
                             val soltou = tryAwaitRelease()
                             apertado = false
@@ -227,7 +235,7 @@ private fun BotaoStatus(modo: Modo, onAlternar: () -> Unit, onToque: () -> Unit)
                                 enchendo.cancel()
                                 if (soltou && segurar.value < 0.2f) onToqueAgora.value()
                             }
-                            escopo.launch { segurar.animateTo(0f, tween(if (trocou) 420 else 260)) }
+                            if (!trocou) escopo.launch { segurar.animateTo(0f, tween(260)) }
                         },
                     )
                 }
@@ -257,6 +265,14 @@ private fun BotaoStatus(modo: Modo, onAlternar: () -> Unit, onToque: () -> Unit)
                         // cometa na ponta da aurora
                         drawCircle(cor3.copy(alpha = l), esp * 0.62f, Offset(centro.x + rAnel, centro.y - 0.5f))
                         drawCircle(cor3.copy(alpha = 0.35f * l), esp * 1.5f, Offset(centro.x + rAnel, centro.y))
+                    }
+                    // onda da troca: anel que se expande e some, na cor nova
+                    val o = onda.value
+                    if (o < 1f) {
+                        val rMax = size.minDimension / 2f
+                        val r = rAnel + (rMax - rAnel) * o
+                        drawCircle(cor.copy(alpha = 0.85f * (1f - o)), r, centro, style = Stroke(esp * (1.6f - o)))
+                        drawCircle(Brush.radialGradient(listOf(cor.copy(alpha = 0.45f * (1f - o)), Color.Transparent), centro, rMax), rMax, centro)
                     }
                     // enchendo enquanto segura
                     val s = segurar.value
@@ -299,17 +315,29 @@ private fun BotaoStatus(modo: Modo, onAlternar: () -> Unit, onToque: () -> Unit)
                 },
                 contentAlignment = Alignment.Center,
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        when (modo) { Modo.OFFLINE -> PwIcones.Power; Modo.DISPONIVEL -> PwIcones.Radar; Modo.EM_CORRIDA -> PwIcones.Route },
-                        null, tint = cor, modifier = Modifier.size(40.dp),
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        when (modo) { Modo.OFFLINE -> "OFFLINE"; Modo.DISPONIVEL -> "ONLINE"; Modo.EM_CORRIDA -> "EM ROTA" },
-                        style = TextStyle(brush = Brush.linearGradient(listOf(cor3, cor, cor2)), fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 16.sp, letterSpacing = 1.2.sp),
-                        maxLines = 1, softWrap = false,
-                    )
+                // ícone e texto trocam com um giro + zoom
+                androidx.compose.animation.AnimatedContent(
+                    modo,
+                    transitionSpec = {
+                        (androidx.compose.animation.fadeIn(tween(380, 120)) + androidx.compose.animation.scaleIn(tween(480, 120), initialScale = 0.55f))
+                            .togetherWith(androidx.compose.animation.fadeOut(tween(200)) + androidx.compose.animation.scaleOut(tween(260), targetScale = 1.35f))
+                    },
+                    label = "estado",
+                ) { m ->
+                    val giroIcone = remember { androidx.compose.animation.core.Animatable(-90f) }
+                    LaunchedEffect(Unit) { giroIcone.animateTo(0f, androidx.compose.animation.core.spring(0.45f, 220f)) }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            when (m) { Modo.OFFLINE -> PwIcones.Power; Modo.DISPONIVEL -> PwIcones.Radar; Modo.EM_CORRIDA -> PwIcones.Route },
+                            null, tint = cor, modifier = Modifier.size(40.dp).graphicsLayer { rotationZ = giroIcone.value },
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            when (m) { Modo.OFFLINE -> "OFFLINE"; Modo.DISPONIVEL -> "ONLINE"; Modo.EM_CORRIDA -> "EM ROTA" },
+                            style = TextStyle(brush = Brush.linearGradient(listOf(cor3, cor, cor2)), fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 16.sp, letterSpacing = 1.2.sp),
+                            maxLines = 1, softWrap = false,
+                        )
+                    }
                 }
             }
         }

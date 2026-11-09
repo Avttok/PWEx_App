@@ -75,6 +75,7 @@ import com.pwexpress.core.designsystem.PwLogo
 import com.pwexpress.core.designsystem.PwRotulo
 import com.pwexpress.core.designsystem.PwSelo
 import com.pwexpress.feature.corridas.data.Corridas
+import com.pwexpress.feature.corridas.data.exigencias
 import com.pwexpress.feature.corridas.data.Oferta
 import com.pwexpress.feature.corridas.data.TipoParada
 import com.pwexpress.feature.corridas.data.PosicaoAtual
@@ -251,8 +252,8 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
                     }
                 }
                 val exigencias = listOfNotNull(
-                    "Nome".takeIf { corrida.exigeNome }, "Foto".takeIf { corrida.exigeFoto },
-                    "Assinatura".takeIf { corrida.exigeAssinatura }, "Código".takeIf { corrida.exigeCodigo },
+                    "Nome".takeIf { corrida.exigeNome || corrida.paradas.any { corrida.exigencias(it).nome } }, "Foto".takeIf { corrida.exigeFoto || corrida.paradas.any { corrida.exigencias(it).foto } },
+                    "Assinatura".takeIf { corrida.exigeAssinatura || corrida.paradas.any { corrida.exigencias(it).assinatura } }, "Código".takeIf { corrida.exigeCodigo || corrida.paradas.any { corrida.exigencias(it).codigo } },
                 )
                 if (exigencias.isNotEmpty() || corrida.exigirNoLocal) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {

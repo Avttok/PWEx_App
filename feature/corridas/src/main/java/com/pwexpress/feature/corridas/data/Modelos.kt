@@ -30,7 +30,20 @@ data class Parada(
     val cliente: String? = null,
     val pedidoNumero: Long? = null,
     val itens: List<ItemParada> = emptyList(),
+    /** O que esta parada exige (o cliente pode pedir por ponto). null = servidor antigo: vale o da corrida nas entregas. */
+    val exige: Exigencias? = null,
+    /** Horário em que o endereço atende (ex.: 09:00 às 12:00). */
+    val janelaDe: String? = null,
+    val janelaAte: String? = null,
 )
+
+data class Exigencias(val foto: Boolean, val nome: Boolean, val assinatura: Boolean, val codigo: Boolean) {
+    val alguma get() = foto || nome || assinatura || codigo
+}
+
+/** O que vale de fato nesta parada. */
+fun Corrida.exigencias(p: Parada): Exigencias = p.exige
+    ?: if (p.tipo == TipoParada.ENTREGA) Exigencias(exigeFoto, exigeNome, exigeAssinatura, exigeCodigo) else Exigencias(false, false, false, false)
 
 data class ItemParada(val descricao: String, val quantidade: Int, val categoria: String?, val perigoso: Boolean, val fragil: Boolean)
 
@@ -159,6 +172,9 @@ private fun JsonElement.paraParada(): Parada {
             val i = e as? JsonObject ?: return@mapNotNull null
             ItemParada(i.texto("descricao") ?: return@mapNotNull null, i.inteiro("quantidade") ?: 1, i.texto("categoria"), i.logico("perigoso"), i.logico("fragil"))
         }.orEmpty(),
+        exige = (o["exige"] as? JsonObject)?.let { e -> Exigencias(e.logico("foto"), e.logico("nome"), e.logico("assinatura"), e.logico("codigo")) },
+        janelaDe = o.texto("janela_de"),
+        janelaAte = o.texto("janela_ate"),
     )
 }
 

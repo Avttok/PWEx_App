@@ -211,6 +211,12 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
                         if (p.referencias.isNotEmpty()) TextoDica("Referências: " + p.referencias.joinToString(" · ") { r -> r.relacao ?: (r.nome + (r.distanciaM?.let { " ($it m)" } ?: "")) })
                         p.concluidaEm?.let { TextoDica("Concluída às ${hora(it)}") }
                         p.distanciaChegadaM?.let { TextoDica("Marcado a ${km(it)} do endereço" + if (p.localIgnorado) " · localização ignorada (teste)" else "") }
+                        run {
+                            // o que vale: o que o cliente pediu no ponto ou, vazio, o padrão da rota (só nas entregas)
+                            val ent = !p.coleta
+                            SelosPontoG(p.exigeFoto ?: (ent && corrida.exigeFoto), p.exigeNome ?: (ent && corrida.exigeNome), p.exigeAssinatura ?: (ent && corrida.exigeAssinatura),
+                                p.exigeCodigo ?: (ent && corrida.exigeCodigo), p.codigo ?: corrida.codigoEntrega.takeIf { ent }, p.janelaDe, p.janelaAte)
+                        }
                         p.recebedorNome?.let { Text("Recebido por $it", color = c.texto, fontSize = 13.sp) }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             p.fotoPath?.let { Comprovante("Foto", it) }

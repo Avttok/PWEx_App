@@ -444,6 +444,7 @@ private fun DetalhesPedidoG(p: PedidoG, onFocar: (Double, Double) -> Unit = { _,
                     listOfNotNull(pt.contatoNome, pt.contatoTelefone, pt.instrucoes).takeIf { it.isNotEmpty() }?.let { TextoDica(it.joinToString(" · ")) }
                     if (itens.isNotEmpty()) TextoDica(itens.joinToString(" · ") { "${it.quantidade}× ${it.descricao}" })
                     pt.concluidoEm?.let { TextoDica("✓ ${dataHora(it)}" + (pt.recebedorNome?.let { r -> " · recebido por $r" } ?: "")) }
+                    SelosPontoG(pt.exigeFoto, pt.exigeNome, pt.exigeAssinatura, pt.exigeCodigo, de = pt.janelaDe, ate = pt.janelaAte)
                 }
             }
         }

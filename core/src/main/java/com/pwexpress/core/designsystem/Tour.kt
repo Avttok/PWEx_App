@@ -1,7 +1,6 @@
 package com.pwexpress.core.designsystem
 
 import android.content.Context
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -75,7 +74,10 @@ object PwTour {
         if (atual == null && prefs()?.getBoolean(id, false) != true) abrir(id, passos)
     }
 
-    internal fun fechar() {
+    /** Há um tour aberto? (o app usa para o botão voltar fechar o tour) */
+    val aberto: Boolean get() = atual != null
+
+    fun fechar() {
         atual?.first?.let { prefs()?.edit()?.putBoolean(it, true)?.apply() }
         atual = null
     }
@@ -93,7 +95,6 @@ fun PwTourCamada() {
     val c = Pw.cores
     var origem by remember { mutableStateOf(Offset.Zero) }
     val alvo = p.alvo?.let { PwTour.alvos[it] }?.translate(-origem)
-    BackHandler { PwTour.fechar() }
     val dens = LocalDensity.current
     BoxWithConstraints(
         Modifier.fillMaxSize().onPlaced { origem = it.positionInRoot() }

@@ -252,6 +252,7 @@ class MainActivity : ComponentActivity() {
                         delay(1_200)
                         if (efetivo == Painel.GESTOR) PwTour.primeiraVez("gestor-app", ToursApp.gestor) else PwTour.primeiraVez("motoboy", ToursApp.motoboy)
                     }
+                    BackHandler(enabled = PwTour.aberto) { PwTour.fechar() }
                     PwTourCamada()
                     com.pwexpress.core.designsystem.PwToasts(Modifier.align(Alignment.BottomCenter))
                 }

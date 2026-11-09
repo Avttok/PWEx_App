@@ -95,6 +95,7 @@ import com.pwexpress.feature.gestor.data.Param
 import com.pwexpress.feature.gestor.data.Precos
 import com.pwexpress.feature.gestor.data.logico
 import com.pwexpress.feature.gestor.data.numero
+import com.pwexpress.feature.gestor.data.textoCfg
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -1092,6 +1093,22 @@ fun ConfiguracoesG(onVoltar: (() -> Unit)?, onAbrir: (TelaG) -> Unit = {}) {
                 PwRotulo("Exemplo")
                 TextoDica("Corrida de R$ 100,00, motoboy a 250 km da coleta e 450 km de percurso:")
                 Text(if (cfg.logico("acrescimo_distancia", true)) "100 × (1 + ${com.pwexpress.core.designsystem.numeroBr(fc)} + ${com.pwexpress.core.designsystem.numeroBr(fe)}) = ${moedaBr(100 * (1 + fc + fe))}" else "Acréscimo desligado: fica R$ 100,00.", color = c.texto, fontWeight = FontWeight.Bold)
+            }
+        }
+        if (g?.chave == "pagamento" && termo.isEmpty()) {
+            // divisão de uma rota de R$ 100 (o mesmo cálculo do banco)
+            val cfg = dados.config
+            val pct = cfg.numero("repasse_motoboy_pct", 67.5); val dev = cfg.numero("dev_pct", 5.0)
+            val origem = (cfg["dev_origem"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "gestor"
+            fun r2(v: Double) = Math.round(v * 100) / 100.0
+            val pDev = r2(dev); val teto = r2(100 - pDev)
+            val pMoto = minOf(teto, r2(when (origem) { "total" -> (100 - pDev) * pct / 100; "proporcional" -> pct * (1 - dev / 100); else -> pct }))
+            PwCartao(cor = c.ouro.copy(alpha = 0.5f)) {
+                PwRotulo("Exemplo: rota de R$ 100,00")
+                if (cfg.textoCfg("pag_modo", "rota") == "percentual") {
+                    Text("Motoboy ${moedaBr(pMoto)} · Gestor ${moedaBr(r2(100 - pMoto - pDev))} · Dev ${moedaBr(pDev)}", color = c.texto, fontWeight = FontWeight.Bold)
+                }
+                TextoDica("O motoboy nunca leva mais que a rota paga: no máximo ${moedaBr(teto)} (a rota menos o Dev), por km ou percentual, com ajuste ou sem.")
             }
         }
         val souDev = com.pwexpress.core.perfil.Perfis.perfil.collectAsState().value?.dev == true

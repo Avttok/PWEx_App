@@ -60,6 +60,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
+import kotlinx.coroutines.launch
 
 /** Uma conquista: alcança quando a estatística [stat] chega em [meta]. */
 data class Conquista(
@@ -170,7 +171,16 @@ object Conquistas {
     }.onSuccess { if (motoboyId == null) _minhas.value = it }
 
     fun valor(stats: JsonObject?, stat: String): Double = (stats?.get(stat) as? JsonPrimitive)?.doubleOrNull ?: 0.0
-    fun ganhas(stats: JsonObject?) = catalogo.filter { valor(stats, it.stat) >= it.meta }
+    /** Ganha/bloqueada à mão pelo Dev (null = pela estatística). */
+    fun manual(stats: JsonObject?, chave: String): Boolean? = ((stats?.get("manuais") as? JsonObject)?.get(chave) as? JsonPrimitive)?.content?.toBooleanStrictOrNull()
+    fun ganha(stats: JsonObject?, cq: Conquista): Boolean = manual(stats, cq.chave) ?: (valor(stats, cq.stat) >= cq.meta)
+    fun ganhas(stats: JsonObject?) = catalogo.filter { ganha(stats, it) }
+
+    /** Dev: "ganha", "bloqueada" ou "auto" (volta a valer a estatística). */
+    suspend fun definir(perfilId: String, chave: String, estado: String): Result<Unit> = runCatching {
+        val r = PwCore.rpc.chamar("definir_conquista", buildJsonObject { put("p_perfil", perfilId); put("p_chave", chave); put("p_estado", estado) })
+        if (!r.ok) error(if (r.corpo.contains("apenas_dev")) "Só o Dev mexe nas conquistas." else if (r.corpo.contains("definir_conquista")) "Rode a migração 20261110000007 no banco." else "Erro (${r.codigo}).")
+    }
 }
 
 private fun numeroCurto(v: Double): String =
@@ -179,7 +189,7 @@ private fun numeroCurto(v: Double): String =
 /** Mostra o que a conquista significa (fica escondido até tocar). */
 fun explicarConquista(cq: Conquista, stats: JsonObject?) {
     val v = Conquistas.valor(stats, cq.stat)
-    val ok = v >= cq.meta
+    val ok = Conquistas.ganha(stats, cq)
     PwToast.mostrar(
         if (ok) cq.descricao else "${cq.descricao} Falta pouco: ${numeroCurto(v)} de ${numeroCurto(cq.meta)} ${cq.unidade}.".replace("  ", " "),
         if (ok) TipoAviso.OK else TipoAviso.INFO,
@@ -189,12 +199,12 @@ fun explicarConquista(cq: Conquista, stats: JsonObject?) {
 
 /** Medalha redonda: colorida quando ganha, apagada (com cadeado) quando não. */
 @Composable
-fun MedalhaConquista(cq: Conquista, ganha: Boolean, stats: JsonObject?, tamanho: Dp = 56.dp, comNome: Boolean = true) {
+fun MedalhaConquista(cq: Conquista, ganha: Boolean, stats: JsonObject?, tamanho: Dp = 56.dp, comNome: Boolean = true, onToque: (() -> Unit)? = null) {
     val c = Pw.cores
     var tocou by remember { mutableStateOf(false) }
     val escala by animateFloatAsState(if (tocou) 1.15f else 1f, spring(0.4f, 500f), finishedListener = { tocou = false }, label = "medalha")
     Column(
-        Modifier.width(tamanho + 18.dp).clip(RoundedCornerShape(14.dp)).clickable { tocou = true; explicarConquista(cq, stats) }.padding(vertical = 4.dp),
+        Modifier.width(tamanho + 18.dp).clip(RoundedCornerShape(14.dp)).clickable { tocou = true; if (onToque != null) onToque() else explicarConquista(cq, stats) }.padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Box(Modifier.size(tamanho).scale(escala), contentAlignment = Alignment.Center) {
@@ -223,7 +233,7 @@ fun MedalhaConquista(cq: Conquista, ganha: Boolean, stats: JsonObject?, tamanho:
 /** Todas as conquistas: ganhas primeiro, depois as que faltam (com progresso no toque). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun GradeConquistas(stats: JsonObject?, modifier: Modifier = Modifier) {
+fun GradeConquistas(stats: JsonObject?, modifier: Modifier = Modifier, perfilDev: String? = null, onMudou: () -> Unit = {}) {
     val c = Pw.cores
     val ganhas = Conquistas.ganhas(stats).toSet()
     Column(modifier.fillMaxWidth()) {
@@ -234,12 +244,35 @@ fun GradeConquistas(stats: JsonObject?, modifier: Modifier = Modifier) {
             Text("${ganhas.size} de ${Conquistas.catalogo.size}", color = c.ouro, fontWeight = FontWeight.Bold, fontSize = 13.sp)
         }
         Spacer(Modifier.height(4.dp))
-        Text("Toque numa medalha para ver o que ela significa.", color = c.texto3, fontSize = 12.sp)
+        Text(if (perfilDev != null) "Dev: toque numa medalha para dar, bloquear ou voltar ao automático." else "Toque numa medalha para ver o que ela significa.", color = if (perfilDev != null) c.dev else c.texto3, fontSize = 12.sp)
         Spacer(Modifier.height(10.dp))
         if (stats == null) { Text("Carregando…", color = c.texto3, fontSize = 13.sp); return@Column }
+        var editando by remember { mutableStateOf<Conquista?>(null) }
         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             (Conquistas.catalogo.filter { it in ganhas } + Conquistas.catalogo.filter { it !in ganhas }).forEach { cq ->
-                MedalhaConquista(cq, cq in ganhas, stats)
+                MedalhaConquista(cq, cq in ganhas, stats, onToque = if (perfilDev != null) ({ editando = cq }) else null)
+            }
+        }
+        val cq = editando
+        if (cq != null && perfilDev != null) {
+            val escopo = androidx.compose.runtime.rememberCoroutineScope()
+            val manual = Conquistas.manual(stats, cq.chave)
+            com.pwexpress.core.designsystem.PwJanela(cq.nome, { editando = null }) {
+                Text(cq.descricao, color = c.texto2, fontSize = 14.sp)
+                Text("Pela estatística: ${if (Conquistas.valor(stats, cq.stat) >= cq.meta) "ganha" else "ainda não"} · agora: ${when (manual) { true -> "dada pelo Dev"; false -> "bloqueada pelo Dev"; null -> "automática" }}",
+                    color = c.texto3, fontSize = 12.5.sp)
+                Spacer(Modifier.height(10.dp))
+                fun aplicar(estado: String, msg: String) {
+                    escopo.launch {
+                        Conquistas.definir(perfilDev, cq.chave, estado).onSuccess { PwToast.mostrar(msg, TipoAviso.OK, cq.nome); editando = null; onMudou() }
+                            .onFailure { PwToast.mostrar(it.message ?: "Erro", TipoAviso.ERRO) }
+                    }
+                }
+                com.pwexpress.core.designsystem.PwBotaoOuro("Dar a medalha", onClick = { aplicar("ganha", "Medalha liberada.") }, icone = PwIcones.Trophy)
+                Spacer(Modifier.height(8.dp))
+                com.pwexpress.core.designsystem.PwBotaoVidro("Bloquear", onClick = { aplicar("bloqueada", "Medalha bloqueada.") }, icone = PwIcones.Lock, modifier = Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
+                com.pwexpress.core.designsystem.PwBotaoVidro("Automático (pela estatística)", onClick = { aplicar("auto", "Volta a valer a estatística.") }, icone = PwIcones.RefreshCw, modifier = Modifier.fillMaxWidth())
             }
         }
     }

@@ -473,7 +473,6 @@ private fun NovaContaG(repassePadrao: Double, onFechar: () -> Unit, onCriada: (S
     var senha by remember { mutableStateOf(gerarSenha()) }
     var motoboy by remember { mutableStateOf(true) }
     var gestor by remember { mutableStateOf(false) }
-    var repasse by remember { mutableStateOf("") }
     var erro by remember { mutableStateOf<String?>(null) }
     var enviando by remember { mutableStateOf(false) }
     var criada by remember { mutableStateOf<String?>(null) }
@@ -499,7 +498,6 @@ private fun NovaContaG(repassePadrao: Double, onFechar: () -> Unit, onCriada: (S
         }
         if (cliente == null) PwInterruptor("Motoboy", motoboy, { motoboy = it }, descricao = "Usa o app e recebe corridas", icone = PwIcones.Bike)
         if (cliente == null) PwInterruptor("Gestor", gestor, { gestor = it }, descricao = "Acessa o painel", icone = PwIcones.ShieldCheck)
-        if (motoboy && cliente == null) PwCampo(repasse, { repasse = it }, "Repasse individual (%)", dica = "padrão: ${repassePadrao.toInt()}%", teclado = KeyboardType.Decimal)
         PwErro(erro)
         PwBotaoOuro(if (enviando) "Criando…" else "Criar conta", icone = PwIcones.UserPlus, habilitado = !enviando, onClick = {
             enviando = true
@@ -507,7 +505,7 @@ private fun NovaContaG(repassePadrao: Double, onFechar: () -> Unit, onCriada: (S
                 Gestao.criarConta(
                     nome.trim(), email.trim(), senha,
                     if (cliente != null) listOf("cliente") else listOfNotNull("motoboy".takeIf { motoboy }, "gestor".takeIf { gestor }),
-                    repasse.replace(',', '.').toDoubleOrNull().takeIf { cliente == null }, cliente?.id,
+                    null, cliente?.id,
                 )
                     .onSuccess { criada = it; Gestao.atualizar() }.onFailure { erro = it.message }
                 enviando = false
@@ -538,11 +536,13 @@ fun MembroG(id: String, meuId: String?, onVoltar: () -> Unit) {
             Triple("registro", "Registro", PwIcones.History),
             Triple("percursos", "Percursos", PwIcones.Route).takeIf { comPercursos },
             Triple("veiculo", "Veículo", PwIcones.Bike).takeIf { m.motoboy },
-            Triple("medalhas", "", PwIcones.Trophy).takeIf { m.motoboy },
+            Triple("medalhas", "Medalhas", PwIcones.Trophy).takeIf { m.motoboy },
             Triple("regras", "Regras", PwIcones.Layers).takeIf { m.motoboy },
             Triple("editar", "Editar", PwIcones.Pencil),
         )
-        PwSegmentado(abas.map { it.second to it.third }, aba.coerceIn(0, abas.lastIndex), { aba = it })
+        // muitas abas: só a escolhida mostra o nome (as outras ficam no ícone, sem texto cortado)
+        val abaAtual = aba.coerceIn(0, abas.lastIndex)
+        PwSegmentado(abas.mapIndexed { i, t -> (if (i == abaAtual) t.second else "") to t.third }, abaAtual, { aba = it })
         val souDev = com.pwexpress.core.perfil.Perfis.perfil.collectAsState().value?.dev == true
         when (abas.getOrNull(aba)?.first) {
             "registro" -> RegistroG(m.id)
@@ -551,9 +551,10 @@ fun MembroG(id: String, meuId: String?, onVoltar: () -> Unit) {
             "medalhas" -> {
                 var stats by remember(m.id) { mutableStateOf<kotlinx.serialization.json.JsonObject?>(null) }
                 var erroC by remember(m.id) { mutableStateOf<String?>(null) }
-                androidx.compose.runtime.LaunchedEffect(m.id) { com.pwexpress.core.perfil.Conquistas.carregar(m.id).onSuccess { stats = it }.onFailure { erroC = it.message } }
+                var versaoC by remember(m.id) { androidx.compose.runtime.mutableIntStateOf(0) }
+                androidx.compose.runtime.LaunchedEffect(m.id, versaoC) { com.pwexpress.core.perfil.Conquistas.carregar(m.id).onSuccess { stats = it }.onFailure { erroC = it.message } }
                 PwErro(erroC)
-                PwCartao { com.pwexpress.core.perfil.GradeConquistas(stats) }
+                PwCartao { com.pwexpress.core.perfil.GradeConquistas(stats, perfilDev = m.id.takeIf { souDev }, onMudou = { versaoC++ }) }
             }
             "regras" -> {
                 val escopoI = rememberCoroutineScope()
@@ -699,7 +700,6 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
     var gestor by remember(m.id) { mutableStateOf(m.gestor) }
     var motoboy by remember(m.id) { mutableStateOf(m.motoboy) }
     var devPapel by remember(m.id) { mutableStateOf(m.dev) }
-    var repasse by remember(m.id) { mutableStateOf(m.repassePct?.toString().orEmpty()) }
     var msg by remember { mutableStateOf<String?>(null) }
     var erro by remember { mutableStateOf<String?>(null) }
     var senhaNova by remember { mutableStateOf<String?>(null) }
@@ -713,7 +713,6 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
         if (souDev) PwInterruptor("Dev", devPapel, { devPapel = it }, descricao = "Administra o sistema inteiro", icone = PwIcones.CodeXml, cor = c.dev)
         PwInterruptor("Gestor", gestor, { gestor = it }, descricao = "Acessa o painel (site e app)", icone = PwIcones.ShieldCheck)
         PwInterruptor("Motoboy", motoboy, { motoboy = it }, descricao = "Usa o app e recebe corridas", icone = PwIcones.Bike)
-        if (motoboy) PwCampo(repasse, { repasse = it }, "Repasse individual (%)", dica = "padrão: ${dados.config.numero("repasse_motoboy_pct", 70.0).toInt()}%", teclado = KeyboardType.Decimal)
         PwErro(erro)
         msg?.let { Text(it, color = c.verde, fontWeight = FontWeight.SemiBold) }
         Espaco(6)
@@ -721,7 +720,7 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
             PwBotaoVidro("Nova senha", onClick = { senhaNova = gerarSenha(); senhaFeita = false }, icone = PwIcones.KeyRound, modifier = Modifier.weight(1f))
             PwBotaoOuro("Salvar", icone = PwIcones.Check, modifier = Modifier.weight(1f), onClick = {
                 escopo.launch {
-                    Gestao.editarMembro(m.id, nome, listOfNotNull("dev".takeIf { devPapel }, "gestor".takeIf { gestor }, "motoboy".takeIf { motoboy }), repasse.replace(',', '.').toDoubleOrNull())
+                    Gestao.editarMembro(m.id, nome, listOfNotNull("dev".takeIf { devPapel }, "gestor".takeIf { gestor }, "motoboy".takeIf { motoboy }), null)
                         .onSuccess { msg = null; erro = null; com.pwexpress.core.designsystem.PwToast.mostrar("${nome.ifBlank { m.email }} atualizado.", titulo = "Salvo"); Gestao.atualizar() }.onFailure { erro = it.message; msg = null }
                 }
             })

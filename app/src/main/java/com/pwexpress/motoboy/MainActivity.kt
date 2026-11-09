@@ -183,7 +183,7 @@ class MainActivity : ComponentActivity() {
                         naConfig && efetivo == Painel.MOTOBOY -> com.pwexpress.motoboy.ui.ConfigMotoApp(onVoltar = { naConfig = false }, modifier = conteudo)
                         else -> Box(conteudo.fillMaxSize()) {
                             val comPlanejadas = p?.modulo("corridas_planejadas") != false
-                            val comCarteira = p?.modulo("carteira") != false
+                            val comCarteira = p?.modulo("carteira") != false && p?.holeriteVisivel != false
                             val abaMotoboy = when { aba == "corridas" -> "corridas"; aba == "carteira" && comCarteira -> "carteira"; else -> "inicio" }
                             androidx.compose.foundation.layout.Column(Modifier.fillMaxSize()) {
                                 PwTopo { AcoesTopo(efetivo, podeTrocar, ::trocar) { conta = true } }

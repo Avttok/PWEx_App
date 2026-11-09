@@ -42,6 +42,8 @@ data class Perfil(
     val raioLng: Double? = null,
     /** Conta só de cliente (pede pelo site, não usa o app). */
     val soCliente: Boolean = false,
+    /** O gestor deixa este motoboy ver a aba Holerite. */
+    val holeriteVisivel: Boolean = true,
 ) {
     /** O módulo está valendo para esta conta? (sem registro = ligado; o Dev sempre vê) */
     fun modulo(chave: String): Boolean = dev || modulos[chave] != false
@@ -228,6 +230,7 @@ object Perfis {
             raioModo = (o["raio"] as? JsonObject)?.let { (it["modo"] as? JsonPrimitive)?.takeIf { p -> p !is JsonNull }?.content } ?: "posicao",
             raioLat = (o["raio"] as? JsonObject)?.let { (it["lat"] as? JsonPrimitive)?.doubleOrNull },
             raioLng = (o["raio"] as? JsonObject)?.let { (it["lng"] as? JsonPrimitive)?.doubleOrNull },
+            holeriteVisivel = (o["holerite_visivel"] as? JsonPrimitive)?.booleanOrNull ?: true,
             soCliente = (o["papeis"] as? kotlinx.serialization.json.JsonArray)?.map { it.jsonPrimitive.content }?.let { p -> "cliente" in p && p.none { it in listOf("gestor", "motoboy", "dev") } } ?: false,
         )
     }

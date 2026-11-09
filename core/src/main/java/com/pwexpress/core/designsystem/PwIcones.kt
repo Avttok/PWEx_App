@@ -140,33 +140,33 @@ object PwIcones {
     val Heart: ImageVector by lazy { icone("heart", "M2 9.5a5.5 5.5 0 0 1 9.591-3.676.56.56 0 0 0 .818 0A5.49 5.49 0 0 1 22 9.5c0 2.29-1.5 4-3 5.5l-5.492 5.313a2 2 0 0 1-3 .019L5 15c-1.5-1.5-3-3.2-3-5.5") }
     // conquistas
     val Trophy: ImageVector by lazy { icone("trophy", "M10 14.66V17a1 1 0 0 1-1 1 2 2 0 0 0-2 2v2", "M14 14.66V17a1 1 0 0 0 1 1 2 2 0 0 1 2 2v2", "M17.916 10H19.5A2.5 2.5 0 0 0 22 7.5V5a1 1 0 0 0-1-1h-3", "M4 22h16", "M6 9a6 6 0 0 0 12 0V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1z", "M6.084 10H4.5A2.5 2.5 0 0 1 2 7.5V5a1 1 0 0 1 1-1h3") }
-    val Medal: ImageVector by lazy { icone("medal", "M11 12 5.12 2.2", "m13 12 5.88-9.8", "M8 7h8", "M7.0 17.0a5.0 5.0 0 1 0 10.0 0a5.0 5.0 0 1 0 -10.0 0", "M12 18v-2h-.5") }
-    val Award: ImageVector by lazy { icone("award", "M6.0 8.0a6.0 6.0 0 1 0 12.0 0a6.0 6.0 0 1 0 -12.0 0") }
-    val Rocket: ImageVector by lazy { icone("rocket", "M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5", "M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05") }
+    val Medal: ImageVector by lazy { icone("medal", "M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15", "M11 12 5.12 2.2", "m13 12 5.88-9.8", "M8 7h8", "M7 17a5 5 0 1 0 10 0a5 5 0 1 0 -10 0", "M12 18v-2h-.5") }
+    val Award: ImageVector by lazy { icone("award", "m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526", "M6 8a6 6 0 1 0 12 0a6 6 0 1 0 -12 0") }
+    val Rocket: ImageVector by lazy { icone("rocket", "M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5", "M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09", "M9 12a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.4 22.4 0 0 1-4 2z", "M9 12H4s.55-3.03 2-4c1.62-1.08 5 .05 5 .05") }
     val Mountain: ImageVector by lazy { icone("mountain", "m8 3 4 8 5-5 5 15H2L8 3z") }
     val Gauge: ImageVector by lazy { icone("gauge", "m12 14 4-4", "M3.34 19a10 10 0 1 1 17.32 0") }
-    val MoonStar: ImageVector by lazy { icone("moon-star", "M18 5h4", "M20 3v4") }
-    val CalendarDays: ImageVector by lazy { icone("calendar-days", "M8 2v3", "M16 2v3", "M5.0 3.0h14.0a2.0 2.0 0 0 1 2.0 2.0v14.0a2.0 2.0 0 0 1 -2.0 2.0h-14.0a2.0 2.0 0 0 1 -2.0 -2.0v-14.0a2.0 2.0 0 0 1 2.0 -2.0z", "M3 9h18", "M8 13h.01", "M12 13h.01", "M16 13h.01", "M8 17h.01", "M12 17h.01", "M16 17h.01") }
-    val Gem: ImageVector by lazy { icone("gem", "M10.5 3 8 9l4 13 4-13-2.5-6", "M2 9h20") }
-    val Target: ImageVector by lazy { icone("target", "M2.0 12.0a10.0 10.0 0 1 0 20.0 0a10.0 10.0 0 1 0 -20.0 0", "M6.0 12.0a6.0 6.0 0 1 0 12.0 0a6.0 6.0 0 1 0 -12.0 0", "M10.0 12.0a2.0 2.0 0 1 0 4.0 0a2.0 2.0 0 1 0 -4.0 0") }
-    val Rabbit: ImageVector by lazy { icone("rabbit", "M13 16a3 3 0 0 1 2.24 5", "M18 12h.01", "M20 8.54V4a2 2 0 1 0-4 0v3", "M7.612 12.524a3 3 0 1 0-1.6 4.3") }
-    val BadgeCheck: ImageVector by lazy { icone("badge-check", "m16 9-5.5 5.5L8 12") }
+    val MoonStar: ImageVector by lazy { icone("moon-star", "M18 5h4", "M20 3v4", "M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401") }
+    val CalendarDays: ImageVector by lazy { icone("calendar-days", "M8 2v3", "M16 2v3", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2z", "M3 9h18", "M8 13h.01", "M12 13h.01", "M16 13h.01", "M8 17h.01", "M12 17h.01", "M16 17h.01") }
+    val Gem: ImageVector by lazy { icone("gem", "M10.5 3 8 9l4 13 4-13-2.5-6", "M17 3a2 2 0 0 1 1.6.8l3 4a2 2 0 0 1 .013 2.382l-7.99 10.986a2 2 0 0 1-3.247 0l-7.99-10.986A2 2 0 0 1 2.4 7.8l2.998-3.997A2 2 0 0 1 7 3z", "M2 9h20") }
+    val Target: ImageVector by lazy { icone("target", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0", "M6 12a6 6 0 1 0 12 0a6 6 0 1 0 -12 0", "M10 12a2 2 0 1 0 4 0a2 2 0 1 0 -4 0") }
+    val Rabbit: ImageVector by lazy { icone("rabbit", "M13 16a3 3 0 0 1 2.24 5", "M18 12h.01", "M18 21h-8a4 4 0 0 1-4-4 7 7 0 0 1 7-7h.2L9.6 6.4a1 1 0 1 1 2.8-2.8L15.8 7h.2c3.3 0 6 2.7 6 6v1a2 2 0 0 1-2 2h-1a3 3 0 0 0-3 3", "M20 8.54V4a2 2 0 1 0-4 0v3", "M7.612 12.524a3 3 0 1 0-1.6 4.3") }
+    val BadgeCheck: ImageVector by lazy { icone("badge-check", "M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z", "m16 9-5.5 5.5L8 12") }
     val Sunrise: ImageVector by lazy { icone("sunrise", "M12 2v8", "m4.93 10.93 1.41 1.41", "M2 18h2", "M20 18h2", "m19.07 10.93-1.41 1.41", "M22 22H2", "m8 6 4-4 4 4", "M16 18a4 4 0 0 0-8 0") }
-    val Hourglass: ImageVector by lazy { icone("hourglass", "M5 22h14", "M5 2h14") }
-    val Coins: ImageVector by lazy { icone("coins", "M13.744 17.736a6 6 0 1 1-7.48-7.48", "M15 6h1v4", "m6.134 14.768.866-.5 2 3.464", "M10.0 8.0a6.0 6.0 0 1 0 12.0 0a6.0 6.0 0 1 0 -12.0 0") }
-    val Handshake: ImageVector by lazy { icone("handshake", "m11 17 2 2a1 1 0 1 0 3-3", "m21 3 1 11h-2", "M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3", "M3 4h8") }
-    val Footprints: ImageVector by lazy { icone("footprints", "M16 17h4", "M4 13h4") }
-    val Siren: ImageVector by lazy { icone("siren", "M7 18v-6a5 5 0 1 1 10 0v6", "M21 12h1", "M18.5 4.5 18 5", "M2 12h1", "M12 2v1", "m4.929 4.929.707.707", "M12 12v6") }
-    val Flag: ImageVector by lazy { icone("flag", ) }
-    val Milestone: ImageVector by lazy { icone("milestone", "M12 13v8", "M12 3v3") }
+    val Hourglass: ImageVector by lazy { icone("hourglass", "M5 22h14", "M5 2h14", "M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22", "M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2") }
+    val Coins: ImageVector by lazy { icone("coins", "M13.744 17.736a6 6 0 1 1-7.48-7.48", "M15 6h1v4", "m6.134 14.768.866-.5 2 3.464", "M10 8a6 6 0 1 0 12 0a6 6 0 1 0 -12 0") }
+    val Handshake: ImageVector by lazy { icone("handshake", "m11 17 2 2a1 1 0 1 0 3-3", "m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4", "m21 3 1 11h-2", "M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3", "M3 4h8") }
+    val Footprints: ImageVector by lazy { icone("footprints", "M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z", "M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z", "M16 17h4", "M4 13h4") }
+    val Siren: ImageVector by lazy { icone("siren", "M7 18v-6a5 5 0 1 1 10 0v6", "M5 21a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2z", "M21 12h1", "M18.5 4.5 18 5", "M2 12h1", "M12 2v1", "m4.929 4.929.707.707", "M12 12v6") }
+    val Flag: ImageVector by lazy { icone("flag", "M4 22V4a1 1 0 0 1 .4-.8A6 6 0 0 1 8 2c3 0 5 2 7.333 2q2 0 3.067-.8A1 1 0 0 1 20 4v10a1 1 0 0 1-.4.8A6 6 0 0 1 16 16c-3 0-5-2-8-2a6 6 0 0 0-4 1.528") }
+    val Milestone: ImageVector by lazy { icone("milestone", "M12 13v8", "M12 3v3", "M18.172 6a2 2 0 0 1 1.414.586l2.06 2.06a1.207 1.207 0 0 1 0 1.708l-2.06 2.06a2 2 0 0 1-1.414.586H4a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1z") }
     val Cake: ImageVector by lazy { icone("cake", "M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8", "M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1", "M2 21h20", "M7 8v3", "M12 8v3", "M17 8v3", "M7 4h.01", "M12 4h.01", "M17 4h.01") }
-    val ShieldAlert: ImageVector by lazy { icone("shield-alert", ) }
+    val ShieldAlert: ImageVector by lazy { icone("shield-exclamation-point", "M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z", "M12 8v4", "M12 16h.01") }
     val Infinito: ImageVector by lazy { icone("infinity", "M6 16c5 0 7-8 12-8a4 4 0 0 1 0 8c-5 0-7-8-12-8a4 4 0 1 0 0 8") }
-    val Globe: ImageVector by lazy { icone("globe", "M2.0 12.0a10.0 10.0 0 1 0 20.0 0a10.0 10.0 0 1 0 -20.0 0", "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", "M2 12h20") }
-    val PartyPopper: ImageVector by lazy { icone("party-popper", "M5.8 11.3 2 22l10.7-3.79", "M4 3h.01", "M22 8h.01", "M15 2h.01", "M22 20h.01") }
-    val Signature: ImageVector by lazy { icone("signature", "M3 21h18") }
-    val Swords: ImageVector by lazy { icone("swords", "m13 19 6-6", "m16 16 4 4", "m19 21 2-2", "m5 14 4 4", "m5 21-2-2", "M7.5 16.5 4 20") }
-    val Snail: ImageVector by lazy { icone("snail", "M2 13a6 6 0 1 0 12 0 4 4 0 1 0-8 0 2 2 0 0 0 4 0", "M2.0 13.0a8.0 8.0 0 1 0 16.0 0a8.0 8.0 0 1 0 -16.0 0", "M2 21h12c4.4 0 8-3.6 8-8V7a2 2 0 1 0-4 0v6", "M18 3 19.1 5.2", "M22 3 20.9 5.2") }
-    val Turtle: ImageVector by lazy { icone("turtle", "M4.82 7.9 8 10", "M15.18 7.9 12 10", "M16.93 10H20a2 2 0 0 1 0 4H2") }
+    val Globe: ImageVector by lazy { icone("globe", "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0", "M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20", "M2 12h20") }
+    val PartyPopper: ImageVector by lazy { icone("party-popper", "M5.8 11.3 2 22l10.7-3.79", "M4 3h.01", "M22 8h.01", "M15 2h.01", "M22 20h.01", "m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10", "m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11c-.11.7-.72 1.22-1.43 1.22H17", "m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7", "M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z") }
+    val Signature: ImageVector by lazy { icone("signature", "m21 17-2.156-1.868A.5.5 0 0 0 18 15.5v.5a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1c0-2.545-3.991-3.97-8.5-4a1 1 0 0 0 0 5c4.153 0 4.745-11.295 5.708-13.5a2.5 2.5 0 1 1 3.31 3.284", "M3 21h18") }
+    val Swords: ImageVector by lazy { icone("swords", "m13 19 6-6", "M14.5 17.5 3.586 6.586A2 2 0 013 5.172V3h2.172a2 2 0 011.414.586L17.5 14.5", "m14.828 6.172 2.586-2.586A2 2 0 0118.828 3H21v2.172a2 2 0 01-.586 1.414l-2.586 2.586", "m16 16 4 4", "m19 21 2-2", "m5 14 4 4", "m5 21-2-2", "M7.5 16.5 4 20") }
+    val Snail: ImageVector by lazy { icone("snail", "M2 13a6 6 0 1 0 12 0 4 4 0 1 0-8 0 2 2 0 0 0 4 0", "M2 13a8 8 0 1 0 16 0a8 8 0 1 0 -16 0", "M2 21h12c4.4 0 8-3.6 8-8V7a2 2 0 1 0-4 0v6", "M18 3 19.1 5.2", "M22 3 20.9 5.2") }
+    val Turtle: ImageVector by lazy { icone("turtle", "m12 10 2 4v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3a8 8 0 1 0-16 0v3a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1v-3l2-4h4Z", "M4.82 7.9 8 10", "M15.18 7.9 12 10", "M16.93 10H20a2 2 0 0 1 0 4H2") }
     val Bird: ImageVector by lazy { icone("bird", "M16 7h.01", "M3.4 18H12a8 8 0 0 0 8-8V7a4 4 0 0 0-7.28-2.3L2 20", "m20 7 2 .5-2 .5", "M10 18v3", "M14 17.75V21", "M7 18a6 6 0 0 0 3.84-10.61") }
 }

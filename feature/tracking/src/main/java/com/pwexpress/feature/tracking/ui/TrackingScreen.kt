@@ -73,6 +73,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import com.pwexpress.core.designsystem.Archivo
 import com.pwexpress.core.designsystem.ArchivoLargo
 import com.pwexpress.core.designsystem.Pw
+import com.pwexpress.core.designsystem.alvoTour
 import com.pwexpress.core.designsystem.PwBotaoPerigo
 import com.pwexpress.core.designsystem.PwBotaoVidro
 import com.pwexpress.core.designsystem.PwCartao
@@ -151,6 +152,7 @@ fun TrackingScreen(
                         Modo.DISPONIVEL -> "Segure o botão até o anel encher para ficar offline."
                     }
                 },
+                modifier = Modifier.alvoTour("status"),
             )
         }
 
@@ -162,13 +164,13 @@ fun TrackingScreen(
                 else Chip(PwIcones.Crosshair, info.ultimaPrecisao?.let { "GPS ± ${it.toInt()} m" } ?: "Buscando GPS…", if (info.ultimaPrecisao != null) c.verde else c.texto3)
             }
             if (info.economia) Chip(PwIcones.BatteryLow, "Economia", c.ouro)
-            chips()
+            Box(Modifier.alvoTour("raio")) { chips() }
             if (!perms.tudoOk) Chip(PwIcones.Alerta, "Preparar o aparelho", c.vermelho, onConfiguracoes)
             if (info.naFila > 0) Chip(PwIcones.Clock, "${info.naFila} na fila", c.ouro, onConfiguracoes)
         }
         aviso?.let { Text(it, color = c.vermelho, fontSize = 13.5.sp, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
 
-        extras()
+        Box(Modifier.alvoTour("dia")) { extras() }
     }
 
 }
@@ -182,7 +184,7 @@ fun TrackingScreen(
  * - Em rota: anel dourado pulsando; trocar só depois de concluir.
  */
 @Composable
-private fun BotaoStatus(modo: Modo, onAlternar: () -> Unit, onToque: () -> Unit) {
+private fun BotaoStatus(modo: Modo, onAlternar: () -> Unit, onToque: () -> Unit, modifier: Modifier = Modifier) {
     val c = Pw.cores
     val online = modo == Modo.DISPONIVEL
     val emRota = modo == Modo.EM_CORRIDA
@@ -215,7 +217,7 @@ private fun BotaoStatus(modo: Modo, onAlternar: () -> Unit, onToque: () -> Unit)
     val onAlternarAgora = androidx.compose.runtime.rememberUpdatedState(onAlternar)
     val onToqueAgora = androidx.compose.runtime.rememberUpdatedState(onToque)
 
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             Modifier.size(tam + 40.dp).scale(escala)
                 .pointerInput(Unit) {

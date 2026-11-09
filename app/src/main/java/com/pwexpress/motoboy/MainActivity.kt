@@ -10,6 +10,10 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import com.pwexpress.core.designsystem.PwTour
+import com.pwexpress.core.designsystem.PwTourCamada
+import com.pwexpress.core.designsystem.alvoTour
+import com.pwexpress.motoboy.ui.ToursApp
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -213,7 +217,7 @@ class MainActivity : ComponentActivity() {
                                     if (comCarteira) PwAba("carteira", "Holerite", PwIcones.ReceiptText) else null,
                                 ),
                                 abaMotoboy, { aba = it },
-                                Modifier.align(Alignment.BottomCenter),
+                                Modifier.align(Alignment.BottomCenter).alvoTour("abas"),
                             )
                         }
                     }
@@ -242,6 +246,13 @@ class MainActivity : ComponentActivity() {
                     if (simulador && podeSimular) com.pwexpress.motoboy.ui.SimuladorScreen(onFechar = { simulador = false }, kmhPadrao = perfil?.numero("simulador_velocidade_kmh", 35.0) ?: 35.0)
                     JanelaAtualizacao()
                     LaunchedEffect(Unit) { while (true) { delay(15 * 60_000L); Atualizador.verificarObrigatoria() } }
+                    // tour na primeira vez de cada painel (depois, no menu da conta)
+                    LaunchedEffect(efetivo, s != null, preparado) {
+                        if (s == null || !preparado) return@LaunchedEffect
+                        delay(1_200)
+                        if (efetivo == Painel.GESTOR) PwTour.primeiraVez("gestor-app", ToursApp.gestor) else PwTour.primeiraVez("motoboy", ToursApp.motoboy)
+                    }
+                    PwTourCamada()
                     com.pwexpress.core.designsystem.PwToasts(Modifier.align(Alignment.BottomCenter))
                 }
             }

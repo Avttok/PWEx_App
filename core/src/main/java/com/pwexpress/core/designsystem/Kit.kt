@@ -639,7 +639,9 @@ object PwToast {
     private val _avisos = kotlinx.coroutines.flow.MutableStateFlow<List<Aviso>>(emptyList())
     val avisos: kotlinx.coroutines.flow.StateFlow<List<Aviso>> = _avisos
     fun mostrar(texto: String, tipo: TipoAviso = TipoAviso.OK, titulo: String? = null) {
-        val a = Aviso(++seq, texto, tipo, titulo, if (tipo == TipoAviso.ERRO || tipo == TipoAviso.AVISO) 6000 else 3500)
+        // texto longo (explicações, medalhas) fica mais tempo na tela
+        val base = if (tipo == TipoAviso.ERRO || tipo == TipoAviso.AVISO) 6000L else 3500L
+        val a = Aviso(++seq, texto, tipo, titulo, maxOf(base, minOf(11_000L, (texto.length + (titulo?.length ?: 0)) * 60L)))
         _avisos.value = (_avisos.value + a).takeLast(3)
     }
     fun fechar(id: Long) { _avisos.value = _avisos.value.filterNot { it.id == id } }

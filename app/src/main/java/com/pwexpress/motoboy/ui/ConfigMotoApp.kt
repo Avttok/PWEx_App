@@ -116,6 +116,10 @@ private fun CartaoRaio() {
                 }
             },
         )
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 6.dp)) {
+            Text("De onde contar o raio", color = c.texto2, fontSize = 13.sp, modifier = Modifier.weight(1f))
+            com.pwexpress.core.designsystem.PwDica("De onde contar o raio", "De onde eu estiver: o raio acompanha você, a partir da sua posição. Ponto fixo: conta a partir de um lugar que você escolhe no mapa, como a sua casa ou a base. Corridas urgentes podem chegar mesmo fora do raio.")
+        }
         PwSegmentado(listOf("De onde eu estiver" to PwIcones.LocateFixed, "Ponto fixo" to PwIcones.MapPin), if (fixo) 1 else 0, { fixo = it == 1 })
         Spacer(Modifier.height(10.dp))
         val forma = RoundedCornerShape(18.dp)

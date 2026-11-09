@@ -28,6 +28,7 @@ class PwApp : Application() {
     override fun onCreate() {
         super.onCreate()
         TemaApp.init(this)
+        com.pwexpress.core.designsystem.PwTour.init(this)
         PwCore.init(this)
         Tracking.init(this, BuildConfig.VERSION_NAME)
         Corridas.init(this)

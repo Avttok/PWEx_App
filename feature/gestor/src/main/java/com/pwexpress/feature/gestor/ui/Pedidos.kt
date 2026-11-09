@@ -257,7 +257,11 @@ internal fun BlocoRotaG(corrida: com.pwexpress.feature.gestor.data.CorridaG, ocu
     if (aberta) {
         var moto by remember { mutableStateOf<String?>(null) }
         PwCartao(cor = c.ouro.copy(alpha = 0.5f)) {
-            com.pwexpress.core.designsystem.PwRotulo(if (corrida.status == "montada") "Rota montada: solte para os motoboys" else "Despacho")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                com.pwexpress.core.designsystem.PwRotulo(if (corrida.status == "montada") "Rota montada: solte para os motoboys" else "Despacho")
+                Spacer(Modifier.width(8.dp))
+                com.pwexpress.core.designsystem.PwDica("Como soltar a rota", "Quadro: todos veem e o primeiro que pegar leva. Melhor primeiro: só o mais indicado recebe a oferta; se não aceitar, vai para o quadro. Cascata: a oferta passa de um em um, do mais perto ao mais longe. Direto: o escolhido recebe a oferta.")
+            }
             corrida.sugeridoMotoboyId?.let { TextoDica("Melhor agora: ${dados.membro(it)?.nome ?: "motoboy"}") }
             if (corrida.modoDespacho == "quadro" && corrida.status != "montada") TextoDica("No quadro${corrida.quadroDesde?.let { " desde ${hora(it)}" } ?: ""}: todos veem, o primeiro que pegar leva.")
             Espaco(8)

@@ -1,5 +1,7 @@
-• Conquistas: 64 medalhas para motoboys (corridas, entregas, km, horas online, tempo de conta, noite, sequência de dias…) no perfil e no menu da conta
-• Novas cores do app: azul, verde, preto no branco e branco no preto
-• Botão online/offline troca de cor assim que o anel enche, com animação de troca
-• Raio com bolinha grande para puxar
-• Ajuste +/− na folha do motoboy voltou a funcionar
+• Medalhas: o Dev pode dar ou bloquear qualquer medalha
+• Ícones das medalhas corrigidos
+• Carteira com Clientes, Extrato (com planilha) e PIX, igual ao site
+• Cliente: usar o site do cliente como ele; conta da equipe pode ser também cliente
+• Gestor escolhe se o motoboy vê a aba Holerite
+• Holerite: bônus e descontos entram distribuídos nas rotas
+• Abas do perfil do membro sem texto cortado

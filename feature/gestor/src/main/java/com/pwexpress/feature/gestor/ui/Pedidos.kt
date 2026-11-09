@@ -1,6 +1,7 @@
 package com.pwexpress.feature.gestor.ui
 
 import androidx.compose.foundation.clickable
+import com.pwexpress.core.json.str
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -205,6 +206,7 @@ private fun JanelaPedido(p: PedidoG, empresa: String?, onFechar: () -> Unit) {
                 }
             }
         }
+        if (p.status !in setOf("recebido", "cancelado", "recusado", "concluido")) SituacaoRotaG(p.id, "${p.status}|${p.pagamentoStatus}|${p.regras}")
         PwErro(erro)
         p.recusaMotivo?.let { TextoDica("Motivo da recusa: $it") }
 
@@ -327,4 +329,45 @@ private fun LinhasCalculo(calc: kotlinx.serialization.json.JsonObject) {
     if ((n("fixo") ?: 0.0) > 0) Linha("Fixo por rota", moedaBr(n("fixo")))
     if ((n("minimo") ?: 0.0) > 0) Linha("Mínimo", moedaBr(n("minimo")))
     Linha("Calculado", moedaBr(n("total")), true)
+}
+
+
+/** Por que o pedido ainda não virou rota (ou em que pé a rota está), com "Montar rota agora". */
+@Composable
+private fun SituacaoRotaG(pedidoId: String, chave: String) {
+    val c = Pw.cores
+    val escopo = rememberCoroutineScope()
+    var codigo by remember { mutableStateOf<String?>(null) }
+    var motivo by remember { mutableStateOf<String?>(null) }
+    var rodando by remember { mutableStateOf(false) }
+    fun ler(r: Result<kotlinx.serialization.json.JsonElement>) {
+        r.onSuccess { j -> val o = j as? kotlinx.serialization.json.JsonObject; codigo = o?.str("codigo"); motivo = o?.str("motivo") }
+         .onFailure { e -> codigo = "erro"; motivo = if (e.message.orEmpty().contains("situacao_rota") || e.message.orEmpty().contains("roteirizar_pedido"))
+             "Rode a migração 20261110000004_situacao_rota.sql para ver aqui por que o pedido ainda não virou rota." else "Erro: ${e.message}" }
+    }
+    androidx.compose.runtime.LaunchedEffect(pedidoId, chave) {
+        while (true) {
+            ler(Gestao.rpcJson("situacao_rota", kotlinx.serialization.json.buildJsonObject { put("p_pedido", kotlinx.serialization.json.JsonPrimitive(pedidoId)) }))
+            kotlinx.coroutines.delay(20_000)
+        }
+    }
+    val m = motivo ?: return
+    val semRota = codigo?.startsWith("rota_") != true
+    PwCartao(cor = if (semRota) androidx.compose.ui.graphics.Color(0xFFFB923C).copy(alpha = 0.6f) else null) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(PwIcones.Route, null, tint = if (semRota) androidx.compose.ui.graphics.Color(0xFFFB923C) else c.ouro, modifier = Modifier.size(16.dp))
+            Spacer(Modifier.width(8.dp))
+            Text(m, color = c.texto, fontSize = 13.5.sp)
+        }
+        if (semRota && !m.startsWith("Rode a migração")) {
+            Spacer(Modifier.size(8.dp))
+            PwBotaoVidro(if (rodando) "Montando…" else "Montar rota agora", onClick = {
+                rodando = true
+                escopo.launch {
+                    ler(Gestao.rpcJson("roteirizar_pedido", kotlinx.serialization.json.buildJsonObject { put("p_pedido", kotlinx.serialization.json.JsonPrimitive(pedidoId)) }))
+                    rodando = false
+                }
+            }, icone = PwIcones.RefreshCw, modifier = Modifier.fillMaxWidth())
+        }
+    }
 }

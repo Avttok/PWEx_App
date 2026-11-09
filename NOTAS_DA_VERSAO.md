@@ -1,2 +1,3 @@
-• Pedidos de cliente pré-pago: selo "Aguardando pagamento", aviso explicando que a rota só sai depois do pagamento e botões "PIX recebido" / "Cartão" na revisão
-• Nova regra "Montar rota sem esperar o pagamento" (geral, por tipo, por cliente ou por pedido)
+• Detalhe do pedido mostra por que ele ainda não virou rota (pagamento, horário, roteirizador desligado…) ou em que pé a rota está
+• Botão "Montar rota agora" no pedido aprovado
+• A regra "Montar rota sem esperar o pagamento" colocada no próprio pedido agora vale

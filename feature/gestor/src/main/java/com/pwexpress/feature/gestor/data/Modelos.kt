@@ -143,7 +143,7 @@ fun JsonObject.paraCorridaG() = CorridaG(
 
 // ------------------------------------------------------------------ pedidos (do site do cliente e do gestor)
 
-data class PontoPedidoG(val ordem: Int, val coleta: Boolean, val endereco: String, val contatoNome: String?)
+data class PontoPedidoG(val ordem: Int, val coleta: Boolean, val endereco: String, val contatoNome: String?, val lat: Double? = null, val lng: Double? = null, val status: String = "pendente")
 data class ItemPedidoG(val descricao: String, val quantidade: Int, val pesoKg: Double?)
 
 data class PedidoG(
@@ -172,7 +172,7 @@ fun JsonObject.paraPedidoG() = PedidoG(
     valorCalculado = dbl("valor_calculado"), valorAjuste = dbl("valor_ajuste") ?: 0.0, ajusteMotivo = str("ajuste_motivo"), valor = dbl("valor"),
     cobranca = str("cobranca") ?: "credito", pagamentoStatus = str("pagamento_status") ?: "nao_exigido", criadoEm = iso(str("criado_em")) ?: 0,
     recusaMotivo = str("recusa_motivo"),
-    pontos = arr("pedido_pontos").map { PontoPedidoG(it.int("ordem") ?: 0, it.str("tipo") == "coleta", it.str("endereco").orEmpty(), it.str("contato_nome")) }.sortedBy { it.ordem },
+    pontos = arr("pedido_pontos").map { PontoPedidoG(it.int("ordem") ?: 0, it.str("tipo") == "coleta", it.str("endereco").orEmpty(), it.str("contato_nome"), it.dbl("lat"), it.dbl("lng"), it.str("status") ?: "pendente") }.sortedBy { it.ordem },
     itens = arr("pedido_itens").map { ItemPedidoG(it.str("descricao").orEmpty(), it.int("quantidade") ?: 1, it.dbl("peso_kg")) },
     regras = obj("regras") ?: JsonObject(emptyMap()),
 )

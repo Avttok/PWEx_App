@@ -1,6 +1,11 @@
 package com.pwexpress.feature.gestor.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.border
 import com.pwexpress.core.json.str
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -172,6 +177,7 @@ private fun JanelaPedido(p: PedidoG, empresa: String?, onFechar: () -> Unit) {
         }
         if (p.planejado && p.quando != null) Text("Para ${dataHora(p.quando)}", color = c.azul, fontWeight = FontWeight.SemiBold)
 
+        MapaPedidoG(p)
         PwCartao {
             p.pontos.forEach { pt ->
                 LinhaEndereco(if (pt.coleta) PwIcones.ArrowUpFromLine else PwIcones.ArrowDownToLine, pt.endereco + (pt.contatoNome?.let { " · $it" } ?: ""), if (pt.coleta) c.ouro else c.texto)
@@ -380,6 +386,30 @@ private fun SituacaoRotaG(pedidoId: String, chave: String) {
                     rodando = false
                 }
             }, icone = PwIcones.RefreshCw, modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
+
+
+/** Mapa do pedido: coleta e entregas, o caminho da rota (quando já tem) e o motoboy ao vivo. */
+@Composable
+internal fun MapaPedidoG(p: PedidoG, altura: androidx.compose.ui.unit.Dp = 220.dp) {
+    val c = Pw.cores
+    val dados by Gestao.dados.collectAsState()
+    val pontos = p.pontos.filter { it.lat != null && it.lng != null }
+    if (pontos.isEmpty()) return
+    val pinos = pontos.map { com.pwexpress.core.mapa.PinoMapa(it.lat!!, it.lng!!, it.coleta, false, it.status == "concluido") }
+    // rota que leva este pedido (mesmos endereços, criada depois dele)
+    val rota = dados.corridas.firstOrNull { cor -> cor.teste == p.teste && cor.status != "cancelada" && cor.criadaEm >= p.criadoEm - 60_000 &&
+        cor.paradas.any { pa -> p.pontos.any { it.endereco == pa.endereco } } }
+    val moto = rota?.motoboyId?.let { id -> dados.posicao(id)?.takeIf { it.lat != null && it.lng != null }?.let { pos ->
+        com.pwexpress.core.mapa.MarcadorMapa(id, pos.lat!!, pos.lng!!, corHex(c.ouro), dados.membro(id)?.nome?.substringBefore(" ") ?: "Motoboy", foto = dados.membro(id)?.foto) } }
+    val forma = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)
+    Box(Modifier.fillMaxWidth().height(altura).clip(forma).border(1.dp, c.borda, forma)) {
+        com.pwexpress.core.mapa.PwMapa(paradas = pinos, rota = rota?.rota, minhaPosicao = null, marcadores = listOfNotNull(moto),
+            modifier = Modifier.fillMaxSize(), enquadrar = "${p.id}-${pinos.size}-${moto != null}")
+        if (rota != null) Row(Modifier.align(Alignment.TopStart).padding(10.dp)) {
+            PwSelo("Rota ${rota.numeroExibicao}" + (rota.motoboyId?.let { " · ${dados.membro(it)?.nome?.substringBefore(" ") ?: ""}" } ?: ""), c.ouro, icone = PwIcones.Route)
         }
     }
 }

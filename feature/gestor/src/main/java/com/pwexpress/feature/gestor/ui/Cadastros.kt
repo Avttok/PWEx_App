@@ -1178,6 +1178,14 @@ private fun CadastrosPendentesG() {
             }.onFailure { erro = it.message }
         }
         com.pwexpress.core.designsystem.PwTelaCheia(cd.str("nome").orEmpty(), { aberto = null }, subtitulo = "Cadastro pelo site") {
+            val la = cd.dbl("lat"); val lo = cd.dbl("lng")
+            if (la != null && lo != null) {
+                val formaM = RoundedCornerShape(20.dp)
+                Box(Modifier.fillMaxWidth().height(180.dp).clip(formaM).border(1.dp, c.borda, formaM)) {
+                    PwMapa(paradas = listOf(com.pwexpress.core.mapa.PinoMapa(la, lo, true, true, false)), rota = null, minhaPosicao = null,
+                        modifier = Modifier.fillMaxSize(), enquadrar = cd.str("id"))
+                }
+            }
             PwCartao {
                 listOf("Responsável" to cd.str("responsavel"), "Documento" to cd.str("documento")?.let { if (it.length == 11) formatarCpf(it) else formatarCnpj(it) },
                     "E-mail" to cd.str("email"), "Telefone" to cd.str("telefone"), "Endereço" to cd.str("endereco"), "Observações" to cd.str("observacoes"))

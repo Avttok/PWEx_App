@@ -558,7 +558,8 @@ fun TextoAjustado(texto: String, estilo: TextStyle, maximo: Int, modifier: Modif
  * modo teste não muda nenhum tamanho. No teste: anel + frasco; Dev: selo </>.
  */
 @Composable
-fun PwAvatarConta(nome: String, foto: String?, teste: Boolean, modifier: Modifier = Modifier, tamanho: Dp = 42.dp, onClick: (() -> Unit)? = null, dev: Boolean = false) {
+fun PwAvatarConta(nome: String, foto: String?, teste: Boolean, modifier: Modifier = Modifier, tamanho: Dp = 42.dp, onClick: (() -> Unit)? = null, dev: Boolean = false,
+                  gestor: Boolean = false, motoboy: Boolean = false) {
     val c = Pw.cores
     Box(modifier.size(tamanho)) {
         PwAvatar(
@@ -566,13 +567,14 @@ fun PwAvatarConta(nome: String, foto: String?, teste: Boolean, modifier: Modifie
             Modifier.border(2.dp, if (teste) c.ouro else Color.Transparent, CircleShape).padding(3.dp),
             tamanho = tamanho, onClick = onClick,
         )
-        val selo = when { teste -> PwIcones.FlaskConical; dev -> PwIcones.CodeXml; else -> null }
+        // selo do cargo mais alto: teste > Dev > gestor > motoboy
+        val selo = when { teste -> PwIcones.FlaskConical; dev -> PwIcones.CodeXml; gestor -> PwIcones.ShieldCheck; motoboy -> PwIcones.Bike; else -> null }
         if (selo != null) {
             Box(
                 Modifier.align(Alignment.BottomEnd).size((tamanho.value * 0.42f).coerceAtLeast(16f).dp).clip(CircleShape).background(c.fundo)
                     .padding(2.dp).clip(CircleShape).background(c.gradOuro),
                 contentAlignment = Alignment.Center,
-            ) { Icon(selo, if (teste) "Modo teste" else "Dev", tint = c.sobreOuro, modifier = Modifier.size((tamanho.value * 0.22f).coerceAtLeast(9f).dp)) }
+            ) { Icon(selo, when { teste -> "Modo teste"; dev -> "Dev"; gestor -> "Gestor"; else -> "Motoboy" }, tint = c.sobreOuro, modifier = Modifier.size((tamanho.value * 0.22f).coerceAtLeast(9f).dp)) }
         }
     }
 }

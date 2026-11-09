@@ -45,6 +45,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.animation.togetherWith
 import kotlinx.coroutines.launch
 import androidx.compose.ui.semantics.contentDescription
@@ -186,9 +187,14 @@ private fun BotaoStatus(modo: Modo, onAlternar: () -> Unit, onToque: () -> Unit)
     val online = modo == Modo.DISPONIVEL
     val emRota = modo == Modo.EM_CORRIDA
     val verde = Color(0xFF34D399)
-    val cor by animateColorAsState(if (online) verde else c.ouro, tween(600), label = "cor")
-    val cor2 by animateColorAsState(if (online) Color(0xFF10B981) else c.ouroEscuro, tween(600), label = "cor2")
-    val cor3 by animateColorAsState(if (online) Color(0xFFA7F3D0) else c.ouroClaro, tween(600), label = "cor3")
+    // a orbe é sempre escura: se a cor do tema for escura (preto no branco), usa branco no lugar
+    val claroNaOrbe = c.ouro.luminance() < 0.35f
+    val base1 = if (claroNaOrbe) Color(0xFFF4F4F5) else c.ouro
+    val base2 = if (claroNaOrbe) Color(0xFFA1A1AA) else c.ouroEscuro
+    val base3 = if (claroNaOrbe) Color(0xFFFFFFFF) else c.ouroClaro
+    val cor by animateColorAsState(if (online) verde else base1, tween(600), label = "cor")
+    val cor2 by animateColorAsState(if (online) Color(0xFF10B981) else base2, tween(600), label = "cor2")
+    val cor3 by animateColorAsState(if (online) Color(0xFFA7F3D0) else base3, tween(600), label = "cor3")
     val anim = rememberInfiniteTransition(label = "orbe")
     val giro by anim.animateFloat(0f, 360f, infiniteRepeatable(tween(if (online) 3800 else 24000, easing = androidx.compose.animation.core.LinearEasing)), label = "giro")
     val radar by anim.animateFloat(0f, 360f, infiniteRepeatable(tween(2600, easing = androidx.compose.animation.core.LinearEasing)), label = "radar")

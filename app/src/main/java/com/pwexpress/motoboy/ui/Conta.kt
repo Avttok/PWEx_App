@@ -80,7 +80,7 @@ fun RowScope.AcoesTopo(painel: Painel, podeTrocar: Boolean, onTrocar: (Painel) -
             }
         }
     }
-    PwAvatarConta(perfil?.nome ?: "", perfil?.fotoUrl, teste, tamanho = 42.dp, onClick = onConta, dev = perfil?.dev == true)
+    PwAvatarConta(perfil?.nome ?: "", perfil?.fotoUrl, teste, tamanho = 42.dp, onClick = onConta, dev = perfil?.dev == true, gestor = perfil?.gestor == true, motoboy = perfil?.motoboy == true)
 }
 
 /**
@@ -113,7 +113,7 @@ fun JanelaConta(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).clickable(onClick = onPerfil).padding(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    PwAvatarConta(perfil?.nome ?: email, perfil?.fotoUrl, teste, tamanho = 48.dp, dev = perfil?.dev == true)
+                    PwAvatarConta(perfil?.nome ?: email, perfil?.fotoUrl, teste, tamanho = 48.dp, dev = perfil?.dev == true, gestor = perfil?.gestor == true, motoboy = perfil?.motoboy == true)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(perfil?.nome ?: email.substringBefore("@"), color = c.texto, fontWeight = FontWeight.Bold, fontFamily = Archivo, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

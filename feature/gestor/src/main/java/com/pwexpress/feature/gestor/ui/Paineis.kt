@@ -135,7 +135,7 @@ private fun TelaComMapa(
     }
 }
 
-private fun corHex(cor: androidx.compose.ui.graphics.Color) = String.format("#%06X", 0xFFFFFF and cor.toArgb())
+internal fun corHex(cor: androidx.compose.ui.graphics.Color) = String.format("#%06X", 0xFFFFFF and cor.toArgb())
 
 /** Trilhas "em corrida" das últimas 12 h, separadas por sessão (como no site). */
 private fun trilhasDe(dados: Gestao.Dados, ids: Set<String>): List<TrilhaMapa> =

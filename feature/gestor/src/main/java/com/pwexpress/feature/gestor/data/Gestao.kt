@@ -103,7 +103,7 @@ object Gestao {
                 val vinculos = async { runCatching { rpc.rest("GET", "/rest/v1/perfis?select=id,empresa_id&empresa_id=not.is.null").exigirOk().lista().associate { it.str("id")!! to it.str("empresa_id")!! } }.getOrDefault(emptyMap()) }
                 val pedidos = async {
                     runCatching {
-                        rpc.rest("GET", "/rest/v1/pedidos?select=*,pedido_pontos(ordem,tipo,endereco,contato_nome),pedido_itens(descricao,quantidade,peso_kg)&or=(criado_em.gte.${enc(desde)},status.eq.recebido)&order=criado_em.desc&limit=300")
+                        rpc.rest("GET", "/rest/v1/pedidos?select=*,pedido_pontos(ordem,tipo,endereco,contato_nome,lat,lng,status),pedido_itens(descricao,quantidade,peso_kg)&or=(criado_em.gte.${enc(desde)},status.eq.recebido)&order=criado_em.desc&limit=300")
                             .exigirOk().lista().map { it.paraPedidoG() }
                     }.getOrDefault(_dados.value.pedidos)
                 }

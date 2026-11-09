@@ -1,3 +1,7 @@
-• Tela de nova corrida mais legível: tempo e botões com contraste em qualquer tema, números sem corte
-• Corrida agendada pode chegar como oferta: a tela mostra a data e a hora, e aceitar vira "Reservar"
-• Pedido no painel do gestor: como chegou no valor (todas as linhas do orçamento), pontos numerados com contato e instruções, itens com categoria e medidas, rotas do pedido
+• Tela de nova corrida mais legível em qualquer tema
+• Corrida agendada pode chegar como oferta, com a data e a hora em destaque; aceitar vira "Reservar"
+• Pedido no painel: como chegou no valor, pontos, itens, contatos e rotas
+• Toque numa coleta ou entrega para o mapa centralizar nela
+• Todo mapa mostra o caminho entre os pontos
+• App confere corridas e cancelamentos a cada poucos segundos, também com a tela apagada
+• Abas só de ícone mostram o nome inteiro da escolhida

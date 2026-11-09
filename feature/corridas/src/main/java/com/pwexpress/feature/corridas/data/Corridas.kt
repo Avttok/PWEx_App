@@ -56,13 +56,26 @@ object Corridas {
         escopo.launch { sincronizarAgora() }
     }
 
+    private var avisadaSumiu: String? = null
+
     suspend fun sincronizarAgora(): Unit = mutex.withLock {
         if (PwCore.auth.sessao.value == null) return@withLock
         runCatching {
             val a = PwCore.rpc.chamar("minha_corrida_ativa", JsonObject(emptyMap()))
             if (a.ok) {
-                _ativa.value = a.json()?.paraCorrida()
+                val antes = _ativa.value
+                val agora = a.json()?.paraCorrida()
+                _ativa.value = agora
                 _carregou.value = true
+                // a corrida sumiu sem você concluir: cancelada ou tirada de você (avisa mesmo se o push não chegou)
+                if (antes != null && agora == null && antes.status != "concluida" && avisadaSumiu != antes.id) {
+                    avisadaSumiu = antes.id
+                    runCatching {
+                        com.pwexpress.feature.corridas.push.Alarme.pararOferta(app)
+                        com.pwexpress.feature.corridas.push.Alarme.avisar(app, "Corrida ${antes.numeroExibicao} encerrada", "O gestor cancelou ou tirou a corrida de você.",
+                            "A corrida ${antes.numeroExibicao} não está mais com você (cancelada ou passada a outro motoboy). Pode parar; nenhuma etapa a mais é necessária.")
+                    }
+                }
             }
             val o = PwCore.rpc.chamar("oferta_pendente", JsonObject(emptyMap()))
             if (o.ok) _oferta.value = o.json()?.paraOferta()

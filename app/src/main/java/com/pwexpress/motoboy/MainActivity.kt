@@ -108,13 +108,13 @@ class MainActivity : ComponentActivity() {
                     LaunchedEffect(sessao != null, info.modo) {
                         if (sessao == null || info.modo != Modo.DISPONIVEL) return@LaunchedEffect
                         ciclo.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-                            while (true) { Corridas.sincronizarAgora(); delay(10_000) }
+                            while (true) { Corridas.sincronizarAgora(); delay(6_000) }
                         }
                     }
                     // planejadas: contador da aba sempre em dia
                     LaunchedEffect(sessao != null, perfil?.motoboy) {
                         if (sessao == null || perfil?.motoboy != true) return@LaunchedEffect
-                        ciclo.repeatOnLifecycle(Lifecycle.State.RESUMED) { while (true) { Corridas.carregarPlanejadas(); Corridas.carregarRotas(); delay(30_000) } }
+                        ciclo.repeatOnLifecycle(Lifecycle.State.RESUMED) { while (true) { Corridas.carregarPlanejadas(); Corridas.carregarRotas(); delay(15_000) } }
                     }
 
                     BackHandler(enabled = noPerfil) { noPerfil = false }

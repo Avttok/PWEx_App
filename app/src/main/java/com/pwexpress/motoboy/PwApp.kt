@@ -54,6 +54,20 @@ class PwApp : Application() {
                     }
                 }
         }
+        // checagem em segundo plano: com o GPS ligado (serviço em primeiro plano) o app segue vivo,
+        // então confere corrida, oferta e cancelamentos mesmo com a tela apagada (o push pode atrasar)
+        escopo.launch {
+            var ciclo = 0
+            while (true) {
+                val modo = Tracking.info.value.modo
+                if (PwCore.auth.sessao.value != null && modo != com.pwexpress.feature.tracking.Modo.OFFLINE) {
+                    runCatching { Corridas.sincronizarAgora() }
+                    if (ciclo % 6 == 0) runCatching { Corridas.carregarPlanejadas(); Corridas.carregarRotas() }
+                    ciclo++
+                }
+                kotlinx.coroutines.delay(if (modo == com.pwexpress.feature.tracking.Modo.EM_CORRIDA) 8_000 else 12_000)
+            }
+        }
         // configurações do servidor (core:perfil) → ritmo do GPS (feature:tracking)
         escopo.launch {
             Perfis.perfil.collect { p ->

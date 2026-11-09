@@ -171,8 +171,17 @@ object Corridas {
         val r = PwCore.rpc.chamar("responder_oferta", buildJsonObject { put("p_oferta", ofertaId); put("p_aceitar", aceitar) })
         if (_oferta.value?.id == ofertaId) _oferta.value = null
         if (!r.ok) throw Exception(traduzir(r))
-        if (aceitar) _ativa.value = r.json()?.paraCorrida()
+        if (aceitar) aceita(r.json()?.paraCorrida())
         Unit
+    }
+
+    /** Aceitou: corrida agora vira a ativa; agendada vira reserva (começa no horário). */
+    private suspend fun aceita(c: Corrida?) {
+        if (c?.status == "reservada") {
+            com.pwexpress.core.designsystem.PwToast.mostrar("Reservada para ${c.agendadaPara?.let { com.pwexpress.feature.corridas.ui.quandoTexto(it) } ?: "o horário marcado"}. Ela fica em Rotas → Minhas reservas.",
+                com.pwexpress.core.designsystem.TipoAviso.OK, "Corrida reservada")
+            runCatching { carregarPlanejadas() }
+        } else _ativa.value = c
     }
 
     // ------------------------------------------------------------------ oferta
@@ -186,7 +195,7 @@ object Corridas {
             })
             _oferta.value = null
             if (!r.ok) throw Exception(traduzir(r))
-            if (aceitar) _ativa.value = r.json()?.paraCorrida()
+            if (aceitar) aceita(r.json()?.paraCorrida())
             Unit
         }.onFailure { if (it is java.io.IOException) _oferta.value = oferta }
             .recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet. Tente de novo.") else e }

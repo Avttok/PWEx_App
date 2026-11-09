@@ -7,6 +7,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.draw.drawBehind
@@ -122,6 +123,8 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
     LaunchedEffect(oferta.id) { PosicaoAtual.obter(ctx, 6_000)?.let { posicao = it.lat to it.lng } }
     val pinos = remember(corrida.id) { corrida.paradas.map { PinoMapa(it.lat, it.lng, it.tipo == TipoParada.COLETA, false, false) } }
     val fracao = (restante / total).coerceIn(0f, 1f)
+    // agendada (o gestor despachou antes da hora): aceitar = reservar
+    val agendada = corrida.agendadaPara?.takeIf { it > System.currentTimeMillis() }
     val pouco = restante < 10_000
     var todasParadas by remember(oferta.id) { mutableStateOf(corrida.paradas.size <= 3) }
 
@@ -132,7 +135,7 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
             // qualquer toque silencia o alarme (a oferta continua na tela)
             .pointerInput(Unit) { awaitEachGesture { awaitFirstDown(requireUnconsumed = false); Alarme.pararOferta(ctx) } },
     ) {
-        val alturaPainel = maxHeight * 0.6f
+        val alturaPainel = maxHeight * 0.56f
         // ------------------------------------------------ mapa em tela cheia, atrás de tudo
         PwMapa(paradas = pinos, rota = corrida.rotaPlanejada, minhaPosicao = posicao, modifier = Modifier.fillMaxSize(),
             enquadrar = "${corrida.id}-${posicao != null}", margemBaixo = alturaPainel.value.toInt() + 10)
@@ -148,7 +151,7 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
                 PwLogo(tamanho = 38, soSelo = true)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(if (corrida.planejada) "ROTA PLANEJADA" else if (corrida.entregas > 1) "NOVA ROTA" else "NOVA CORRIDA", maxLines = 1, softWrap = false,
+                    Text(if (agendada != null) "CORRIDA AGENDADA" else if (corrida.entregas > 1) "NOVA ROTA" else "NOVA CORRIDA", maxLines = 1, softWrap = false,
                         style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 15.sp, letterSpacing = 1.sp))
                     Text(corrida.numeroExibicao + (corrida.empresaNome?.let { " · $it" } ?: ""), color = c.texto2, fontFamily = Archivo, fontSize = 12.5.sp, maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
@@ -168,6 +171,24 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
         ) {
             Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp, bottom = 12.dp).size(width = 42.dp, height = 4.dp).clip(RoundedCornerShape(99.dp)).background(c.bordaForte))
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // agendada: deixa claro que não é para agora
+                if (agendada != null) {
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.azul.copy(alpha = 0.14f)).border(1.5.dp, c.azul.copy(alpha = 0.6f), RoundedCornerShape(20.dp))
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(44.dp).clip(CircleShape).background(c.azul.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
+                            Icon(PwIcones.CalendarClock, null, tint = c.azul, modifier = Modifier.size(22.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("AGENDADA · NÃO É AGORA", color = c.azul, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = Archivo)
+                            Text(quandoTexto(agendada).replaceFirstChar { it.uppercase() }, color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 19.sp)
+                            Text("${relativoTexto(agendada)} · aceitar reserva para você", color = c.texto2, fontSize = 12.5.sp)
+                        }
+                    }
+                }
                 // destaque
                 Column {
                     if (corrida.valoresVisiveis && corrida.valorMotoboy != null) {
@@ -189,9 +210,14 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
                         }
                     }
                 }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Numero(PwIcones.Navigation, "Até a coleta", km(oferta.distanciaM), Modifier.weight(1f))
+                Row(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(c.vidroSutil).border(1.dp, c.borda, RoundedCornerShape(20.dp))
+                        .height(androidx.compose.foundation.layout.IntrinsicSize.Min).padding(vertical = 12.dp),
+                ) {
+                    Numero(PwIcones.Navigation, "Até coleta", km(oferta.distanciaM), Modifier.weight(1f))
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(c.borda))
                     Numero(PwIcones.Route, "Percurso", km(corrida.distanciaM), Modifier.weight(1f))
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(c.borda))
                     Numero(PwIcones.Clock, "Tempo", minutos(corrida.duracaoS), Modifier.weight(1f))
                 }
                 // trajeto em linha do tempo
@@ -233,18 +259,22 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
                         if (corrida.exigirNoLocal) Pilula(PwIcones.MapPinned, "Etapas no local · ${corrida.raioChegadaM} m")
                     }
                 }
-                corrida.observacoes?.let { Linha(PwIcones.Pencil, it) }
+                corrida.observacoes?.let { obs ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(c.vidroSutil).border(1.dp, c.borda, RoundedCornerShape(18.dp)).padding(14.dp),
+                        verticalAlignment = Alignment.Top) {
+                        Icon(PwIcones.Pencil, null, tint = c.ouro, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Column { PwRotulo("Observação"); Text(obs, color = c.texto, style = MaterialTheme.typography.bodyMedium) }
+                    }
+                }
+                Spacer(Modifier.height(4.dp))
             }
             erro?.let { Text(it, color = c.vermelho, modifier = Modifier.padding(vertical = 8.dp)) }
             Spacer(Modifier.height(10.dp))
             // ações: recusar (vidro, redondo) e aceitar (o dourado "esvazia" com o tempo)
             Row(Modifier.padding(bottom = 14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.size(66.dp).clip(CircleShape).background(c.vidroForte).border(1.dp, c.bordaForte, CircleShape)
-                        .clickable(enabled = !enviando) { responder(false) }.semantics { contentDescription = "Recusar" },
-                    contentAlignment = Alignment.Center,
-                ) { Icon(PwIcones.X, null, tint = c.texto, modifier = Modifier.size(26.dp)) }
-                BotaoAceitar(if (enviando) "Enviando…" else "ACEITAR", fracao, pouco, !enviando, Modifier.weight(1f)) { responder(true) }
+                PwBotaoVidro("Recusar", onClick = { responder(false) }, habilitado = !enviando, icone = PwIcones.X, modifier = Modifier.weight(1f).height(64.dp))
+                BotaoAceitar(if (enviando) "Enviando…" else if (agendada != null) "RESERVAR" else "ACEITAR", fracao, pouco, !enviando, Modifier.weight(1.8f)) { responder(true) }
             }
         }
     }
@@ -257,34 +287,37 @@ private fun OrbeTempo(segundos: Long, fracao: Float, pouco: Boolean) {
     val cor = if (pouco) c.vermelho else c.ouro
     val anim = rememberInfiniteTransition(label = "tempo")
     val pulso by anim.animateFloat(0.85f, 1f, infiniteRepeatable(tween(if (pouco) 450 else 1200), RepeatMode.Reverse), label = "pulso")
+    val fundo = c.vidroForte
+    val trilho = c.bordaForte
     Box(Modifier.size(66.dp).drawBehind {
         val esp = 5.dp.toPx()
-        drawCircle(Brush.radialGradient(listOf(cor.copy(alpha = 0.35f * pulso), Color.Transparent)), size.minDimension / 2f)
-        drawCircle(Color(0xFF0B0B0E), size.minDimension / 2f - esp)
-        drawCircle(Color.White.copy(alpha = 0.08f), size.minDimension / 2f - esp / 2, style = Stroke(esp))
+        drawCircle(Brush.radialGradient(listOf(cor.copy(alpha = 0.30f * pulso), Color.Transparent)), size.minDimension / 2f)
+        drawCircle(fundo, size.minDimension / 2f - esp)
+        drawCircle(trilho, size.minDimension / 2f - esp / 2, style = Stroke(esp))
         drawArc(Brush.sweepGradient(listOf(cor.copy(alpha = 0.4f), cor, cor)), -90f, 360f * fracao, false,
             topLeft = Offset(esp / 2, esp / 2), size = Size(size.width - esp, size.height - esp), style = Stroke(esp, cap = StrokeCap.Round))
     }, contentAlignment = Alignment.Center) {
-        Text("$segundos", style = TextStyle(brush = if (pouco) Brush.linearGradient(listOf(c.vermelho, c.vermelho)) else c.gradOuro,
-            fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 22.sp))
+        Text("$segundos", color = if (pouco) c.vermelho else c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 22.sp)
     }
 }
 
-/** Aceitar: dourado que vai esvaziando conforme o tempo passa. */
+/** Aceitar: dourado sólido (texto sempre legível) com a barra do tempo correndo embaixo. */
 @Composable
 private fun BotaoAceitar(texto: String, fracao: Float, pouco: Boolean, habilitado: Boolean, modifier: Modifier, onClick: () -> Unit) {
     val c = Pw.cores
-    val forma = RoundedCornerShape(99.dp)
+    val forma = RoundedCornerShape(20.dp)
     Box(
-        modifier.height(66.dp).clip(forma).background(c.vidroForte).border(1.dp, c.ouro.copy(alpha = 0.5f), forma)
+        modifier.height(64.dp).clip(forma).background(c.gradOuro)
             .clickable(enabled = habilitado, onClick = onClick).semantics { contentDescription = "Aceitar" },
-        contentAlignment = Alignment.CenterStart,
+        contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.fillMaxWidth(fracao.coerceAtLeast(0.02f)).height(66.dp).background(if (pouco) Brush.linearGradient(listOf(c.vermelho, c.ouro)) else c.gradOuro))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
             Icon(PwIcones.Check, null, tint = c.sobreOuro, modifier = Modifier.size(24.dp))
             Spacer(Modifier.width(10.dp))
-            Text(texto, color = c.sobreOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 20.sp, letterSpacing = 1.sp)
+            Text(texto, color = c.sobreOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 20.sp, letterSpacing = 1.sp, maxLines = 1, softWrap = false)
+        }
+        Box(Modifier.align(Alignment.BottomStart).fillMaxWidth().height(5.dp).background(c.sobreOuro.copy(alpha = 0.15f))) {
+            Box(Modifier.fillMaxWidth(fracao).height(5.dp).background(if (pouco) c.vermelho else c.sobreOuro.copy(alpha = 0.55f)))
         }
     }
 }
@@ -303,15 +336,14 @@ private fun Pilula(icone: androidx.compose.ui.graphics.vector.ImageVector, texto
 @Composable
 private fun Numero(icone: androidx.compose.ui.graphics.vector.ImageVector, rotulo: String, valor: String, modifier: Modifier) {
     val c = Pw.cores
-    Column(modifier.clip(RoundedCornerShape(18.dp)).background(c.vidroSutil).border(1.dp, c.borda, RoundedCornerShape(18.dp)).padding(horizontal = 12.dp, vertical = 10.dp)) {
+    Column(modifier.padding(horizontal = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(icone, null, tint = c.ouro, modifier = Modifier.size(13.dp))
-            Spacer(Modifier.width(5.dp))
-            Text(rotulo.uppercase(), color = c.texto3, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp, maxLines = 1, softWrap = false,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Spacer(Modifier.width(4.dp))
+            Text(rotulo, color = c.texto2, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, softWrap = false)
         }
         Spacer(Modifier.height(4.dp))
-        Text(valor, fontWeight = FontWeight.Bold, fontSize = 17.sp, fontFamily = ArchivoLargo, color = c.texto, maxLines = 1, softWrap = false)
+        com.pwexpress.core.designsystem.TextoAjustado(valor, TextStyle(fontWeight = FontWeight.Bold, fontFamily = ArchivoLargo, color = c.texto), maximo = 19, minimo = 12)
     }
 }
 

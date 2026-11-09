@@ -1,6 +1,7 @@
 package com.pwexpress.feature.gestor.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
@@ -178,25 +179,15 @@ private fun JanelaPedido(p: PedidoG, empresa: String?, onFechar: () -> Unit) {
         if (p.planejado && p.quando != null) Text("Para ${dataHora(p.quando)}", color = c.azul, fontWeight = FontWeight.SemiBold)
 
         MapaPedidoG(p)
-        PwCartao {
-            p.pontos.forEach { pt ->
-                LinhaEndereco(if (pt.coleta) PwIcones.ArrowUpFromLine else PwIcones.ArrowDownToLine, pt.endereco + (pt.contatoNome?.let { " · $it" } ?: ""), if (pt.coleta) c.ouro else c.texto)
-            }
-            if (p.distanciaM != null) TextoDica("Distância estimada: ${km(p.distanciaM)}")
-        }
-        if (p.itens.isNotEmpty()) PwCartao {
-            p.itens.forEach { i ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 2.dp)) {
-                    Icon(PwIcones.Package2, null, tint = c.texto3, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("${i.quantidade}× ${i.descricao}" + (i.pesoKg?.let { " · ${numeroBr(it)} kg" } ?: ""), color = c.texto, fontSize = 13.5.sp)
-                }
-            }
-        }
-        p.observacoes?.let { TextoDica("Obs.: $it") }
+        DetalhesPedidoG(p)
 
         PwCartao(destaque = true) {
-            Text("Calculado: ${moedaBr(p.valorCalculado)}" + if (p.valorAjuste != 0.0) " · ajuste ${if (p.valorAjuste > 0) "+" else "−"}${moedaBr(kotlin.math.abs(p.valorAjuste))}" else "", color = c.texto2, fontSize = 13.sp)
+            p.orcamento?.let { OrcamentoG(it) } ?: TextoDica("Sem orçamento.")
+            Spacer(Modifier.size(8.dp))
+            Text("Calculado: ${moedaBr(p.valorCalculado)}" + (if (p.valorAjuste != 0.0) " · ajuste ${if (p.valorAjuste > 0) "+" else "−"}${moedaBr(kotlin.math.abs(p.valorAjuste))}" else "") +
+                (p.ajusteMotivo?.takeIf { p.valorAjuste != 0.0 }?.let { " ($it)" } ?: "") + " · Dev ${moedaBr(p.valorDev)} · " +
+                when { p.cobranca == "credito" -> if (p.faturaId != null) "já na fatura" else "entra na próxima fatura"; p.pagamentoStatus == "pago" -> "pago (${p.pagamentoMetodo ?: ""})"; else -> "pagamento antecipado pendente" },
+                color = c.texto2, fontSize = 13.sp)
             Spacer(Modifier.size(6.dp))
             PwCampo(valor, { valor = it }, "Valor do pedido", teclado = KeyboardType.Decimal, prefixo = "R$ ")
             if (mudou || p.valorAjuste != 0.0) PwCampo(motivo, { motivo = it }, "Motivo da mudança", dica = "Ex.: cliente fixo, rota longa, desconto combinado")
@@ -269,7 +260,8 @@ internal fun BlocoRotaG(corrida: com.pwexpress.feature.gestor.data.CorridaG, ocu
             if (corrida.modoDespacho == "quadro" && corrida.status != "montada") TextoDica("No quadro${corrida.quadroDesde?.let { " desde ${hora(it)}" } ?: ""}: todos veem, o primeiro que pegar leva.")
             Espaco(8)
             PwBotaoOuro("Quadro (todos veem)", onClick = { acao { Gestao.liberarRota(corrida.id, "quadro") } }, icone = PwIcones.Users, habilitado = !ocupado)
-            if (corrida.agendadaPara == null) {
+            if (corrida.agendadaPara != null) TextoDica("Agendada para ${dataHora(corrida.agendadaPara)}: quem aceitar a oferta fica com a reserva (não começa agora).")
+            run {
                 Espaco(6)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     PwBotaoVidro("Melhor primeiro", onClick = { acao { Gestao.liberarRota(corrida.id, "melhor_primeiro") } }, icone = PwIcones.Crown, modifier = Modifier.weight(1f))
@@ -281,7 +273,7 @@ internal fun BlocoRotaG(corrida: com.pwexpress.feature.gestor.data.CorridaG, ocu
                 "Entregar direto para", dados.equipe.filter { it.motoboy && it.modoTeste == corrida.teste }.map { it.id to ((if (it.id == corrida.sugeridoMotoboyId) "★ " else "") + it.nome) }, moto, { moto = it },
             )
             Espaco(6)
-            PwBotaoVidro("Enviar para o escolhido", onClick = { moto?.let { m -> acao { Gestao.liberarRota(corrida.id, null, m) } } }, icone = PwIcones.Send, modifier = Modifier.fillMaxWidth())
+            PwBotaoVidro("Enviar oferta para o escolhido", onClick = { moto?.let { m -> acao { Gestao.liberarRota(corrida.id, null, m) } } }, icone = PwIcones.Send, modifier = Modifier.fillMaxWidth())
         }
     }
 
@@ -412,4 +404,104 @@ internal fun MapaPedidoG(p: PedidoG, altura: androidx.compose.ui.unit.Dp = 220.d
             PwSelo("Rota ${rota.numeroExibicao}" + (rota.motoboyId?.let { " · ${dados.membro(it)?.nome?.substringBefore(" ") ?: ""}" } ?: ""), c.ouro, icone = PwIcones.Route)
         }
     }
+}
+
+
+/** Pontos numerados (como no mapa) com contato, instruções, itens de cada um e a entrega feita; itens com categoria e medidas; rotas. */
+@Composable
+private fun DetalhesPedidoG(p: PedidoG) {
+    val c = Pw.cores
+    val dados by Gestao.dados.collectAsState()
+    var categorias by remember { mutableStateOf<List<com.pwexpress.feature.gestor.data.CategoriaG>>(emptyList()) }
+    androidx.compose.runtime.LaunchedEffect(Unit) { categorias = runCatching { Gestao.catalogoPedido().second }.getOrDefault(emptyList()) }
+    PwCartao {
+        com.pwexpress.core.designsystem.PwRotulo("Pontos")
+        Spacer(Modifier.size(6.dp))
+        p.pontos.forEachIndexed { i, pt ->
+            val itens = p.itens.filter { it.entregaId == pt.id || it.coletaId == pt.id }
+            Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
+                Box(Modifier.size(24.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (pt.coleta) c.ouro else c.texto), contentAlignment = Alignment.Center) {
+                    Text("${i + 1}", color = if (pt.coleta) c.sobreOuro else c.fundo, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                }
+                Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text((if (pt.coleta) "Coleta" else "Entrega") + if (pt.status == "concluido") " · feita" else "", color = if (pt.coleta) c.ouro else c.texto2,
+                        fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Text(pt.endereco, color = c.texto, fontSize = 14.sp)
+                    listOfNotNull(pt.contatoNome, pt.contatoTelefone, pt.instrucoes).takeIf { it.isNotEmpty() }?.let { TextoDica(it.joinToString(" · ")) }
+                    if (itens.isNotEmpty()) TextoDica(itens.joinToString(" · ") { "${it.quantidade}× ${it.descricao}" })
+                    pt.concluidoEm?.let { TextoDica("✓ ${dataHora(it)}" + (pt.recebedorNome?.let { r -> " · recebido por $r" } ?: "")) }
+                }
+            }
+        }
+        if (p.distanciaM != null) TextoDica("Distância estimada: ${km(p.distanciaM)}")
+    }
+    if (p.itens.isNotEmpty()) PwCartao {
+        com.pwexpress.core.designsystem.PwRotulo("Itens")
+        p.itens.forEach { it2 ->
+            val k = categorias.firstOrNull { it.id == it2.categoriaId }
+            Column(Modifier.padding(vertical = 5.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(PwIcones.Package2, null, tint = if (k?.perigoso == true) c.vermelho else c.ouro, modifier = Modifier.size(15.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("${it2.quantidade}× ${it2.descricao}", color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 14.sp, modifier = Modifier.weight(1f))
+                    if (k?.perigoso == true) PwSelo("Perigoso", c.vermelho)
+                }
+                TextoDica(listOfNotNull(k?.nome ?: "Sem categoria", it2.pesoKg?.let { "${numeroBr(it)} kg" },
+                    it2.comprimento?.let { "${numeroBr(it)}×${numeroBr(it2.largura ?: 0.0)}×${numeroBr(it2.altura ?: 0.0)} cm" },
+                    it2.valorDeclarado?.let { "declarado ${moedaBr(it)}" }, it2.observacoes).joinToString(" · "))
+            }
+        }
+    }
+    p.observacoes?.let { o -> PwCartao { com.pwexpress.core.designsystem.PwRotulo("Observações"); Text(o, color = c.texto, fontSize = 14.sp) } }
+    // rotas que levam este pedido
+    val rotas = dados.corridas.filter { cor -> cor.teste == p.teste && cor.criadaEm >= p.criadoEm - 60_000 && cor.paradas.any { pa -> p.pontos.any { it.endereco == pa.endereco } } }
+    if (rotas.isNotEmpty()) PwCartao {
+        com.pwexpress.core.designsystem.PwRotulo("Rotas")
+        rotas.forEach { r ->
+            TextoDica("Rota ${r.numeroExibicao} · ${com.pwexpress.feature.gestor.data.Status.rotulo[r.status] ?: r.status}" +
+                (r.motoboyId?.let { " · ${dados.membro(it)?.nome ?: ""}" } ?: "") + " · ${r.entregas} entrega${if (r.entregas == 1) "" else "s"}")
+        }
+    }
+}
+
+/** Como o valor foi calculado (as mesmas linhas do site). */
+@Composable
+internal fun OrcamentoG(o: kotlinx.serialization.json.JsonObject) {
+    val c = Pw.cores
+    fun num(e: kotlinx.serialization.json.JsonElement?) = (e as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
+    fun txt(e: kotlinx.serialization.json.JsonElement?) = (e as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
+    com.pwexpress.core.designsystem.PwRotulo("Como chegou no valor")
+    Spacer(Modifier.size(4.dp))
+    (o["linhas"] as? kotlinx.serialization.json.JsonArray)?.forEach { l ->
+        val x = l as? kotlinx.serialization.json.JsonObject ?: return@forEach
+        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(txt(x["rotulo"]).orEmpty(), color = c.texto, fontSize = 14.sp)
+                txt(x["detalhe"])?.let { Text(it, color = c.texto3, fontSize = 12.sp) }
+            }
+            Text(moedaBr(num(x["valor"])), color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        }
+    }
+    (o["percentuais"] as? kotlinx.serialization.json.JsonArray)?.forEach { l ->
+        val x = l as? kotlinx.serialization.json.JsonObject ?: return@forEach
+        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+            Text(txt(x["rotulo"]).orEmpty(), color = c.texto2, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Text("+${numeroBr(num(x["pct"]) ?: 0.0)}%", color = c.ouro, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        }
+    }
+    num(o["minimo"])?.takeIf { it > 0 }?.let { m ->
+        Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+            Text("Mínimo", color = c.texto2, fontSize = 14.sp, modifier = Modifier.weight(1f))
+            Text(moedaBr(m), color = c.ouro, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+        }
+    }
+    Box(Modifier.fillMaxWidth().padding(vertical = 6.dp).height(1.dp).background(c.borda))
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text("Total", color = c.texto, fontWeight = FontWeight.Bold, fontSize = 16.sp, modifier = Modifier.weight(1f))
+        Text(moedaBr(num(o["total"])), color = c.ouro, fontWeight = FontWeight.Black, fontSize = 20.sp)
+    }
+    val vol = num(o["volumes"])?.toInt() ?: 0
+    TextoDica("$vol volume${if (vol == 1) "" else "s"} · peso real ${numeroBr(num(o["peso_real_kg"]) ?: 0.0)} kg · cubado ${numeroBr(num(o["peso_cubado_kg"]) ?: 0.0)} kg" +
+        (if (txt(o["perigoso"]) == "true") " · perigoso" else ""))
 }

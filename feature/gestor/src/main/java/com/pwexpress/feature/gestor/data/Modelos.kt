@@ -143,8 +143,15 @@ fun JsonObject.paraCorridaG() = CorridaG(
 
 // ------------------------------------------------------------------ pedidos (do site do cliente e do gestor)
 
-data class PontoPedidoG(val ordem: Int, val coleta: Boolean, val endereco: String, val contatoNome: String?, val lat: Double? = null, val lng: Double? = null, val status: String = "pendente")
-data class ItemPedidoG(val descricao: String, val quantidade: Int, val pesoKg: Double?)
+data class PontoPedidoG(
+    val ordem: Int, val coleta: Boolean, val endereco: String, val contatoNome: String?, val lat: Double? = null, val lng: Double? = null, val status: String = "pendente",
+    val id: String = "", val contatoTelefone: String? = null, val instrucoes: String? = null, val concluidoEm: Long? = null, val recebedorNome: String? = null,
+)
+data class ItemPedidoG(
+    val descricao: String, val quantidade: Int, val pesoKg: Double?,
+    val categoriaId: String? = null, val comprimento: Double? = null, val largura: Double? = null, val altura: Double? = null,
+    val valorDeclarado: Double? = null, val coletaId: String? = null, val entregaId: String? = null, val observacoes: String? = null,
+)
 
 data class PedidoG(
     val id: String, val numero: Long, val teste: Boolean, val empresaId: String?, val clienteNome: String?, val origem: String,
@@ -153,6 +160,10 @@ data class PedidoG(
     val cobranca: String, val pagamentoStatus: String, val criadoEm: Long, val recusaMotivo: String?,
     val pontos: List<PontoPedidoG>, val itens: List<ItemPedidoG>,
     val regras: JsonObject = JsonObject(emptyMap()),
+    /** Orçamento calculado (linhas, percentuais, mínimo, total, pesos). */
+    val orcamento: JsonObject? = null,
+    val valorDev: Double? = null, val faturaId: String? = null, val pagamentoMetodo: String? = null,
+    val tipoPedidoNome: String? = null,
 ) {
     val numeroExibicao get() = if (teste) "P-T$numero" else "P-$numero"
     val planejado get() = tipo == "planejado"
@@ -172,9 +183,16 @@ fun JsonObject.paraPedidoG() = PedidoG(
     valorCalculado = dbl("valor_calculado"), valorAjuste = dbl("valor_ajuste") ?: 0.0, ajusteMotivo = str("ajuste_motivo"), valor = dbl("valor"),
     cobranca = str("cobranca") ?: "credito", pagamentoStatus = str("pagamento_status") ?: "nao_exigido", criadoEm = iso(str("criado_em")) ?: 0,
     recusaMotivo = str("recusa_motivo"),
-    pontos = arr("pedido_pontos").map { PontoPedidoG(it.int("ordem") ?: 0, it.str("tipo") == "coleta", it.str("endereco").orEmpty(), it.str("contato_nome"), it.dbl("lat"), it.dbl("lng"), it.str("status") ?: "pendente") }.sortedBy { it.ordem },
-    itens = arr("pedido_itens").map { ItemPedidoG(it.str("descricao").orEmpty(), it.int("quantidade") ?: 1, it.dbl("peso_kg")) },
+    pontos = arr("pedido_pontos").map {
+        PontoPedidoG(it.int("ordem") ?: 0, it.str("tipo") == "coleta", it.str("endereco").orEmpty(), it.str("contato_nome"), it.dbl("lat"), it.dbl("lng"), it.str("status") ?: "pendente",
+            it.str("id").orEmpty(), it.str("contato_telefone"), it.str("instrucoes"), iso(it.str("concluido_em")), it.str("recebedor_nome"))
+    }.sortedBy { it.ordem },
+    itens = arr("pedido_itens").map {
+        ItemPedidoG(it.str("descricao").orEmpty(), it.int("quantidade") ?: 1, it.dbl("peso_kg"), it.str("categoria_id"), it.dbl("comprimento_cm"), it.dbl("largura_cm"), it.dbl("altura_cm"),
+            it.dbl("valor_declarado"), it.str("coleta_id"), it.str("entrega_id"), it.str("observacoes"))
+    },
     regras = obj("regras") ?: JsonObject(emptyMap()),
+    orcamento = obj("orcamento"), valorDev = dbl("valor_dev"), faturaId = str("fatura_id"), pagamentoMetodo = str("pagamento_metodo"),
 )
 
 fun JsonObject.paraOfertaG() = OfertaG(str("id")!!, str("corrida_id")!!, str("motoboy_id")!!, int("distancia_m"), iso(str("expira_em")) ?: 0)

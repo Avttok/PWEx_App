@@ -172,11 +172,15 @@ class MainActivity : ComponentActivity() {
                                 Linha("Último erro", info.erro ?: "nenhum")
                             },
                         )
-                        efetivo == Painel.GESTOR -> GestorApp(
-                            modifier = conteudo,
-                            topo = { PwTopo { AcoesTopo(efetivo, podeTrocar, ::trocar) { conta = true } } },
-                            meuId = p?.id,
-                        )
+                        efetivo == Painel.GESTOR -> androidx.compose.runtime.CompositionLocalProvider(
+                            com.pwexpress.core.designsystem.LocalMinhasChavesPix provides { com.pwexpress.feature.corridas.ui.CartaoChavesPix() },
+                        ) {
+                            GestorApp(
+                                modifier = conteudo,
+                                topo = { PwTopo { AcoesTopo(efetivo, podeTrocar, ::trocar) { conta = true } } },
+                                meuId = p?.id,
+                            )
+                        }
                         o != null -> OfertaScreen(o, onFim = { }, modifier = conteudo)
                         !preparado -> PrimeiraConfiguracao(onPronto = { preparado = true }, modifier = conteudo)
                         a != null -> CorridaScreen(a, admin = p?.admin == true, modifier = conteudo)

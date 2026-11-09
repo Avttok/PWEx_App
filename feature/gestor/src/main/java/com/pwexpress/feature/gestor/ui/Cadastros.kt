@@ -205,6 +205,16 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
     PwPagina {
         Cabecalho(if (e == null) "Novo cliente" else e.nome, onVoltar, subtitulo = "Dados, preço, pagamento e coleta padrão")
         if (e != null) {
+            val ctxCli = LocalContext.current
+            PwBotaoVidro("Usar o site do cliente como ${e.nome}", onClick = {
+                escopo.launch {
+                    Gestao.rpcJson("entrar_como_cliente", kotlinx.serialization.json.buildJsonObject { put("p_empresa", kotlinx.serialization.json.JsonPrimitive(e.id)) })
+                        .onSuccess {
+                            runCatching { ctxCli.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(com.pwexpress.core.config.PwConfig.siteUrl + "/cliente"))) }
+                            com.pwexpress.core.designsystem.PwToast.mostrar("No site do cliente você está como ${e.nome}${if (e.modoTeste) " (modo teste)" else ""}.")
+                        }.onFailure { erro = it.message }
+                }
+            }, icone = PwIcones.Store, modifier = Modifier.fillMaxWidth())
             PwSegmentado(listOf("Dados" to PwIcones.Building2, "Regras" to PwIcones.Layers, "Zonas" to PwIcones.MapPin), aba, { aba = it })
             when (aba) {
                 1 -> { RegrasDoAlvoG("cliente", e.id, e.nome); return@PwPagina }
@@ -713,6 +723,7 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
         if (souDev) PwInterruptor("Dev", devPapel, { devPapel = it }, descricao = "Administra o sistema inteiro", icone = PwIcones.CodeXml, cor = c.dev)
         PwInterruptor("Gestor", gestor, { gestor = it }, descricao = "Acessa o painel (site e app)", icone = PwIcones.ShieldCheck)
         PwInterruptor("Motoboy", motoboy, { motoboy = it }, descricao = "Usa o app e recebe corridas", icone = PwIcones.Bike)
+        if (gestor || devPapel) VincularClienteG(m.id, m.nome)
         PwErro(erro)
         msg?.let { Text(it, color = c.verde, fontWeight = FontWeight.SemiBold) }
         Espaco(6)
@@ -787,12 +798,141 @@ private fun EditarMembroG(m: com.pwexpress.feature.gestor.data.MembroG, eu: Bool
 fun FinanceiroG(onVoltar: (() -> Unit)?) {
     var aba by remember { mutableIntStateOf(0) }
     val abas: @Composable () -> Unit = {
-        PwSegmentado(listOf("Resumo" to PwIcones.TrendingUp, "Faturas" to PwIcones.ReceiptText, "Folha" to PwIcones.Users), aba, { aba = it })
+        PwFiltros(listOf("Resumo" to 0, "Faturas" to 0, "Folha" to 0, "Clientes" to 0, "Extrato" to 0, "PIX" to 0), aba, { aba = it })
     }
     when (aba) {
         0 -> ResumoCarteiraG(onVoltar, abas)
         1 -> FaturasG(onVoltar, abas)
-        else -> FolhaG(onVoltar, abas)
+        2 -> FolhaG(onVoltar, abas)
+        3 -> ClientesCarteiraG(onVoltar, abas)
+        4 -> ExtratoCarteiraG(onVoltar, abas)
+        else -> PixCarteiraG(onVoltar, abas)
+    }
+}
+
+/** Período da carteira (Hoje · 7 dias · Este mês · 30 dias) e as corridas concluídas nele. */
+@Composable
+private fun corridasDoPeriodo(periodo: Int, teste: Boolean): List<CorridaG>? {
+    var linhas by remember { mutableStateOf<List<CorridaG>?>(null) }
+    LaunchedEffect(periodo, teste) {
+        linhas = null
+        val cal = java.util.Calendar.getInstance()
+        when (periodo) {
+            0 -> { cal.set(java.util.Calendar.HOUR_OF_DAY, 0); cal.set(java.util.Calendar.MINUTE, 0); cal.set(java.util.Calendar.SECOND, 0) }
+            1 -> cal.add(java.util.Calendar.DAY_OF_MONTH, -7)
+            2 -> { cal.set(java.util.Calendar.DAY_OF_MONTH, 1); cal.set(java.util.Calendar.HOUR_OF_DAY, 0); cal.set(java.util.Calendar.MINUTE, 0) }
+            else -> cal.add(java.util.Calendar.DAY_OF_MONTH, -30)
+        }
+        linhas = Gestao.concluidas(cal.timeInMillis, teste)
+    }
+    return linhas
+}
+
+private fun clienteDaCorrida(cor: CorridaG, dados: Gestao.Dados) = dados.empresa(cor.empresaId)?.nome ?: cor.clienteNome?.let { "$it (avulso)" } ?: "Avulso"
+
+/** Carteira · Clientes: quanto cada cliente rendeu no período. */
+@Composable
+private fun ClientesCarteiraG(onVoltar: (() -> Unit)?, abas: @Composable () -> Unit) {
+    val c = Pw.cores
+    val dados by Gestao.dados.collectAsState()
+    val teste by TemaApp.modoTeste.collectAsState()
+    var periodo by remember { mutableIntStateOf(2) }
+    val l = corridasDoPeriodo(periodo, teste)
+    PwPagina {
+        if (onVoltar != null) Cabecalho("Carteira", onVoltar, subtitulo = "Por cliente") else TituloTela("Carteira", "Por cliente", PwIcones.Wallet)
+        abas()
+        PwFiltros(listOf("Hoje" to 0, "7 dias" to 0, "Este mês" to 0, "30 dias" to 0), periodo, { periodo = it })
+        val x = l ?: run { PwCarregando(); return@PwPagina }
+        if (x.isEmpty()) { PwVazio("Nenhuma rota concluída neste período.", icone = PwIcones.Building2); return@PwPagina }
+        x.groupBy { clienteDaCorrida(it, dados) }.entries.sortedByDescending { e -> e.value.sumOf { it.valor ?: 0.0 } }.forEach { (nome, cs) ->
+            PwCartao {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(nome, color = c.texto, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        TextoDica("${cs.size} rota${if (cs.size == 1) "" else "s"} · gestão ${moedaBr(cs.sumOf { it.valorGestao ?: 0.0 })} · Dev ${moedaBr(cs.sumOf { it.valorDev ?: 0.0 })}")
+                    }
+                    Text(moedaBr(cs.sumOf { it.valor ?: 0.0 }), color = c.texto, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+/** Carteira · Extrato: cada rota com a divisão (motoboy, gestão, Dev), com busca e planilha. */
+@Composable
+private fun ExtratoCarteiraG(onVoltar: (() -> Unit)?, abas: @Composable () -> Unit) {
+    val c = Pw.cores
+    val ctx = LocalContext.current
+    val dados by Gestao.dados.collectAsState()
+    val teste by TemaApp.modoTeste.collectAsState()
+    var periodo by remember { mutableIntStateOf(2) }
+    var busca by remember { mutableStateOf("") }
+    val l = corridasDoPeriodo(periodo, teste)
+    PwPagina {
+        if (onVoltar != null) Cabecalho("Carteira", onVoltar, subtitulo = "Extrato") else TituloTela("Carteira", "Extrato", PwIcones.Wallet)
+        abas()
+        PwFiltros(listOf("Hoje" to 0, "7 dias" to 0, "Este mês" to 0, "30 dias" to 0), periodo, { periodo = it })
+        CampoBusca(busca, { busca = it }, "Buscar por número, motoboy ou cliente")
+        val x = (l ?: run { PwCarregando(); return@PwPagina }).filter { cor ->
+            combinaBusca(busca, cor.numeroExibicao, cor.numero.toString(), cor.motoboyId?.let { dados.membro(it)?.nome } ?: cor.motoboyNomeArquivado, clienteDaCorrida(cor, dados))
+        }
+        if (x.isEmpty()) { PwVazio("Nenhuma rota aqui.", icone = PwIcones.ReceiptText); return@PwPagina }
+        PwBotaoVidro("Compartilhar planilha (CSV)", onClick = {
+            val csv = buildString {
+                appendLine("Corrida;Quando;Cliente;Motoboy;Valor;Motoboy (R$);Gestão;Dev")
+                x.forEach { cor ->
+                    appendLine(listOf(cor.numeroExibicao, java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale("pt", "BR")).format(java.util.Date(cor.concluidaEm ?: cor.criadaEm)),
+                        clienteDaCorrida(cor, dados), cor.motoboyId?.let { dados.membro(it)?.nome } ?: cor.motoboyNomeArquivado ?: "",
+                        cor.valor ?: 0.0, cor.valorMotoboy ?: 0.0, cor.valorGestao ?: 0.0, cor.valorDev ?: 0.0).joinToString(";") { it.toString().replace(';', ',') })
+                }
+            }
+            runCatching {
+                ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/csv")
+                    .putExtra(android.content.Intent.EXTRA_SUBJECT, "Extrato PW Express").putExtra(android.content.Intent.EXTRA_TEXT, csv), "Compartilhar extrato"))
+            }
+        }, icone = PwIcones.Download, modifier = Modifier.fillMaxWidth())
+        x.forEach { cor ->
+            PwCartao {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("${cor.numeroExibicao} · ${clienteDaCorrida(cor, dados)}", color = c.texto, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        TextoDica("${dataHora(cor.concluidaEm ?: cor.criadaEm)} · ${cor.motoboyId?.let { dados.membro(it)?.nome } ?: cor.motoboyNomeArquivado ?: "—"}")
+                        TextoDica("Motoboy ${moedaBr(cor.valorMotoboy)} · gestão ${moedaBr(cor.valorGestao)} · Dev ${moedaBr(cor.valorDev)}")
+                    }
+                    Text(moedaBr(cor.valor), color = c.texto, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+/** Carteira · PIX: as minhas chaves (vem do app) e a principal de cada pessoa da equipe. */
+@Composable
+private fun PixCarteiraG(onVoltar: (() -> Unit)?, abas: @Composable () -> Unit) {
+    val c = Pw.cores
+    val ctx = LocalContext.current
+    val dados by Gestao.dados.collectAsState()
+    var chaves by remember { mutableStateOf<Map<String, String>?>(null) }
+    LaunchedEffect(Unit) { chaves = Gestao.chavesPix() }
+    PwPagina {
+        if (onVoltar != null) Cabecalho("Carteira", onVoltar, subtitulo = "Chaves PIX") else TituloTela("Carteira", "Chaves PIX", PwIcones.Wallet)
+        abas()
+        com.pwexpress.core.designsystem.LocalMinhasChavesPix.current()
+        PwRotulo("Chaves da equipe")
+        TextoDica("A principal de cada pessoa: é para ela que vai o repasse. Toque para copiar.")
+        val ch = chaves ?: run { PwCarregando(); return@PwPagina }
+        dados.equipe.filter { it.motoboy }.sortedBy { it.nome }.forEach { m ->
+            val k = ch[m.id]
+            PwCartao(modifier = Modifier.clickable(enabled = k != null) { k?.let { copiar(ctx, it.substringBefore(" ·")); com.pwexpress.core.designsystem.PwToast.mostrar("Chave copiada.") } }) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(m.nome, color = c.texto, fontWeight = FontWeight.SemiBold)
+                        TextoDica(k ?: "Sem chave PIX cadastrada")
+                    }
+                    if (k != null) Icon(PwIcones.Copy, null, tint = c.ouro, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
     }
 }
 
@@ -1055,3 +1195,28 @@ private fun CadastrosPendentesG() {
 
 @Composable
 private fun dados_cfgBool(k: String): Boolean = Gestao.dados.collectAsState().value.cfgBool(k, false)
+
+
+/** Gestor/Dev que também é cliente: entra no site do cliente como este cadastro. */
+@Composable
+private fun VincularClienteG(id: String, nome: String) {
+    val dados by Gestao.dados.collectAsState()
+    val escopo = rememberCoroutineScope()
+    var atual by remember(id) { mutableStateOf<String?>(null) }
+    var carregado by remember(id) { mutableStateOf(false) }
+    LaunchedEffect(id) {
+        atual = runCatching { Gestao.tabela("perfis", "id=eq.$id&select=empresa_id").firstOrNull()?.str("empresa_id") }.getOrNull()
+        carregado = true
+    }
+    if (!carregado) return
+    com.pwexpress.core.designsystem.PwSelecao("Também é cliente (entra no site do cliente como)", listOf("" to "Não") + dados.empresas.map { it.id to it.nome }, atual ?: "", { v ->
+        escopo.launch {
+            Gestao.rpcJson("vincular_cliente", kotlinx.serialization.json.buildJsonObject {
+                put("p_usuario", kotlinx.serialization.json.JsonPrimitive(id)); put("p_empresa", if (v.isEmpty()) kotlinx.serialization.json.JsonNull else kotlinx.serialization.json.JsonPrimitive(v))
+            }).onSuccess {
+                atual = v.ifEmpty { null }
+                com.pwexpress.core.designsystem.PwToast.mostrar(if (v.isEmpty()) "Não é mais cliente." else "Agora $nome também é cliente de ${dados.empresa(v)?.nome ?: ""}.")
+            }.onFailure { com.pwexpress.core.designsystem.PwToast.mostrar(it.message ?: "Erro", com.pwexpress.core.designsystem.TipoAviso.ERRO) }
+        }
+    })
+}

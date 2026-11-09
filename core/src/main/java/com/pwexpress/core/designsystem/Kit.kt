@@ -684,3 +684,7 @@ fun lembrarLigado(chave: String, padrao: Boolean): androidx.compose.runtime.Muta
         }
     }
 }
+
+
+/** As chaves PIX da própria conta (a tela vem do módulo do motoboy; o painel do gestor mostra na Carteira). */
+val LocalMinhasChavesPix = androidx.compose.runtime.staticCompositionLocalOf<@Composable () -> Unit> { {} }

@@ -397,7 +397,11 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
         titulo = if (selecionando) "${marcadas.size} selecionada${if (marcadas.size == 1) "" else "s"}" else "Rotas",
         subtitulo = "${if (ativas.isEmpty()) "Nenhuma ativa" else if (ativas.size == 1) "1 ativa" else "${ativas.size} ativas"} agora${if (teste) " · modo teste" else ""}",
         mapa = { margem, enquadrar ->
-            PwMapa(paradas = pinos, rota = null, minhaPosicao = null, marcadores = online, modifier = Modifier.fillMaxSize(), enquadrar = "${pinos.size}-$enquadrar", margemBaixo = margem)
+            // caminho de cada rota ativa (a pronta ou a calculada pelas paradas)
+            val caminhos by androidx.compose.runtime.produceState(emptyList<String>(), ativas.map { it.id + (it.rota?.length ?: 0) }) {
+                value = ativas.mapNotNull { cor -> cor.rota ?: com.pwexpress.core.mapa.Caminho.entre(cor.paradas.map { it.lat to it.lng }) }
+            }
+            PwMapa(paradas = pinos, rota = null, rotas = caminhos, caminhoAuto = false, minhaPosicao = null, marcadores = online, modifier = Modifier.fillMaxSize(), enquadrar = "${pinos.size}-$enquadrar", margemBaixo = margem)
         },
         acoesGaveta = {
             if (selecionando) {

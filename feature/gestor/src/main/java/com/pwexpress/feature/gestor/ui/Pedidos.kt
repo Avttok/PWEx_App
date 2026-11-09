@@ -1,6 +1,7 @@
 package com.pwexpress.feature.gestor.ui
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
@@ -178,8 +179,9 @@ private fun JanelaPedido(p: PedidoG, empresa: String?, onFechar: () -> Unit) {
         }
         if (p.planejado && p.quando != null) Text("Para ${dataHora(p.quando)}", color = c.azul, fontWeight = FontWeight.SemiBold)
 
-        MapaPedidoG(p)
-        DetalhesPedidoG(p)
+        var focoP by remember(p.id) { mutableStateOf<com.pwexpress.core.mapa.FocoMapa?>(null) }
+        MapaPedidoG(p, foco = focoP)
+        DetalhesPedidoG(p) { la, lo -> focoP = com.pwexpress.core.mapa.FocoMapa(la, lo) }
 
         PwCartao(destaque = true) {
             p.orcamento?.let { OrcamentoG(it) } ?: TextoDica("Sem orçamento.")
@@ -385,7 +387,7 @@ private fun SituacaoRotaG(pedidoId: String, chave: String) {
 
 /** Mapa do pedido: coleta e entregas, o caminho da rota (quando já tem) e o motoboy ao vivo. */
 @Composable
-internal fun MapaPedidoG(p: PedidoG, altura: androidx.compose.ui.unit.Dp = 220.dp) {
+internal fun MapaPedidoG(p: PedidoG, altura: androidx.compose.ui.unit.Dp = 220.dp, foco: com.pwexpress.core.mapa.FocoMapa? = null) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
     val pontos = p.pontos.filter { it.lat != null && it.lng != null }
@@ -397,9 +399,11 @@ internal fun MapaPedidoG(p: PedidoG, altura: androidx.compose.ui.unit.Dp = 220.d
     val moto = rota?.motoboyId?.let { id -> dados.posicao(id)?.takeIf { it.lat != null && it.lng != null }?.let { pos ->
         com.pwexpress.core.mapa.MarcadorMapa(id, pos.lat!!, pos.lng!!, corHex(c.ouro), dados.membro(id)?.nome?.substringBefore(" ") ?: "Motoboy", foto = dados.membro(id)?.foto) } }
     val forma = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)
-    Box(Modifier.fillMaxWidth().height(altura).clip(forma).border(1.dp, c.borda, forma)) {
+    val trazer = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    androidx.compose.runtime.LaunchedEffect(foco) { if (foco != null) trazer.bringIntoView() }
+    Box(Modifier.fillMaxWidth().height(altura).clip(forma).border(1.dp, c.borda, forma).bringIntoViewRequester(trazer)) {
         com.pwexpress.core.mapa.PwMapa(paradas = pinos, rota = rota?.rota, minhaPosicao = null, marcadores = listOfNotNull(moto),
-            modifier = Modifier.fillMaxSize(), enquadrar = "${p.id}-${pinos.size}-${moto != null}")
+            modifier = Modifier.fillMaxSize(), enquadrar = "${p.id}-${pinos.size}-${moto != null}", focar = foco)
         if (rota != null) Row(Modifier.align(Alignment.TopStart).padding(10.dp)) {
             PwSelo("Rota ${rota.numeroExibicao}" + (rota.motoboyId?.let { " · ${dados.membro(it)?.nome?.substringBefore(" ") ?: ""}" } ?: ""), c.ouro, icone = PwIcones.Route)
         }
@@ -409,17 +413,18 @@ internal fun MapaPedidoG(p: PedidoG, altura: androidx.compose.ui.unit.Dp = 220.d
 
 /** Pontos numerados (como no mapa) com contato, instruções, itens de cada um e a entrega feita; itens com categoria e medidas; rotas. */
 @Composable
-private fun DetalhesPedidoG(p: PedidoG) {
+private fun DetalhesPedidoG(p: PedidoG, onFocar: (Double, Double) -> Unit = { _, _ -> }) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
     var categorias by remember { mutableStateOf<List<com.pwexpress.feature.gestor.data.CategoriaG>>(emptyList()) }
     androidx.compose.runtime.LaunchedEffect(Unit) { categorias = runCatching { Gestao.catalogoPedido().second }.getOrDefault(emptyList()) }
     PwCartao {
-        com.pwexpress.core.designsystem.PwRotulo("Pontos")
+        com.pwexpress.core.designsystem.PwRotulo("Pontos · toque para ver no mapa")
         Spacer(Modifier.size(6.dp))
         p.pontos.forEachIndexed { i, pt ->
             val itens = p.itens.filter { it.entregaId == pt.id || it.coletaId == pt.id }
-            Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
+            Row(Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(12.dp))
+                .clickable(enabled = pt.lat != null) { onFocar(pt.lat!!, pt.lng!!) }.padding(vertical = 5.dp), verticalAlignment = Alignment.Top) {
                 Box(Modifier.size(24.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (pt.coleta) c.ouro else c.texto), contentAlignment = Alignment.Center) {
                     Text("${i + 1}", color = if (pt.coleta) c.sobreOuro else c.fundo, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                 }

@@ -167,10 +167,13 @@ fun PwSegmentado(opcoes: List<Pair<String, ImageVector?>>, selecionado: Int, onS
     val c = Pw.cores
     val forma = RoundedCornerShape(14.dp)
     Row(modifier.fillMaxWidth().clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).padding(3.dp), horizontalArrangement = Arrangement.spacedBy(3.dp)) {
+        // abas só de ícone: a que tem nome ganha espaço para o texto caber inteiro
+        val misto = opcoes.any { it.first.isEmpty() } && opcoes.any { it.first.isNotEmpty() }
         opcoes.forEachIndexed { i, (rotulo, icone) ->
             val ativo = i == selecionado
+            val peso by androidx.compose.animation.core.animateFloatAsState(if (misto && rotulo.isNotEmpty()) 1f + rotulo.length * 0.32f else 1f, label = "peso-aba")
             Row(
-                Modifier.weight(1f).clip(RoundedCornerShape(11.dp)).then(if (ativo) Modifier.background(c.vidroForte) else Modifier)
+                Modifier.weight(peso).clip(RoundedCornerShape(11.dp)).then(if (ativo) Modifier.background(c.vidroForte) else Modifier)
                     .clickable { onSelecionar(i) }.padding(vertical = 10.dp, horizontal = 4.dp),
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically,
             ) {

@@ -128,6 +128,7 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
         corrida.paradas.map { PinoMapa(it.lat, it.lng, it.tipo == TipoParada.COLETA, it.id == corrida.paradaAtual?.id, it.status == StatusParada.CONCLUIDA) }
     }
 
+    var focoT by remember(corrida.id) { mutableStateOf<com.pwexpress.core.mapa.FocoMapa?>(null) }
     Column(modifier.fillMaxSize()) {
         // ---------------------------------------------------------- mapa
         Box(Modifier.fillMaxWidth().then(if (minimizado) Modifier.weight(1f) else Modifier.height(320.dp))) {
@@ -136,6 +137,7 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
                 rota = corrida.rotaPlanejada,
                 minhaPosicao = posicao?.let { it.lat to it.lng },
                 modifier = Modifier.fillMaxSize(),
+                focar = focoT,
             )
             // barra de vidro sobre o mapa: corrida + selo de teste à esquerda, valor à direita
             Row(
@@ -220,7 +222,8 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
                 PwRotulo("Trajeto")
                 Spacer(Modifier.height(6.dp))
                 corrida.paradas.forEach { p ->
-                    Row(Modifier.padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { focoT = com.pwexpress.core.mapa.FocoMapa(p.lat, p.lng) }.padding(vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
                         PwPonto(
                             when {
                                 p.status == StatusParada.CONCLUIDA -> c.verde

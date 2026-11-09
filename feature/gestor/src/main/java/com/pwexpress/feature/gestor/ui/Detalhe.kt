@@ -2,6 +2,8 @@ package com.pwexpress.feature.gestor.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -93,6 +95,7 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
         escopo.launch { bloco().onFailure { erro = it.message }.onSuccess { erro = null; Gestao.atualizar(); eventos = Gestao.eventos(id) }; ocupado = false }
     }
 
+    var focoC by remember(id) { mutableStateOf<com.pwexpress.core.mapa.FocoMapa?>(null) }
     PwPagina {
         Cabecalho(
             if (corrida != null) "Corrida ${corrida.numeroExibicao}" else "Corrida", onVoltar,
@@ -100,8 +103,10 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
         ) { if (corrida?.teste == true) Icon(PwIcones.FlaskConical, "Corrida de teste", tint = c.violeta, modifier = Modifier.size(20.dp)) }
         if (corrida == null) { if (!dados.carregado) PwCarregando() else PwErro("Essa corrida não existe mais (pode ter sido apagada)."); return@PwPagina }
 
-        Box(Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(22.dp))) {
-            PwMapa(
+        val trazerMapa = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+        androidx.compose.runtime.LaunchedEffect(focoC) { if (focoC != null) trazerMapa.bringIntoView() }
+        Box(Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(22.dp)).bringIntoViewRequester(trazerMapa)) {
+            PwMapa(focar = focoC,
                 paradas = corrida.paradas.map { PinoMapa(it.lat, it.lng, it.coleta, false, it.status == "concluida") },
                 rota = corrida.rota, minhaPosicao = dados.posicao(corrida.motoboyId)?.takeIf { corrida.ativa }?.let { p -> p.lat?.let { la -> p.lng?.let { lo -> la to lo } } },
                 modifier = Modifier.fillMaxWidth().height(220.dp),
@@ -182,10 +187,10 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
         }
 
         PwCartao {
-            PwRotulo("Paradas")
+            PwRotulo("Paradas · toque para ver no mapa")
             corrida.paradas.forEach { p ->
                 Espaco(8)
-                Row(verticalAlignment = Alignment.Top) {
+                Row(Modifier.clip(RoundedCornerShape(12.dp)).clickable { focoC = com.pwexpress.core.mapa.FocoMapa(p.lat, p.lng) }, verticalAlignment = Alignment.Top) {
                     Box(Modifier.size(26.dp).clip(RoundedCornerShape(99.dp)).then(Modifier), contentAlignment = Alignment.Center) {
                         Icon(if (p.coleta) PwIcones.ArrowUpFromLine else PwIcones.ArrowDownToLine, null, tint = if (p.coleta) c.ouro else c.texto, modifier = Modifier.size(18.dp))
                     }

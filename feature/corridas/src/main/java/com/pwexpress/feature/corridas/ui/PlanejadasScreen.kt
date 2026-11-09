@@ -1,5 +1,7 @@
 package com.pwexpress.feature.corridas.ui
 
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -287,10 +289,13 @@ private fun DetalheRotaQuadro(r: Corrida, agora: Long, ocupado: Boolean, onFecha
             )
         },
     ) {
-        Box(Modifier.fillMaxWidth().height(240.dp).clip(RoundedCornerShape(20.dp))) {
+        var focoR by remember(r.id) { mutableStateOf<com.pwexpress.core.mapa.FocoMapa?>(null) }
+        val trazer = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+        LaunchedEffect(focoR) { if (focoR != null) trazer.bringIntoView() }
+        Box(Modifier.fillMaxWidth().height(240.dp).clip(RoundedCornerShape(20.dp)).bringIntoViewRequester(trazer)) {
             com.pwexpress.core.mapa.PwMapa(
                 paradas = r.paradas.map { com.pwexpress.core.mapa.PinoMapa(it.lat, it.lng, it.tipo == TipoParada.COLETA, false, false) },
-                rota = r.rotaPlanejada, minhaPosicao = null, modifier = Modifier.fillMaxWidth().height(240.dp), enquadrar = r.id,
+                rota = r.rotaPlanejada, minhaPosicao = null, modifier = Modifier.fillMaxWidth().height(240.dp), enquadrar = r.id, focar = focoR,
             )
         }
         androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -315,7 +320,8 @@ private fun DetalheRotaQuadro(r: Corrida, agora: Long, ocupado: Boolean, onFecha
         r.paradas.forEachIndexed { i, p ->
             val coleta = p.tipo == TipoParada.COLETA
             val forma = RoundedCornerShape(16.dp)
-            Row(Modifier.fillMaxWidth().clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).padding(12.dp), verticalAlignment = Alignment.Top) {
+            Row(Modifier.fillMaxWidth().clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma)
+                .clickable { focoR = com.pwexpress.core.mapa.FocoMapa(p.lat, p.lng) }.padding(12.dp), verticalAlignment = Alignment.Top) {
                 Box(Modifier.size(26.dp).clip(androidx.compose.foundation.shape.CircleShape).background(if (coleta) c.gradOuro else androidx.compose.ui.graphics.SolidColor(c.texto)), contentAlignment = Alignment.Center) {
                     Text("${i + 1}", color = if (coleta) c.sobreOuro else c.fundo, fontWeight = FontWeight.Black, fontSize = 12.sp)
                 }

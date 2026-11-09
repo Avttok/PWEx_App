@@ -43,6 +43,9 @@ import org.maplibre.geojson.LineString
 import org.maplibre.geojson.Point
 
 /** Um ponto no mapa (parada da corrida). */
+/** Pedido para o mapa centralizar num ponto (o [vez] muda a cada toque, para repetir no mesmo ponto). */
+data class FocoMapa(val lat: Double, val lng: Double, val vez: Long = System.nanoTime())
+
 data class PinoMapa(val lat: Double, val lng: Double, val coleta: Boolean, val atual: Boolean, val concluida: Boolean)
 
 /** Marcador livre (ex.: motoboy no mapa do gestor): cor em hex e rótulo curto. */
@@ -137,6 +140,12 @@ fun PwMapa(
     margemBaixo: Int = 0,
     /** Ao mudar, a câmera desliza até este ponto (mantendo o zoom). */
     irPara: Pair<Double, Double>? = null,
+    /** Toque num endereço da lista: centraliza e aproxima nele (mude o [FocoMapa.vez] para repetir). */
+    focar: FocoMapa? = null,
+    /** Sem rota pronta, traça sozinho o caminho pelas ruas entre as paradas (na ordem). */
+    caminhoAuto: Boolean = true,
+    /** Vários caminhos ao mesmo tempo (ex.: todas as rotas ativas), além de [rota]. */
+    rotas: List<String> = emptyList(),
     /** Círculo (centro, raio em metros): o raio de disponibilidade do motoboy. */
     circulo: Pair<Pair<Double, Double>, Double>? = null,
     /** Percursos (registros) em degradê, do início ao mais recente. */
@@ -241,6 +250,12 @@ fun PwMapa(
         val p = irPara ?: return@LaunchedEffect
         m.easeCamera(CameraUpdateFactory.newLatLng(LatLng(p.first, p.second)), 400)
     }
+    LaunchedEffect(mapa, focar) {
+        val m = mapa ?: return@LaunchedEffect
+        val f = focar ?: return@LaunchedEffect
+        val zoom = maxOf(m.cameraPosition.zoom, 15.5)
+        m.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(f.lat, f.lng), zoom), 600)
+    }
 
     // estabelecimentos: liga/desliga
     LaunchedEffect(estilo, comLocais) {
@@ -299,7 +314,13 @@ fun PwMapa(
         )
     }
 
-    LaunchedEffect(estilo, paradas, rota, minhaPosicao, marcadores, seguir, trilhas, enquadrar, fotos.size) {
+    // rota que vem pronta ou, sem ela, o caminho calculado entre as paradas
+    val chaveParadas = paradas.filter { coordenadaValida(it.lat, it.lng) }.joinToString("|") { "${it.lat},${it.lng}" }
+    val caminho by androidx.compose.runtime.produceState<String?>(null, rota, chaveParadas, caminhoAuto) {
+        value = if (rota != null || !caminhoAuto || rotas.isNotEmpty()) null else Caminho.entre(paradas.filter { coordenadaValida(it.lat, it.lng) }.map { it.lat to it.lng })
+    }
+    val rotaDesenhada = rota ?: caminho
+    LaunchedEffect(estilo, paradas, rotaDesenhada, rotas, minhaPosicao, marcadores, seguir, trilhas, enquadrar, fotos.size) {
         val s = estilo ?: return@LaunchedEffect
         val m = mapa ?: return@LaunchedEffect
         if (enquadrar != ultimoEnquadrar) { ultimoEnquadrar = enquadrar; enquadrou = false }
@@ -307,12 +328,9 @@ fun PwMapa(
         val pinos = paradas.filter { coordenadaValida(it.lat, it.lng) }
         val eu = minhaPosicao?.takeIf { coordenadaValida(it.first, it.second) }
 
-        val linha = rota?.let { decodificarPolyline(it) }.orEmpty()
+        val linhas = (listOfNotNull(rotaDesenhada) + rotas).map { decodificarPolyline(it) }.filter { it.size >= 2 }
         (s.getSource("rota") as? GeoJsonSource)?.setGeoJson(
-            FeatureCollection.fromFeatures(
-                if (linha.size >= 2) listOf(Feature.fromGeometry(LineString.fromLngLats(linha.map { Point.fromLngLat(it.second, it.first) })))
-                else emptyList(),
-            ),
+            FeatureCollection.fromFeatures(linhas.map { l -> Feature.fromGeometry(LineString.fromLngLats(l.map { Point.fromLngLat(it.second, it.first) })) }),
         )
         (s.getSource("trilhas") as? GeoJsonSource)?.setGeoJson(
             FeatureCollection.fromFeatures(

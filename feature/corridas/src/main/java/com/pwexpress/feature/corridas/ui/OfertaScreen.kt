@@ -127,6 +127,7 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
     val agendada = corrida.agendadaPara?.takeIf { it > System.currentTimeMillis() }
     val pouco = restante < 10_000
     var todasParadas by remember(oferta.id) { mutableStateOf(corrida.paradas.size <= 3) }
+    var foco by remember(oferta.id) { mutableStateOf<com.pwexpress.core.mapa.FocoMapa?>(null) }
 
     BoxWithConstraints(
         modifier
@@ -138,7 +139,7 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
         val alturaPainel = maxHeight * 0.56f
         // ------------------------------------------------ mapa em tela cheia, atrás de tudo
         PwMapa(paradas = pinos, rota = corrida.rotaPlanejada, minhaPosicao = posicao, modifier = Modifier.fillMaxSize(),
-            enquadrar = "${corrida.id}-${posicao != null}", margemBaixo = alturaPainel.value.toInt() + 10)
+            enquadrar = "${corrida.id}-${posicao != null}", margemBaixo = alturaPainel.value.toInt() + 10, focar = foco)
         Box(Modifier.fillMaxWidth().height(150.dp).background(Brush.verticalGradient(listOf(c.fundo, c.fundo.copy(alpha = 0.7f), Color.Transparent))))
 
         // ------------------------------------------------ topo: pílula de vidro + orbe do tempo
@@ -226,7 +227,7 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
                     visiveis.forEachIndexed { i, p ->
                         val coleta = p.tipo == TipoParada.COLETA
                         val n = corrida.paradas.indexOf(p)
-                        Row(verticalAlignment = Alignment.Top) {
+                        Row(Modifier.clip(RoundedCornerShape(12.dp)).clickable { foco = com.pwexpress.core.mapa.FocoMapa(p.lat, p.lng) }, verticalAlignment = Alignment.Top) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                 Box(Modifier.size(28.dp).clip(CircleShape).background(if (coleta) c.gradOuro else Brush.linearGradient(listOf(c.vidroForte, c.vidroForte)))
                                     .border(if (coleta) 0.dp else 1.5.dp, c.bordaForte, CircleShape), contentAlignment = Alignment.Center) {

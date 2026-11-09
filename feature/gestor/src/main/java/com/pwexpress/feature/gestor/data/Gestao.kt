@@ -46,6 +46,8 @@ object Gestao {
         val config: Map<String, JsonElement> = emptyMap(),
         /** Trilhas das últimas 12 h por motoboy (como no mapa do site). */
         val trilhas: Map<String, List<PontoTrilha>> = emptyMap(),
+        /** Caminho pelas ruas de cada registro das trilhas (chave "motoboy|inicioMs"). */
+        val ajustesTrilha: Map<String, com.pwexpress.core.mapa.PercursosServidor.Ajuste> = emptyMap(),
         /** Logins de cliente por cadastro (empresa_id → contas). */
         val acessosCliente: Map<String, List<MembroG>> = emptyMap(),
         /** Pedidos dos últimos 30 dias (os "para revisar" ficam no topo da aba Pedidos). */
@@ -91,10 +93,13 @@ object Gestao {
                 ultimoTeste = teste
                 val trilha = if (voltas++ % 5 == 0 || !_dados.value.carregado || trocouModo) async {
                     val desde12h = Instant.now().minusSeconds(12L * 3600).toString()
-                    runCatching {
+                    // pelo site: todos os pings (sem o corte de 1000) e o caminho já casado com as ruas
+                    com.pwexpress.core.mapa.PercursosServidor.buscar(Instant.parse(desde12h), Instant.now().plusSeconds(600), teste = teste)?.let { r ->
+                        r.pings.groupBy({ it.motoboy }, { PontoTrilha(null, it.ping.status, it.ping.lat, it.ping.lng, it.ping.quando, it.ping.corridaId) }) to r.ajustes
+                    } ?: runCatching {
                         rpc.rest("GET", "/rest/v1/localizacoes?select=motoboy_id,sessao_id,status,lat,lng,registrado_em,corrida_id&teste=eq.$teste&registrado_em=gte.${enc(desde12h)}&order=registrado_em.asc&limit=8000").exigirOk().lista()
                             .mapNotNull { o -> val la = o.dbl("lat"); val lo = o.dbl("lng"); if (la == null || lo == null) null else o.str("motoboy_id")!! to PontoTrilha(o.str("sessao_id"), o.str("status") ?: "", la, lo, iso(o.str("registrado_em")) ?: 0, o.str("corrida_id")) }
-                            .groupBy({ it.first }, { it.second })
+                            .groupBy({ it.first }, { it.second }) to emptyMap<String, com.pwexpress.core.mapa.PercursosServidor.Ajuste>()
                     }.getOrNull()
                 } else null
                 val empresas = async { rpc.rest("GET", "/rest/v1/empresas?select=*&order=nome").exigirOk().lista() }
@@ -108,6 +113,7 @@ object Gestao {
                     }.getOrDefault(_dados.value.pedidos)
                 }
                 val icones = async { runCatching { rpc.rest("GET", "/rest/v1/perfis?select=id,icone&icone=not.is.null").exigirOk().lista().associate { it.str("id")!! to it.str("icone")!! } }.getOrDefault(emptyMap()) }
+                val trilhaR = trilha?.await()
                 val todos = equipe.await().map { it.paraMembroG() }
                 val vinc = vinculos.await()
                 _dados.value = Dados(
@@ -119,7 +125,8 @@ object Gestao {
                     empresas = empresas.await().map { it.paraEmpresaG() },
                     favoritos = fav.await().groupBy({ it.str("empresa_id")!! }, { it.str("motoboy_id")!! }),
                     config = cfg.await().associate { it.str("chave")!! to (it["valor"] ?: JsonNull) },
-                    trilhas = trilha?.await() ?: _dados.value.trilhas,
+                    trilhas = trilhaR?.first ?: _dados.value.trilhas,
+                    ajustesTrilha = trilhaR?.second ?: _dados.value.ajustesTrilha,
                     pedidos = pedidos.await(),
                     icones = icones.await(),
                     carregado = true,

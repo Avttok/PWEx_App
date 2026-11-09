@@ -106,10 +106,18 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
         val trazerMapa = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
         androidx.compose.runtime.LaunchedEffect(focoC) { if (focoC != null) trazerMapa.bringIntoView() }
         Box(Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(22.dp)).bringIntoViewRequester(trazerMapa)) {
+            val posMoto = dados.posicao(corrida.motoboyId)?.takeIf { corrida.ativa }?.let { p -> p.lat?.let { la -> p.lng?.let { lo -> la to lo } } }
+            val feito = com.pwexpress.core.mapa.rememberTrilhaCorrida(corrida.id.takeIf { corrida.motoboyId != null }, corrida.ativa)
             PwMapa(focar = focoC,
                 paradas = corrida.paradas.map { PinoMapa(it.lat, it.lng, it.coleta, false, it.status == "concluida") },
-                rota = corrida.rota, minhaPosicao = dados.posicao(corrida.motoboyId)?.takeIf { corrida.ativa }?.let { p -> p.lat?.let { la -> p.lng?.let { lo -> la to lo } } },
+                rota = corrida.rota, minhaPosicao = null,
+                marcadores = listOfNotNull(posMoto?.let { (la, lo) ->
+                    val mb = dados.membro(corrida.motoboyId)
+                    com.pwexpress.core.mapa.MarcadorMapa(corrida.motoboyId ?: "moto", la, lo, corHex(c.ouro), mb?.nome?.substringBefore(" ") ?: "Motoboy", foto = mb?.foto, prioridade = 2)
+                }),
                 modifier = Modifier.fillMaxWidth().height(220.dp),
+                trilhas = if (feito.size >= 2) listOf(com.pwexpress.core.mapa.TrilhaMapa(feito + listOfNotNull(posMoto))) else emptyList(),
+                restanteDe = posMoto,
             )
         }
 

@@ -1,4 +1,5 @@
-• Tour guiado: abre na primeira vez e pode ser revisto em Ver o tour, no menu da foto
-• Central de ajuda no menu da foto
-• Dicas (?) nas opções que confundem: despacho, peças do lego, ajustes da folha, raio
-• Avisos com texto longo ficam mais tempo na tela
+• Percursos guardados: escolha qualquer dia (Hoje, Ontem, Anteontem ou Outro dia)
+• O traçado do percurso segue as ruas, ligando os pontos que o celular enviou
+• Mapas das corridas e pedidos: linha cheia = feito, tracejada = o que falta, saindo do motoboy
+• Sua foto aparece no mapa no lugar da bolinha
+• Disponíveis e em corrida aparecem por cima dos offline, no mapa e nas listas

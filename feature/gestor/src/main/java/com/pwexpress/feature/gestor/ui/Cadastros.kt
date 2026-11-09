@@ -411,7 +411,9 @@ fun EquipeG(onAbrir: (String) -> Unit) {
         "Todos" to { _ -> true }, "Motoboys" to { m -> m.motoboy }, "Online" to { m -> online(m) }, "Offline" to { m -> m.motoboy && !online(m) },
         "Gestores" to { m -> m.gestor || m.dev }, "Teste" to { m -> m.modoTeste }, "Bloqueados" to { m -> m.bloqueado },
     )
+    // em corrida e disponíveis primeiro, offline por último (a ordem de antes vale dentro de cada grupo)
     val lista = dados.equipe.filter { m -> filtros[tipo].second(m) && combinaBusca(busca, m.nome, m.email) }
+        .sortedBy { m -> when (dados.posicao(m.id)?.status) { "em_corrida" -> 0; "disponivel" -> 1; else -> 2 } }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 190.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             item { TituloTela("Equipe", if (dados.equipe.size == 1) "1 pessoa" else "${dados.equipe.size} pessoas", PwIcones.Users) }
@@ -580,29 +582,48 @@ fun MembroG(id: String, meuId: String?, onVoltar: () -> Unit) {
     }
 }
 
-/** Percursos das últimas 12 h do motoboy, separados em registros (procurando / corrida). */
+/** Percursos do motoboy por dia, separados em registros (procurando / corrida), traçados pelas ruas. */
 @Composable
 private fun PercursosMembroG(id: String, teste: Boolean) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
-    val regs = registrosDe(dados, id)
-    var destaque by remember { mutableStateOf<Int?>(null) }
+    var dia by remember { mutableIntStateOf(0) }
+    var doServidor by remember(id) { mutableStateOf<List<com.pwexpress.core.mapa.RegistroPercurso>?>(null) }
+    var carregando by remember { mutableStateOf(true) }
+    LaunchedEffect(id, dia, teste) {
+        carregando = true; doServidor = null
+        val zona = java.time.ZoneId.systemDefault()
+        val ini = java.time.LocalDate.now(zona).minusDays(dia.toLong()).atStartOfDay(zona).toInstant()
+        var tentativas = 0
+        while (true) {
+            val r = com.pwexpress.core.mapa.PercursosServidor.buscar(ini, ini.plusSeconds(86_400), id, teste) ?: break
+            doServidor = r.registros(id); carregando = false
+            if (!r.parcial || tentativas++ >= 3) break
+            kotlinx.coroutines.delay(4000)
+        }
+        carregando = false
+    }
+    // site fora do ar: as últimas 12 h que o app já tem (linha reta entre os pings)
+    val regs = doServidor ?: if (dia == 0 && !carregando) registrosDe(dados, id) else emptyList()
+    var destaque by remember(dia) { mutableStateOf<Int?>(null) }
     var chave by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(id) { chave = Gestao.chavesPix()[id] }
     val forma = RoundedCornerShape(20.dp)
     Box(Modifier.fillMaxWidth().height(300.dp).clip(forma).border(1.dp, c.borda, forma)) {
         PwMapa(
             paradas = emptyList(), rota = null, minhaPosicao = null, modifier = Modifier.fillMaxWidth().height(300.dp),
-            percursos = regs.mapIndexed { i, r -> com.pwexpress.core.mapa.PercursoMapa(r.pontos.map { it.lat to it.lng }, destaque = destaque == i, apagado = destaque != null && destaque != i) },
-            percursoTeste = teste, enquadrar = "$id-${regs.size}-$destaque",
+            percursos = regs.mapIndexed { i, r -> com.pwexpress.core.mapa.PercursoMapa.de(r, destaque = destaque == i, apagado = destaque != null && destaque != i) },
+            percursoTeste = teste, enquadrar = "$id-$dia-${regs.size}-$destaque",
             marcadores = dados.posicao(id)?.takeIf { coordenadaValida(it.lat, it.lng) }?.let { p -> listOf(MarcadorMapa(id, p.lat!!, p.lng!!, String.format("#%06X", 0xFFFFFF and corMotoboy(p.status, c).toArgb()), dados.membro(id)?.nome?.substringBefore(" ").orEmpty(), foto = dados.membro(id)?.foto)) }.orEmpty(),
         )
     }
+    com.pwexpress.core.mapa.SeletorDia(dia, { dia = it })
     LegendaPercurso(teste)
     PwCartao {
-        PwRotulo("Registros · últimas 12 h")
+        PwRotulo("Registros do dia")
         Espaco(6)
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { ListaRegistros(regs, destaque, { destaque = if (destaque == it) null else it }, dados) }
+        if (carregando && regs.isEmpty()) PwCarregando(texto = "Traçando os percursos pelas ruas…")
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { ListaRegistros(regs, destaque, { destaque = if (destaque == it) null else it }, dados, vazio = if (carregando) "" else "Nenhum percurso neste dia.") }
         Espaco(8)
         TextoDica("Total: ${String.format(java.util.Locale("pt", "BR"), "%.1f km", regs.sumOf { it.metros } / 1000)} · ${regs.count { it.corrida }} em corrida · ${regs.count { !it.corrida }} procurando")
     }

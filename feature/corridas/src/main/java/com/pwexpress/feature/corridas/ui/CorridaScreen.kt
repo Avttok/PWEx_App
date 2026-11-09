@@ -132,12 +132,17 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
     Column(modifier.fillMaxSize()) {
         // ---------------------------------------------------------- mapa
         Box(Modifier.fillMaxWidth().then(if (minimizado) Modifier.weight(1f) else Modifier.height(320.dp))) {
+            // feito (pelas ruas, do servidor) + onde estou agora; a fazer: daqui até as paradas que faltam
+            val feito = com.pwexpress.core.mapa.rememberTrilhaCorrida(corrida.id, ativa = true)
+            val eu = posicao?.let { it.lat to it.lng }
             PwMapa(
                 paradas = pinos,
                 rota = corrida.rotaPlanejada,
-                minhaPosicao = posicao?.let { it.lat to it.lng },
+                minhaPosicao = eu,
                 modifier = Modifier.fillMaxSize(),
                 focar = focoT,
+                trilhas = if (feito.size >= 2) listOf(com.pwexpress.core.mapa.TrilhaMapa(feito + listOfNotNull(eu))) else emptyList(),
+                restanteDe = eu,
             )
             // barra de vidro sobre o mapa: corrida + selo de teste à esquerda, valor à direita
             Row(

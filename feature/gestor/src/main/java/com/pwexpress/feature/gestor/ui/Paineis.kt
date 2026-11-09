@@ -155,7 +155,10 @@ private fun semSinal(p: PosicaoG?, agora: Long): Boolean {
 
 /** Registros (procurando / corrida) de um motoboy a partir dos pings das últimas 12 h. */
 internal fun registrosDe(dados: Gestao.Dados, id: String): List<com.pwexpress.core.mapa.RegistroPercurso> =
-    com.pwexpress.core.mapa.separarRegistros(dados.trilhas[id].orEmpty().map { com.pwexpress.core.mapa.PingMapa(it.lat, it.lng, it.status, it.corridaId, it.quando) })
+    com.pwexpress.core.mapa.aplicarAjustes(
+        com.pwexpress.core.mapa.separarRegistros(dados.trilhas[id].orEmpty().map { com.pwexpress.core.mapa.PingMapa(it.lat, it.lng, it.status, it.corridaId, it.quando) }),
+        id, dados.ajustesTrilha,
+    )
 
 private enum class Calor(val rotulo: String) { DESLIGADO("Sem calor"), PEDIDOS("Pedidos"), PINGS("Pings") }
 
@@ -199,14 +202,15 @@ fun MapaG(onCorrida: (String) -> Unit) {
         if (!coordenadaValida(p.lat, p.lng)) return@mapNotNull null
         val op = opacidadeNoMapa(p.status, p.posicaoEm, someH, esmaecer, agora) ?: return@mapNotNull null
         MarcadorMapa(m.id, p.lat!!, p.lng!!, corHex(corMotoboyMapa(p.status, p.modoTeste || m.modoTeste, c)), m.nome.substringBefore(" "), foto = m.foto,
+            prioridade = when (p.status) { "offline" -> 0; "disponivel", "em_corrida" -> 2; else -> 1 },
             opacidade = op, teste = p.modoTeste || m.modoTeste)
     }
     // selecionado: todos os registros do dia; os outros: só o registro atual (se estiver em serviço)
     val regSel = seguindo?.let { registrosDe(dados, it) }.orEmpty()
     val percursos = if (!comTrilhas) emptyList() else motoboys.flatMap { m ->
-        if (m.id == seguindo) regSel.mapIndexed { i, r -> com.pwexpress.core.mapa.PercursoMapa(r.pontos.map { it.lat to it.lng }, destaque = destaque == i, apagado = destaque != null && destaque != i) }
+        if (m.id == seguindo) regSel.mapIndexed { i, r -> com.pwexpress.core.mapa.PercursoMapa.de(r, destaque = destaque == i, apagado = destaque != null && destaque != i) }
         else if (st(m.id) == "offline") emptyList()
-        else registrosDe(dados, m.id).lastOrNull()?.let { r -> listOf(com.pwexpress.core.mapa.PercursoMapa(r.pontos.map { it.lat to it.lng }, apagado = seguindo != null)) }.orEmpty()
+        else registrosDe(dados, m.id).lastOrNull()?.let { r -> listOf(com.pwexpress.core.mapa.PercursoMapa.de(r, apagado = seguindo != null)) }.orEmpty()
     }
     val pontosCalor = when (calor) {
         Calor.DESLIGADO -> null
@@ -335,9 +339,9 @@ internal fun LegendaPercurso(teste: Boolean) {
 
 /** Registros do dia (procurando corrida / em corrida); tocar destaca no mapa. */
 @Composable
-internal fun ListaRegistros(regs: List<com.pwexpress.core.mapa.RegistroPercurso>, destaque: Int?, onEscolher: (Int) -> Unit, dados: Gestao.Dados) {
+internal fun ListaRegistros(regs: List<com.pwexpress.core.mapa.RegistroPercurso>, destaque: Int?, onEscolher: (Int) -> Unit, dados: Gestao.Dados, vazio: String = "Nenhum percurso nas últimas 12 h.") {
     val c = Pw.cores
-    if (regs.isEmpty()) { TextoDica("Nenhum percurso nas últimas 12 h."); return }
+    if (regs.isEmpty()) { if (vazio.isNotEmpty()) TextoDica(vazio); return }
     val fmt = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
     fun h(ms: Long) = java.time.Instant.ofEpochMilli(ms).atZone(java.time.ZoneId.systemDefault()).format(fmt)
     regs.withIndex().reversed().forEach { (i, r) ->
@@ -389,7 +393,8 @@ fun CorridasG(onAbrir: (String) -> Unit, onNova: () -> Unit) {
     val pinos = ativas.flatMap { cor -> cor.paradas.map { PinoMapa(it.lat, it.lng, it.coleta, false, it.status == "concluida") } }
     val online = dados.equipe.filter { it.motoboy && it.modoTeste == teste }.mapNotNull { m ->
         val p = dados.posicao(m.id)?.takeIf { it.status != "offline" && coordenadaValida(it.lat, it.lng) } ?: return@mapNotNull null
-        MarcadorMapa(m.id, p.lat!!, p.lng!!, corHex(corMotoboyMapa(p.status, m.modoTeste, c)), m.nome.substringBefore(" "), foto = m.foto, teste = m.modoTeste)
+        MarcadorMapa(m.id, p.lat!!, p.lng!!, corHex(corMotoboyMapa(p.status, m.modoTeste, c)), m.nome.substringBefore(" "), foto = m.foto, teste = m.modoTeste,
+            prioridade = when (p.status) { "offline" -> 0; "disponivel", "em_corrida" -> 2; else -> 1 })
     }
 
     TelaComMapa(

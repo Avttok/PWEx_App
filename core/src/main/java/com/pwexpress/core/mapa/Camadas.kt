@@ -32,11 +32,17 @@ data class PingMapa(val lat: Double, val lng: Double, val status: String, val co
  * Registro = um trecho contínuo: "procurando" (disponível até aceitar) ou "corrida" (a corrida inteira).
  * Começa de novo ao mudar de status, de corrida ou depois de 20 min sem ping (igual ao site).
  */
-data class RegistroPercurso(val corrida: Boolean, val corridaId: String?, val pontos: List<PingMapa>) {
+data class RegistroPercurso(
+    val corrida: Boolean, val corridaId: String?, val pontos: List<PingMapa>,
+    /** Caminho pelas ruas (lat, lng), quando o servidor conseguiu casar os pings com o mapa. */
+    val caminho: List<Pair<Double, Double>>? = null,
+) {
     val inicio get() = pontos.first().quando
     val fim get() = pontos.last().quando
-    /** Distância percorrida (m). */
-    val metros: Double get() = pontos.zipWithNext { a, b -> distanciaM(a.lat, a.lng, b.lat, b.lng) }.sum()
+    /** Linha desenhada: pelas ruas, ou os pings. */
+    val linha: List<Pair<Double, Double>> get() = caminho ?: pontos.map { it.lat to it.lng }
+    /** Distância percorrida (m), pelo caminho das ruas quando houver. */
+    val metros: Double get() = linha.zipWithNext { a, b -> distanciaM(a.first, a.second, b.first, b.second) }.sum()
 }
 
 private const val LACUNA_MS = 20 * 60_000L
@@ -67,7 +73,16 @@ fun distanciaM(la1: Double, lo1: Double, la2: Double, lo2: Double): Double {
 }
 
 /** Percurso desenhado: pontos (lat, lng) do mais antigo ao mais recente. */
-data class PercursoMapa(val pontos: List<Pair<Double, Double>>, val destaque: Boolean = false, val apagado: Boolean = false)
+data class PercursoMapa(
+    val pontos: List<Pair<Double, Double>>, val destaque: Boolean = false, val apagado: Boolean = false,
+    /** Linha pelas ruas (se nula, liga os pings). Os pings continuam nos [pontos]. */
+    val linha: List<Pair<Double, Double>>? = null,
+) {
+    companion object {
+        fun de(r: RegistroPercurso, destaque: Boolean = false, apagado: Boolean = false) =
+            PercursoMapa(r.pontos.map { it.lat to it.lng }, destaque, apagado, r.caminho)
+    }
+}
 
 /** Do início ao mais recente. Normal: vermelho → amarelo → verde. Teste: cinza → roxo → azul. */
 fun coresPercurso(teste: Boolean): List<Int> =

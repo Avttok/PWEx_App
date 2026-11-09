@@ -401,13 +401,17 @@ internal fun MapaPedidoG(p: PedidoG, altura: androidx.compose.ui.unit.Dp = 220.d
     val rota = dados.corridas.firstOrNull { cor -> cor.teste == p.teste && cor.status != "cancelada" && cor.criadaEm >= p.criadoEm - 60_000 &&
         cor.paradas.any { pa -> p.pontos.any { it.endereco == pa.endereco } } }
     val moto = rota?.motoboyId?.let { id -> dados.posicao(id)?.takeIf { it.lat != null && it.lng != null }?.let { pos ->
-        com.pwexpress.core.mapa.MarcadorMapa(id, pos.lat!!, pos.lng!!, corHex(c.ouro), dados.membro(id)?.nome?.substringBefore(" ") ?: "Motoboy", foto = dados.membro(id)?.foto) } }
+        com.pwexpress.core.mapa.MarcadorMapa(id, pos.lat!!, pos.lng!!, corHex(c.ouro), dados.membro(id)?.nome?.substringBefore(" ") ?: "Motoboy", foto = dados.membro(id)?.foto, prioridade = 2) } }
     val forma = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)
     val trazer = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
     androidx.compose.runtime.LaunchedEffect(foco) { if (foco != null) trazer.bringIntoView() }
     Box(Modifier.fillMaxWidth().height(altura).clip(forma).border(1.dp, c.borda, forma).bringIntoViewRequester(trazer)) {
+        val feito = com.pwexpress.core.mapa.rememberTrilhaCorrida(rota?.takeIf { it.motoboyId != null }?.id, rota?.ativa == true)
+        val posMoto = moto?.takeIf { rota?.ativa == true }?.let { it.lat to it.lng }
         com.pwexpress.core.mapa.PwMapa(paradas = pinos, rota = rota?.rota, minhaPosicao = null, marcadores = listOfNotNull(moto),
-            modifier = Modifier.fillMaxSize(), enquadrar = "${p.id}-${pinos.size}-${moto != null}", focar = foco)
+            modifier = Modifier.fillMaxSize(), enquadrar = "${p.id}-${pinos.size}-${moto != null}", focar = foco,
+            trilhas = if (feito.size >= 2) listOf(com.pwexpress.core.mapa.TrilhaMapa(feito + listOfNotNull(posMoto))) else emptyList(),
+            restanteDe = posMoto)
         if (rota != null) Row(Modifier.align(Alignment.TopStart).padding(10.dp)) {
             PwSelo("Rota ${rota.numeroExibicao}" + (rota.motoboyId?.let { " · ${dados.membro(it)?.nome?.substringBefore(" ") ?: ""}" } ?: ""), c.ouro, icone = PwIcones.Route)
         }

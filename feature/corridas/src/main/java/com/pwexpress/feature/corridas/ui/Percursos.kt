@@ -36,7 +36,6 @@ import com.pwexpress.core.PwCore
 import com.pwexpress.core.designsystem.Pw
 import com.pwexpress.core.designsystem.PwCarregando
 import com.pwexpress.core.designsystem.PwCartao
-import com.pwexpress.core.designsystem.PwFiltros
 import com.pwexpress.core.designsystem.PwIcones
 import com.pwexpress.core.designsystem.PwRotulo
 import com.pwexpress.core.designsystem.TemaApp
@@ -72,6 +71,16 @@ fun MeusPercursos() {
         val zona = ZoneId.systemDefault()
         val ini = LocalDate.now(zona).minusDays(dia.toLong()).atStartOfDay(zona).toInstant()
         val fim = ini.plusSeconds(86_400)
+        // pelo site: todos os pings do dia e o caminho já casado com as ruas
+        var tentativas = 0
+        while (true) {
+            val r = com.pwexpress.core.mapa.PercursosServidor.buscar(ini, fim, id, teste) ?: break
+            regs = r.registros(id)
+            if (!r.parcial || tentativas++ >= 3) return@LaunchedEffect
+            kotlinx.coroutines.delay(4000) // o mapa ainda está traçando algum trecho: busca de novo
+        }
+        if (regs != null) return@LaunchedEffect
+        // site fora do ar: pings direto do banco (linha reta entre eles)
         regs = runCatching {
             val r = PwCore.rpc.rest("GET", "/rest/v1/localizacoes?select=lat,lng,status,corrida_id,registrado_em&motoboy_id=eq.$id&teste=eq.$teste&registrado_em=gte.$ini&registrado_em=lt.$fim&order=registrado_em.asc&limit=8000")
             if (!r.ok) emptyList() else separarRegistros(Json.parseToJsonElement(r.corpo).jsonArray.mapNotNull { e ->
@@ -86,14 +95,14 @@ fun MeusPercursos() {
     PwCartao {
         PwRotulo("Meus percursos")
         Spacer(Modifier.height(8.dp))
-        PwFiltros(listOf("Hoje" to 0, "Ontem" to 0, "Anteontem" to 0), dia, { dia = it })
+        com.pwexpress.core.mapa.SeletorDia(dia, { dia = it })
         Spacer(Modifier.height(10.dp))
         val r = regs
         val forma = RoundedCornerShape(18.dp)
         Box(Modifier.fillMaxWidth().height(240.dp).clip(forma).border(1.dp, c.borda, forma)) {
             PwMapa(
                 paradas = emptyList(), rota = null, minhaPosicao = null, modifier = Modifier.fillMaxWidth().height(240.dp),
-                percursos = r.orEmpty().mapIndexed { i, g -> PercursoMapa(g.pontos.map { it.lat to it.lng }, destaque = destaque == i, apagado = destaque != null && destaque != i) },
+                percursos = r.orEmpty().mapIndexed { i, g -> PercursoMapa.de(g, destaque = destaque == i, apagado = destaque != null && destaque != i) },
                 percursoTeste = teste, enquadrar = "$dia-${r?.size}-$destaque",
                 marcadores = r.orEmpty().flatMap { it.pontos }.let { pts -> listOfNotNull(pts.firstOrNull()?.let { com.pwexpress.core.mapa.MarcadorMapa("ini", it.lat, it.lng, "#FFFFFF", "Início", pino = false) }) },
             )

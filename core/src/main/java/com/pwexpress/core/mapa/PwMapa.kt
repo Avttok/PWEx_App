@@ -17,6 +17,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -59,6 +66,8 @@ data class MarcadorMapa(
     val opacidade: Float = 1f,
     /** Modo teste: selo de frasco e anel violeta no lugar da moto. */
     val teste: Boolean = false,
+    /** Quem fica por cima quando se sobrepõem: 0 offline, 1 normal, 2 disponível/em corrida, 3 você. */
+    val prioridade: Int = 1,
 )
 
 /** Linha de trajeto (trilha real do motoboy). */
@@ -156,6 +165,12 @@ fun PwMapa(
     percursoTeste: Boolean = false,
     /** Mapa de calor (null = desligado). */
     calor: List<Pair<Double, Double>>? = null,
+    /** Posição do motoboy em corrida: o "a fazer" sai dele e passa pelas paradas que faltam. */
+    restanteDe: Pair<Double, Double>? = null,
+    /** Legenda "Feito / A fazer" no canto quando há trilha feita. */
+    legenda: Boolean = true,
+    /** A [minhaPosicao] aparece com a sua foto (pino), em vez do ponto. */
+    euComFoto: Boolean = true,
 ) {
     val ctx = LocalContext.current
     val escuro = Pw.cores.escuro
@@ -266,8 +281,14 @@ fun PwMapa(
     LaunchedEffect(estilo, modoRuas) { estilo?.let { runCatching { aplicarModoRuas(it, modoRuas, corRua) } } }
 
     // fotos dos pinos (baixadas uma vez)
-    LaunchedEffect(marcadores.mapNotNull { it.foto }.toSet()) {
-        marcadores.mapNotNull { it.foto }.distinct().filter { it !in fotos }.forEach { url ->
+    // você no mapa: pino com a sua foto (a bolinha só se não houver perfil)
+    val meuPerfil by com.pwexpress.core.perfil.Perfis.perfil.collectAsState()
+    val euMarcador = minhaPosicao?.takeIf { euComFoto && coordenadaValida(it.first, it.second) }?.let {
+        MarcadorMapa("eu", it.first, it.second, ouro, meuPerfil?.nome?.substringBefore(" ")?.takeIf { n -> n.isNotBlank() } ?: "Você", foto = meuPerfil?.fotoUrl, prioridade = 3)
+    }
+    val todosMarcadores = marcadores + listOfNotNull(euMarcador)
+    LaunchedEffect(todosMarcadores.mapNotNull { it.foto }.toSet()) {
+        todosMarcadores.mapNotNull { it.foto }.distinct().filter { it !in fotos }.forEach { url ->
             val r = carregador.execute(coil.request.ImageRequest.Builder(ctx).data(url).size(160).allowHardware(false).build())
             (r.drawable as? android.graphics.drawable.BitmapDrawable)?.bitmap?.let { fotos[url] = it }
         }
@@ -276,10 +297,10 @@ fun PwMapa(
     LaunchedEffect(estilo, percursos, comPings, percursoTeste) {
         val s = estilo ?: return@LaunchedEffect
         val cores = coresPercurso(percursoTeste)
-        val validos = percursos.map { it.copy(pontos = it.pontos.filter { p -> coordenadaValida(p.first, p.second) }) }
+        val validos = percursos.map { it.copy(pontos = it.pontos.filter { p -> coordenadaValida(p.first, p.second) }, linha = it.linha?.filter { p -> coordenadaValida(p.first, p.second) }) }
         (s.getSource("percursos") as? GeoJsonSource)?.setGeoJson(FeatureCollection.fromFeatures(
-            validos.filter { it.pontos.size >= 2 }.map { r ->
-                Feature.fromGeometry(LineString.fromLngLats(r.pontos.map { Point.fromLngLat(it.second, it.first) })).apply {
+            validos.filter { (it.linha ?: it.pontos).size >= 2 }.map { r ->
+                Feature.fromGeometry(LineString.fromLngLats((r.linha ?: r.pontos).map { Point.fromLngLat(it.second, it.first) })).apply {
                     addBooleanProperty("destaque", r.destaque); addBooleanProperty("apagado", r.apagado)
                 }
             },
@@ -320,18 +341,42 @@ fun PwMapa(
         value = if (rota != null || !caminhoAuto || rotas.isNotEmpty()) null else Caminho.entre(paradas.filter { coordenadaValida(it.lat, it.lng) }.map { it.lat to it.lng })
     }
     val rotaDesenhada = rota ?: caminho
-    LaunchedEffect(estilo, paradas, rotaDesenhada, rotas, minhaPosicao, marcadores, seguir, trilhas, enquadrar, fotos.size) {
+
+    // "a fazer" de verdade: do motoboy até as paradas que faltam (recalcula ao andar ~80 m ou concluir uma parada)
+    val pendentes = paradas.filter { !it.concluida && coordenadaValida(it.lat, it.lng) }
+    val todasFeitas = paradas.isNotEmpty() && pendentes.isEmpty()
+    val chavePend = pendentes.joinToString("|") { "${it.lat},${it.lng}" }
+    var origemRest by remember { mutableStateOf<Pair<Pair<Double, Double>, String>?>(null) }
+    var restante by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(restanteDe, chavePend) {
+        val de = restanteDe?.takeIf { coordenadaValida(it.first, it.second) }
+        if (de == null || pendentes.isEmpty()) { restante = null; origemRest = null; return@LaunchedEffect }
+        val o = origemRest
+        if (o != null && o.second == chavePend && distanciaM(o.first.first, o.first.second, de.first, de.second) < 80) return@LaunchedEffect
+        origemRest = de to chavePend
+        Caminho.entre(listOf(de) + pendentes.take(24).map { it.lat to it.lng })?.let { restante = it }
+    }
+    val aFazer = when {
+        todasFeitas -> emptyList()
+        restante != null -> listOf(restante!!)
+        else -> listOfNotNull(rotaDesenhada) + rotas
+    }
+    val fundo = if (todasFeitas || restante != null) listOfNotNull(rotaDesenhada) + rotas else emptyList()
+    LaunchedEffect(estilo, paradas, aFazer, fundo, minhaPosicao, todosMarcadores, seguir, trilhas, enquadrar, fotos.size) {
         val s = estilo ?: return@LaunchedEffect
         val m = mapa ?: return@LaunchedEffect
         if (enquadrar != ultimoEnquadrar) { ultimoEnquadrar = enquadrar; enquadrou = false }
-        val validos = marcadores.filter { coordenadaValida(it.lat, it.lng) }
+        // offline por baixo, disponível/em corrida por cima, você no topo
+        val validos = todosMarcadores.filter { coordenadaValida(it.lat, it.lng) }.sortedBy { it.prioridade }
         val pinos = paradas.filter { coordenadaValida(it.lat, it.lng) }
         val eu = minhaPosicao?.takeIf { coordenadaValida(it.first, it.second) }
+        val euPonto = eu?.takeIf { euMarcador == null }
 
-        val linhas = (listOfNotNull(rotaDesenhada) + rotas).map { decodificarPolyline(it) }.filter { it.size >= 2 }
-        (s.getSource("rota") as? GeoJsonSource)?.setGeoJson(
-            FeatureCollection.fromFeatures(linhas.map { l -> Feature.fromGeometry(LineString.fromLngLats(l.map { Point.fromLngLat(it.second, it.first) })) }),
+        fun feicoes(lista: List<String>) = FeatureCollection.fromFeatures(
+            lista.map { decodificarPolyline(it) }.filter { it.size >= 2 }.map { l -> Feature.fromGeometry(LineString.fromLngLats(l.map { Point.fromLngLat(it.second, it.first) })) },
         )
+        (s.getSource("rota") as? GeoJsonSource)?.setGeoJson(feicoes(aFazer))
+        (s.getSource("plano") as? GeoJsonSource)?.setGeoJson(feicoes(fundo))
         (s.getSource("trilhas") as? GeoJsonSource)?.setGeoJson(
             FeatureCollection.fromFeatures(
                 trilhas.filter { it.pontos.size >= 2 }.map { t -> Feature.fromGeometry(LineString.fromLngLats(t.pontos.map { Point.fromLngLat(it.second, it.first) })) },
@@ -351,7 +396,7 @@ fun PwMapa(
         )
 
         (s.getSource("eu") as? GeoJsonSource)?.setGeoJson(
-            FeatureCollection.fromFeatures(eu?.let { listOf(Feature.fromGeometry(Point.fromLngLat(it.second, it.first))) } ?: emptyList()),
+            FeatureCollection.fromFeatures(euPonto?.let { listOf(Feature.fromGeometry(Point.fromLngLat(it.second, it.first))) } ?: emptyList()),
         )
 
         (s.getSource("marcadores") as? GeoJsonSource)?.setGeoJson(
@@ -373,6 +418,7 @@ fun PwMapa(
                         addNumberProperty("raio", if (mk.id == seguir) 17 else 13)
                         addNumberProperty("borda", if (mk.id == seguir) 4 else 3)
                         addNumberProperty("opacidade", mk.opacidade.coerceIn(0f, 1f))
+                        addNumberProperty("ordem", mk.prioridade)
                     }
                 },
             ),
@@ -416,7 +462,32 @@ fun PwMapa(
         }
     }
 
-    AndroidView(factory = { mapView }, modifier = modifier)
+    androidx.compose.foundation.layout.Box(modifier) {
+        AndroidView(factory = { mapView }, modifier = Modifier.matchParentSize())
+        if (legenda && trilhas.any { it.pontos.size >= 2 }) LegendaLinhas(aFazer.isNotEmpty(), Modifier.align(androidx.compose.ui.Alignment.BottomStart).padding(start = 10.dp, bottom = (margemBaixo + 10).dp))
+    }
+}
+
+/** Legenda das linhas: feito (dourado) e a fazer (tracejado). */
+@Composable
+private fun LegendaLinhas(comAFazer: Boolean, modifier: Modifier) {
+    val c = Pw.cores
+    val forma = androidx.compose.foundation.shape.RoundedCornerShape(10.dp)
+    androidx.compose.foundation.layout.Row(
+        modifier.clip(forma).background(c.vidroForte).border(1.dp, c.borda, forma).padding(horizontal = 10.dp, vertical = 6.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp),
+    ) {
+        androidx.compose.foundation.layout.Box(Modifier.size(width = 20.dp, height = 4.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(2.dp)).background(c.ouro))
+        androidx.compose.material3.Text("Feito", color = c.texto2, fontSize = 12.sp)
+        if (comAFazer) {
+            androidx.compose.foundation.layout.Spacer(Modifier.size(6.dp))
+            androidx.compose.foundation.layout.Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(3.dp)) {
+                repeat(3) { androidx.compose.foundation.layout.Box(Modifier.size(width = 5.dp, height = 3.dp).background(c.texto)) }
+            }
+            androidx.compose.material3.Text("A fazer", color = c.texto2, fontSize = 12.sp)
+        }
+    }
 }
 
 /** Polígono de um círculo na superfície (64 pontos), para desenhar raios em metros. */
@@ -444,6 +515,7 @@ private fun criarCamadas(ctx: Context, s: Style, escuro: Boolean, ouro: String, 
     s.addSource(GeoJsonSource("marcadores"))
     s.addSource(GeoJsonSource("trilhas"))
     s.addSource(GeoJsonSource("rota"))
+    s.addSource(GeoJsonSource("plano"))
     s.addSource(GeoJsonSource("paradas"))
     s.addSource(GeoJsonSource("eu"))
 
@@ -460,20 +532,28 @@ private fun criarCamadas(ctx: Context, s: Style, escuro: Boolean, ouro: String, 
         ),
     )
     criarCamadasPercurso(s, teste)
+    // rota planejada inteira, só de fundo (quando já há o "a fazer" a partir do motoboy, ou tudo foi feito)
+    s.addLayer(
+        LineLayer("plano", "plano").withProperties(
+            PropertyFactory.lineColor(ouro), PropertyFactory.lineOpacity(0.35f), PropertyFactory.lineWidth(3f),
+            PropertyFactory.lineDasharray(arrayOf(1.5f, 2f)), PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+        ),
+    )
+    // a fazer: tracejado claro com contorno escuro (aparece no mapa claro e no noturno); o feito é a trilha dourada
     s.addLayer(
         LineLayer("rota-contorno", "rota").withProperties(
             PropertyFactory.lineColor("#0A0A0A"),
-            PropertyFactory.lineOpacity(0.45f),
-            PropertyFactory.lineWidth(9f),
+            PropertyFactory.lineOpacity(0.55f),
+            PropertyFactory.lineWidth(8f),
             PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
             PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
         ),
     )
     s.addLayer(
         LineLayer("rota", "rota").withProperties(
-            PropertyFactory.lineColor(ouro),
-            PropertyFactory.lineWidth(5.5f),
-            PropertyFactory.lineCap(Property.LINE_CAP_ROUND),
+            PropertyFactory.lineColor("#F5F5F4"),
+            PropertyFactory.lineWidth(4f),
+            PropertyFactory.lineDasharray(arrayOf(2f, 1.6f)),
             PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
         ),
     )
@@ -509,6 +589,7 @@ private fun criarCamadas(ctx: Context, s: Style, escuro: Boolean, ouro: String, 
             PropertyFactory.circleStrokeWidth(Expression.get("borda")),
             PropertyFactory.circleOpacity(Expression.coalesce(Expression.get("opacidade"), Expression.literal(1f))),
             PropertyFactory.circleStrokeOpacity(Expression.coalesce(Expression.get("opacidade"), Expression.literal(1f))),
+            PropertyFactory.circleSortKey(Expression.coalesce(Expression.get("ordem"), Expression.literal(1))),
         ).apply { setFilter(Expression.not(Expression.get("pino"))) },
     )
     s.addLayer(
@@ -518,6 +599,7 @@ private fun criarCamadas(ctx: Context, s: Style, escuro: Boolean, ouro: String, 
             PropertyFactory.iconAllowOverlap(true),
             PropertyFactory.iconIgnorePlacement(true),
             PropertyFactory.iconOpacity(Expression.coalesce(Expression.get("opacidade"), Expression.literal(1f))),
+            PropertyFactory.symbolSortKey(Expression.coalesce(Expression.get("ordem"), Expression.literal(1))),
         ),
     )
     s.addLayer(
@@ -532,6 +614,7 @@ private fun criarCamadas(ctx: Context, s: Style, escuro: Boolean, ouro: String, 
             PropertyFactory.textHaloWidth(1.6f),
             PropertyFactory.textAllowOverlap(true),
             PropertyFactory.textOpacity(Expression.coalesce(Expression.get("opacidade"), Expression.literal(1f))),
+            PropertyFactory.symbolSortKey(Expression.coalesce(Expression.get("ordem"), Expression.literal(1))),
         ),
     )
 }

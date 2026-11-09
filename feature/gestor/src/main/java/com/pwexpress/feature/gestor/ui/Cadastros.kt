@@ -1046,7 +1046,10 @@ fun ConfiguracoesG(onVoltar: (() -> Unit)?, onAbrir: (TelaG) -> Unit = {}) {
         PwCampo(busca, { busca = it }, "Buscar ajuste…")
         val termo = sem(busca.trim())
         if (termo.isEmpty()) {
-            PwRotulo("Peças do lego")
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PwRotulo("Peças do lego"); Spacer(Modifier.width(8.dp))
+                com.pwexpress.core.designsystem.PwDica("Peças do lego", "Cada regra tem um valor geral e pode ter exceção por tipo de pedido, cliente, motoboy ou num pedido só. Vale a mais específica: pedido, motoboy, cliente, tipo e, por último, a geral.")
+            }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 listOf(Triple("Exceções", PwIcones.Layers, TelaG.Excecoes), Triple("Zonas de preço", PwIcones.MapPin, TelaG.CatalogoT(Catalogo.ZONAS)),
                     Triple("Horários de pico", PwIcones.Clock, TelaG.CatalogoT(Catalogo.HORARIOS)), Triple("Categorias", PwIcones.Package2, TelaG.CatalogoT(Catalogo.CATEGORIAS)),

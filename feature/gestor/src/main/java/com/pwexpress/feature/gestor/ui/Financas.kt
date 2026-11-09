@@ -350,7 +350,10 @@ private fun HoleriteG(linha: JsonObject, ini: String, fim: String, teste: Boolea
                 Text(moedaBr(r.dbl("valor")), color = c.texto, fontWeight = FontWeight.SemiBold)
             }
         }
-        PwRotulo("Ajustes do período")
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            PwRotulo("Ajustes do período"); Spacer(Modifier.width(8.dp))
+            com.pwexpress.core.designsystem.PwDica("Ajustes", "Bônus (valor positivo) ou desconto (com −). O motoboy não vê o motivo: o total do ajuste aparece repartido entre as rotas do holerite dele.")
+        }
         x.arr("ajustes").forEach { a ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(a.str("descricao").orEmpty(), color = c.texto, modifier = Modifier.weight(1f))

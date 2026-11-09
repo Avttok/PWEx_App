@@ -46,6 +46,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.pwexpress.core.designsystem.Archivo
 import com.pwexpress.core.designsystem.PreferenciaTema
 import com.pwexpress.core.designsystem.Pw
+import com.pwexpress.core.designsystem.alvoTour
 import com.pwexpress.core.designsystem.PwAvatarConta
 import com.pwexpress.core.designsystem.PwSelosCargo
 import com.pwexpress.core.designsystem.PwToast
@@ -80,7 +81,7 @@ fun RowScope.AcoesTopo(painel: Painel, podeTrocar: Boolean, onTrocar: (Painel) -
             }
         }
     }
-    PwAvatarConta(perfil?.nome ?: "", perfil?.fotoUrl, teste, tamanho = 42.dp, onClick = onConta, dev = perfil?.dev == true, gestor = perfil?.gestor == true, motoboy = perfil?.motoboy == true)
+    PwAvatarConta(perfil?.nome ?: "", perfil?.fotoUrl, teste, modifier = Modifier.alvoTour("conta"), tamanho = 42.dp, onClick = onConta, dev = perfil?.dev == true, gestor = perfil?.gestor == true, motoboy = perfil?.motoboy == true)
 }
 
 /**
@@ -170,6 +171,16 @@ fun JanelaConta(
                         Interruptor(info.economia) { com.pwexpress.feature.tracking.Tracking.definirEconomia(it) }
                     }
                 }
+                val ctxAjuda = androidx.compose.ui.platform.LocalContext.current
+                ItemMenu(PwIcones.Info, "Central de ajuda", onClick = {
+                    runCatching { ctxAjuda.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse(com.pwexpress.core.config.PwConfig.siteUrl + "/ajuda?p=" + if (painel == Painel.GESTOR) "gestor" else "motoboy"))) }
+                })
+                ItemMenu(PwIcones.Navigation, "Ver o tour", onClick = {
+                    onFechar()
+                    if (painel == Painel.GESTOR) com.pwexpress.core.designsystem.PwTour.abrir("gestor-app", ToursApp.gestor)
+                    else com.pwexpress.core.designsystem.PwTour.abrir("motoboy", ToursApp.motoboy)
+                })
                 if (perfil?.modulo("atualizacao_app") != false) ItemMenu(PwIcones.Download, "Verificar atualização", onClick = { onFechar(); Atualizador.abrirJanela(); Atualizador.verificar(automatico = false) })
                 if (perfil?.dev == true) ItemMenu(PwIcones.CodeXml, "Console Dev", cor = c.dev, onClick = onDev)
                 Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(c.borda))

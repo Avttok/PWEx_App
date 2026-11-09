@@ -24,6 +24,7 @@ import com.pwexpress.core.designsystem.PwAba
 import com.pwexpress.core.designsystem.PwBarraAbas
 import com.pwexpress.core.designsystem.PwIcones
 import com.pwexpress.core.designsystem.TemaApp
+import com.pwexpress.core.designsystem.alvoTour
 import com.pwexpress.feature.gestor.data.Gestao
 import com.pwexpress.feature.gestor.data.Status
 import kotlinx.coroutines.delay
@@ -162,7 +163,7 @@ fun GestorApp(
                 ) + (if (comCarteira) listOf(PwAba("financeiro", "Carteira", PwIcones.Wallet)) else emptyList()) +
                     PwAba("config", "Ajustes", PwIcones.Settings2),
                 aba, { aba = it },
-                Modifier.align(Alignment.BottomCenter),
+                Modifier.align(Alignment.BottomCenter).alvoTour("abas-gestor"),
             )
         }
     }

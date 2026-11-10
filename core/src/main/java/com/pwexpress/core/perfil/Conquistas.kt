@@ -161,7 +161,16 @@ object Conquistas {
         Conquista("ganho_10000", "Cofre cheio", "Ganhou R$ 10.000 em corridas.", "ganhos", 10000.0, { PwIcones.Gem }, OURO, "reais"),
     )
 
-    private val _minhas = MutableStateFlow<JsonObject?>(null)
+    // as últimas estatísticas ficam guardadas: o menu abre já com as medalhas e atualiza por trás
+    private val prefs get() = PwCore.app.getSharedPreferences("pwex_conquistas", android.content.Context.MODE_PRIVATE)
+    private val _minhas = MutableStateFlow<JsonObject?>(tentar { prefs.getString("minhas", null)?.let { Json.parseToJsonElement(it).jsonObject } }.getOrNull())
+    @Volatile private var ultimaCarga = 0L
+    private val carregando = java.util.concurrent.atomic.AtomicBoolean(false)
+    /** Atualiza as minhas se passou um tempo (sem segurar a tela). */
+    suspend fun atualizarMinhas(maxIdadeMs: Long = 120_000) {
+        if (System.currentTimeMillis() - ultimaCarga < maxIdadeMs || !carregando.compareAndSet(false, true)) return
+        try { carregar() } finally { carregando.set(false) }
+    }
     /** Estatísticas do próprio usuário (para o menu da conta e o perfil). */
     val minhas: StateFlow<JsonObject?> = _minhas.asStateFlow()
 
@@ -170,7 +179,12 @@ object Conquistas {
         val r = PwCore.rpc.chamar("conquistas", buildJsonObject { if (motoboyId != null) put("p_motoboy", motoboyId) })
         if (!r.ok) error(if (r.corpo.contains("conquistas")) "Rode a migração das conquistas no banco." else "Erro (${r.codigo}).")
         Json.parseToJsonElement(r.corpo).jsonObject
-    }.onSuccess { if (motoboyId == null) _minhas.value = it }
+    }.onSuccess {
+        if (motoboyId == null) {
+            _minhas.value = it; ultimaCarga = System.currentTimeMillis()
+            tentar { prefs.edit().putString("minhas", it.toString()).apply() }
+        }
+    }
 
     fun valor(stats: JsonObject?, stat: String): Double = (stats?.get(stat) as? JsonPrimitive)?.doubleOrNull ?: 0.0
     /** Ganha/bloqueada à mão pelo Dev (null = pela estatística). */
@@ -285,7 +299,7 @@ fun GradeConquistas(stats: JsonObject?, modifier: Modifier = Modifier, perfilDev
 fun FaixaConquistas(onVerTodas: () -> Unit, modifier: Modifier = Modifier) {
     val c = Pw.cores
     val stats by Conquistas.minhas.collectAsState()
-    LaunchedEffect(Unit) { Conquistas.carregar() }
+    LaunchedEffect(Unit) { Conquistas.atualizarMinhas() }
     val ganhas = Conquistas.ganhas(stats)
     Column(modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp)) {
         Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).clickable(onClick = onVerTodas).padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {

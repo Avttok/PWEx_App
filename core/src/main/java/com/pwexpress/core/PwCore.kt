@@ -17,9 +17,14 @@ object PwCore {
     lateinit var rpc: SupabaseRpc
         private set
 
+    /** Contexto do app (para guardar coisas pequenas entre aberturas, como as conquistas). */
+    lateinit var app: Context
+        private set
+
     fun init(context: Context) {
         if (::http.isInitialized) return
         val app = context.applicationContext
+        this.app = app
         http = SupabaseHttp(PwConfig.supabaseUrl, PwConfig.supabaseKey)
         auth = AuthRepository(http, SessaoStore(app), ContasSalvas(app))
         auth.aplicarPermanencia()

@@ -88,6 +88,9 @@ class PwApp : Application() {
                     precisaoM = p.numero("ping_precisao_max_m", 60.0),
                     envioS = p.numero("ping_envio_s", 12.0),
                 )
+                // conquistas e dados do aparelho já prontos (o menu da foto abre na hora)
+                if (p != null) escopo.launch { com.pwexpress.core.perfil.Conquistas.atualizarMinhas(10 * 60_000) }
+                if (p?.motoboy == true) escopo.launch { com.pwexpress.motoboy.Aparelho.registrar(this@PwApp) }
                 com.pwexpress.core.mapa.PreferenciaRota.definir(p.texto("rota_provedor", "valhalla"), p.texto("rota_perfil", "motorcycle"))
                 com.pwexpress.core.mapa.PreferenciasNavegacao.definir(
                     ligada = p.logico("navegacao_ligada", true), voz = p.logico("navegacao_voz", true),

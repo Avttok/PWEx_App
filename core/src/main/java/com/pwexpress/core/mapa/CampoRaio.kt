@@ -34,6 +34,7 @@ import com.pwexpress.core.designsystem.PwIcones
 import kotlinx.coroutines.delay
 
 /** Barra grossa com bolinha dourada (a mesma do "Raio de disponibilidade"). */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun PwBarraBolinha(valor: Float, onMudar: (Float) -> Unit, faixa: ClosedFloatingPointRange<Float>, passo: Float, modifier: Modifier = Modifier, habilitado: Boolean = true) {
     val c = Pw.cores
@@ -87,7 +88,7 @@ fun CampoRaio(valor: Double, unidade: String, min: Double, max: Double, passo: D
             val outra = centro.first to centro.second + dist / (111_320.0 * Math.cos(Math.toRadians(centro.first)))
             Box(Modifier.fillMaxWidth().height(220.dp).clip(forma).border(1.dp, c.borda, forma)) {
                 PwMapa(
-                    paradas = emptyList(), rota = null, modifier = Modifier.fillMaxWidth().height(220.dp),
+                    paradas = emptyList(), rota = null, minhaPosicao = null, modifier = Modifier.fillMaxWidth().height(220.dp),
                     marcadores = listOfNotNull(
                         MarcadorMapa("a", centro.first, centro.second, "#D4AF37", "1", pino = false),
                         if (dupla) MarcadorMapa("b", outra.first, outra.second, "#38BDF8", "2", pino = false) else null,

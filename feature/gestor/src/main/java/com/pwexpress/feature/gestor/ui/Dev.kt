@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pwexpress.core.designsystem.Pw
 import com.pwexpress.core.designsystem.PwBotaoVidro
+import com.pwexpress.core.designsystem.PwBotaoIcone
 import com.pwexpress.core.designsystem.PwCarregando
 import com.pwexpress.core.designsystem.moedaBr
 import com.pwexpress.core.designsystem.numeroBr
@@ -56,6 +57,7 @@ import com.pwexpress.core.json.int
 import com.pwexpress.core.json.long
 import com.pwexpress.core.json.obj
 import com.pwexpress.core.json.str
+import com.pwexpress.core.json.strs
 import com.pwexpress.core.perfil.Perfis
 import com.pwexpress.feature.gestor.data.Gestao
 import kotlinx.coroutines.launch
@@ -105,42 +107,11 @@ fun DevG(onVoltar: () -> Unit) {
         PwErro(erro)
         if (aba == 4) { VersaoAppG(); return@PwPagina }
         if (aba == 6) { ApagarTudoG(); return@PwPagina }
-        if (aba == 5) {
-            val tf = painel?.arr("tarefas") ?: run { PwCarregando(); return@PwPagina }
-            TextoDica("Tarefas automáticas do banco (pg_cron): despacho, planejadas, faturas…")
-            if (tf.isEmpty()) PwVazio("Nenhuma tarefa automática encontrada (ou o pg_cron não está ligado).", icone = PwIcones.Clock)
-            tf.forEach { x ->
-                PwCartao {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(x.str("nome") ?: "—", color = c.texto, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        com.pwexpress.core.designsystem.PwSelo(if (x.bool("ativa")) "Ligada" else "Parada", if (x.bool("ativa")) c.verde else c.texto3)
-                    }
-                    TextoDica("Quando: ${x.str("quando") ?: "—"}")
-                }
-            }
-            return@PwPagina
-        }
+        if (aba == 5) { TarefasDevG(painel?.arr("tarefas"), onMudou = { escopo.launch { carregar() } }); return@PwPagina }
         when (aba) {
             0 -> {
                 val l = modulos ?: run { PwCarregando(); return@PwPagina }
-                TextoDica("Desligado, some para todos (menos para você). “Quem usa” limita a cargos.")
-                l.groupBy { it.grupo }.forEach { (g, ms) ->
-                    PwRotulo(g)
-                    ms.forEach { m ->
-                        PwCartao {
-                            PwInterruptor(m.nome, m.ligado, { salvar(m, it, m.papeis) }, descricao = m.descricao)
-                            if (m.ligado) {
-                                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                    PwPilula("Todos", PwIcones.Users, { salvar(m, true, emptyList()) }, ligada = m.papeis.isEmpty())
-                                    PAPEIS.forEach { (p, rot, ic) ->
-                                        val ativo = p in m.papeis
-                                        PwPilula(rot, ic, { salvar(m, true, if (ativo) m.papeis - p else m.papeis + p) }, ligada = ativo)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                ModulosDevG(l) { m, ligado, papeis -> salvar(m, ligado, papeis) }
             }
             1 -> {
                 val cont = painel?.obj("contagens") ?: run { PwCarregando(); return@PwPagina }
@@ -157,34 +128,8 @@ fun DevG(onVoltar: () -> Unit) {
                         }
                     }
                 }
-                ZerarPedidosG(onFeito = { escopo.launch { carregar() } })
             }
-            2 -> {
-                val ap = painel?.arr("aparelhos") ?: run { PwCarregando(); return@PwPagina }
-                if (ap.isEmpty()) PwVazio("Nenhum aparelho registrado ainda.", icone = PwIcones.Smartphone)
-                ap.forEach { a ->
-                    PwCartao {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(a.str("nome") ?: "—", color = c.texto, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                            Text(a.str("versao_app") ?: "—", color = c.texto3, fontSize = 12.sp)
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 4.dp)) {
-                            Detalhe(PwIcones.Radio, rotuloMotoboy[a.str("status")] ?: "Offline")
-                            Detalhe(PwIcones.Timer, haQuanto(com.pwexpress.feature.gestor.data.iso(a.str("posicao_em"))))
-                            a.int("bateria")?.let { Detalhe(PwIcones.BatteryMedium, "$it%") }
-                            a.dbl("precisao_m")?.let { Detalhe(PwIcones.Crosshair, "± ${it.toInt()} m") }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 4.dp)) {
-                            a.long("pings_24h")?.let { Detalhe(PwIcones.Footprints, "$it pings em 24 h") }
-                            Detalhe(PwIcones.BellRing, if (a.bool("push")) "recebe push" else "sem push", if (a.bool("push")) c.verde else c.vermelho)
-                        }
-                        if (a.bool("modo_teste") || a.bool("modo_economia")) Row(Modifier.padding(top = 4.dp)) {
-                            if (a.bool("modo_teste")) Detalhe(PwIcones.FlaskConical, "teste", c.violeta)
-                            if (a.bool("modo_economia")) { Spacer(Modifier.width(12.dp)); Detalhe(PwIcones.BatteryLow, "economia") }
-                        }
-                    }
-                }
-            }
+            2 -> AparelhosDevG(painel?.arr("aparelhos"))
             else -> {
                 val ex = painel?.arr("exclusoes") ?: run { PwCarregando(); return@PwPagina }
                 if (ex.isEmpty()) PwVazio("Nada apagado até agora.", icone = PwIcones.History)
@@ -343,6 +288,7 @@ private fun ApagarTudoG() {
     LaunchedEffect(Unit) { contar() }
     LaunchedEffect(cat?.str("chave"), busca) { marcados.clear(); if (cat != null) { kotlinx.coroutines.delay(300); listar() } }
 
+    ZerarPedidosG(onFeito = { escopo.launch { contar() } })
     TextoDica("Apague um por um, os marcados, uma categoria inteira ou tudo. Não tem volta: sempre pede a senha do Dev.")
     val cs = cats ?: run { PwCarregando(); return }
     if (cat == null) {
@@ -426,6 +372,210 @@ private fun ApagarTudoG() {
                     apagando = false
                 }
             }, cheio = true, habilitado = senha.isNotBlank() && !apagando)
+        }
+    }
+}
+
+
+// ------------------------------------------------------------------ módulos (explicados)
+
+/** Módulos: cada parte do sistema que dá para desligar, e para quem ela aparece. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ModulosDevG(l: List<Gestao.ModuloDev>, salvar: (Gestao.ModuloDev, Boolean, List<String>) -> Unit) {
+    val c = Pw.cores
+    var busca by remember { mutableStateOf("") }
+    var filtro by remember { mutableIntStateOf(0) }
+    PwCartao(cor = c.ouro.copy(alpha = 0.4f)) {
+        Text("O que é um módulo?", color = c.texto, fontWeight = FontWeight.Bold)
+        TextoDica("Uma parte do sistema (chat, carteira, pedidos, conquistas…). Desligado, some do site e do app para todo mundo — menos para você. Ligado, dá para deixar só para alguns cargos (ex.: carteira só para gestores).")
+    }
+    com.pwexpress.core.designsystem.PwCampo(busca, { busca = it }, "Buscar módulo")
+    val n = listOf(l.size, l.count { it.ligado }, l.count { !it.ligado }, l.count { it.ligado && it.papeis.isNotEmpty() })
+    PwFiltros(listOf("Todos" to n[0], "Ligados" to n[1], "Desligados" to n[2], "Só alguns" to n[3]), filtro, { filtro = it })
+    val lista = l.filter { m -> (busca.isBlank() || "${m.nome} ${m.descricao ?: ""}".contains(busca.trim(), true)) &&
+        when (filtro) { 1 -> m.ligado; 2 -> !m.ligado; 3 -> m.ligado && m.papeis.isNotEmpty(); else -> true } }
+    lista.groupBy { it.grupo }.forEach { (g, ms) ->
+        PwRotulo(g)
+        ms.forEach { m ->
+            val modo = if (!m.ligado) 0 else if (m.papeis.isEmpty()) 1 else 2
+            PwCartao(cor = if (modo == 2) c.ouro.copy(alpha = 0.45f) else null) {
+                Text(m.nome, color = if (m.ligado) c.texto else c.texto3, fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                m.descricao?.let { TextoDica(it) }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 4.dp)) {
+                    Icon(if (modo == 0) PwIcones.X else PwIcones.Check, null, tint = when (modo) { 0 -> c.texto3; 1 -> c.verde; else -> c.ouro }, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text(when (modo) { 0 -> "Desligado para todos (você, Dev, continua vendo)"; 1 -> "Ligado para todos"
+                        else -> "Ligado só para " + m.papeis.joinToString(" e ") { p -> PAPEIS.firstOrNull { it.first == p }?.second?.lowercase() ?: p } },
+                        color = when (modo) { 0 -> c.texto3; 1 -> c.verde; else -> c.ouro }, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                }
+                com.pwexpress.core.designsystem.PwSegmentado(listOf("Desligado" to null, "Todos" to null, "Só alguns" to null), modo, { i ->
+                    when (i) { 0 -> salvar(m, false, m.papeis); 1 -> salvar(m, true, emptyList()); else -> salvar(m, true, m.papeis.ifEmpty { listOf("gestor") }) }
+                })
+                if (modo == 2) FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    PAPEIS.forEach { (p, rot, ic) ->
+                        val on = p in m.papeis
+                        PwPilula(rot, ic, { val novo = if (on) m.papeis - p else m.papeis + p; salvar(m, true, novo) }, ligada = on)
+                    }
+                }
+            }
+        }
+    }
+    if (lista.isEmpty()) PwVazio("Nenhum módulo com esse filtro.", icone = PwIcones.Search)
+}
+
+// ------------------------------------------------------------------ tarefas automáticas (pg_cron)
+
+private val DIAS = listOf("domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado")
+/** "*\/5 * * * *" → "a cada 5 minutos" (o pg_cron usa UTC; o texto mostra no horário de Brasília). */
+internal fun cronParaTexto(c: String): String {
+    val s = c.trim()
+    Regex("^(\\d+)\\s+seconds?$").find(s)?.let { return "a cada ${it.groupValues[1]} segundos" }
+    val p = s.split(Regex("\\s+"))
+    if (p.size != 5) return s
+    val (mi, h, dm, me, ds) = p
+    fun hora(hh: String, mm: String) = "%02d:%02d".format((hh.toInt() + 21) % 24, mm.toInt())
+    val num = Regex("^\\d+$")
+    if (s == "* * * * *") return "a cada minuto"
+    Regex("^\\*/(\\d+)$").find(mi)?.let { if (h == "*" && dm == "*" && me == "*" && ds == "*") return "a cada ${it.groupValues[1]} minutos" }
+    Regex("^\\*/(\\d+)$").find(h)?.let { if (num.matches(mi) && dm == "*" && me == "*" && ds == "*") return "a cada ${it.groupValues[1]} horas (no minuto $mi)" }
+    if (num.matches(mi) && h == "*" && dm == "*" && me == "*" && ds == "*") return "toda hora, no minuto $mi"
+    if (num.matches(mi) && num.matches(h) && me == "*") {
+        if (dm == "*" && ds == "*") return "todo dia às ${hora(h, mi)}"
+        if (dm == "*" && Regex("^\\d$").matches(ds)) return (if (ds == "0" || ds == "6") "todo " else "toda ") + "${DIAS[ds.toInt()]} às ${hora(h, mi)}"
+        if (num.matches(dm) && ds == "*") return "todo dia $dm do mês às ${hora(h, mi)}"
+    }
+    return "$s (expressão cron, horário UTC)"
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun TarefasDevG(tf: List<JsonObject>?, onMudou: () -> Unit) {
+    val c = Pw.cores
+    val escopo = rememberCoroutineScope()
+    var aberta by remember { mutableStateOf<String?>(null) }
+    var cron by remember { mutableStateOf("") }
+    var horaTxt by remember { mutableStateOf("03:00") }
+    var ocupado by remember { mutableStateOf(false) }
+    fun acao(nome: String, a: String, v: String? = null) {
+        ocupado = true
+        escopo.launch {
+            Gestao.rpcJson("dev_tarefa", kotlinx.serialization.json.buildJsonObject { put("p_nome", nome); put("p_acao", a); v?.let { put("p_valor", it) } })
+                .onSuccess { PwToast.mostrar(when (a) { "rodar" -> "Rodou."; "horario" -> "Horário mudado."; "ligar" -> "Tarefa ligada."; else -> "Tarefa parada." }); onMudou() }
+                .onFailure { PwToast.mostrar(if (it.message.orEmpty().contains("horario")) "Horário inválido: use 5 partes (ex.: */5 * * * *)." else it.message ?: "Erro", TipoAviso.ERRO) }
+            ocupado = false
+        }
+    }
+    val l = tf ?: run { PwCarregando(); return }
+    TextoDica("Tarefas que o banco roda sozinho (montar rotas, abrir planejadas, faturas…). Os horários aparecem no horário de Brasília.")
+    if (l.isEmpty()) { PwVazio("Nenhuma tarefa automática (o pg_cron não está ligado neste banco).", icone = PwIcones.Clock); return }
+    l.forEach { t ->
+        val nome = t.str("nome") ?: return@forEach
+        val quando = t.str("quando").orEmpty()
+        val ult = t.obj("ultima")
+        val ab = aberta == nome
+        PwCartao(cor = if (!t.bool("ativa")) null else if (ult?.str("status") == "failed") c.vermelho.copy(alpha = 0.5f) else null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(nome, color = c.texto, fontWeight = FontWeight.Bold)
+                    Text((if (t.bool("ativa")) "Roda " else "Parada · rodaria ") + cronParaTexto(quando), color = c.texto2, fontSize = 13.5.sp)
+                    TextoDica(ult?.let { u -> "Última vez: " + (com.pwexpress.feature.gestor.data.iso(u.str("inicio"))?.let { dataHora(it) } ?: "—") +
+                        if (u.str("status") == "succeeded") " · deu certo" else " · ${if (u.str("status") == "failed") "falhou" else u.str("status")}" } ?: "Ainda não rodou")
+                    if ((t.long("falhas_24h") ?: 0) > 0) Text("${t.long("falhas_24h")} falha(s) em 24 h", color = c.vermelho, fontSize = 12.sp)
+                }
+                androidx.compose.material3.Switch(t.bool("ativa"), { acao(nome, if (it) "ligar" else "desligar") }, enabled = !ocupado)
+                PwBotaoIcone(if (ab) PwIcones.ChevronUp else PwIcones.ChevronDown, "Mais", { aberta = if (ab) null else nome; cron = quando }, tamanho = 36.dp)
+            }
+            if (ab) {
+                Espaco(8)
+                PwRotulo("Mudar quando roda")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("* * * * *" to "A cada minuto", "*/5 * * * *" to "A cada 5 min", "*/15 * * * *" to "A cada 15 min", "0 * * * *" to "Toda hora", "0 */6 * * *" to "A cada 6 h").forEach { (cr, r) ->
+                        PwPilula(r, PwIcones.Clock, { acao(nome, "horario", cr) }, ligada = quando == cr)
+                    }
+                }
+                Espaco(6)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.pwexpress.core.designsystem.PwCampo(horaTxt, { horaTxt = it.take(5) }, "Todo dia às (Brasília)", dica = "03:00", modifier = Modifier.weight(1f))
+                    PwBotaoVidro("Usar", onClick = {
+                        val pr = horaTxt.split(":"); val hh = pr.getOrNull(0)?.toIntOrNull(); val mm = pr.getOrNull(1)?.toIntOrNull() ?: 0
+                        if (hh != null && hh in 0..23 && mm in 0..59) acao(nome, "horario", "$mm ${(hh + 3) % 24} * * *") else PwToast.mostrar("Use HH:MM.", TipoAviso.AVISO)
+                    })
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    com.pwexpress.core.designsystem.PwCampo(cron, { cron = it }, "Expressão cron (UTC)", modifier = Modifier.weight(1f))
+                    PwBotaoVidro("Salvar", onClick = { acao(nome, "horario", cron.trim()) }, habilitado = cron.trim() != quando && !ocupado)
+                }
+                TextoDica("= ${cronParaTexto(cron)}")
+                Espaco(6)
+                com.pwexpress.core.designsystem.PwBotaoOuro("Rodar agora", onClick = { acao(nome, "rodar") }, icone = PwIcones.Zap, habilitado = !ocupado)
+                ult?.str("mensagem")?.let { TextoDica("Resposta da última vez: $it") }
+                t.str("comando")?.let { TextoDica("O que ela roda: $it") }
+            }
+        }
+    }
+}
+
+// ------------------------------------------------------------------ aparelhos
+
+@Composable
+private fun AparelhosDevG(ap: List<JsonObject>?) {
+    val c = Pw.cores
+    var aberto by remember { mutableStateOf<String?>(null) }
+    var busca by remember { mutableStateOf("") }
+    val l = ap ?: run { PwCarregando(); return }
+    if (l.isEmpty()) { PwVazio("Nenhum aparelho registrado ainda.", icone = PwIcones.Smartphone); return }
+    com.pwexpress.core.designsystem.PwCampo(busca, { busca = it }, "Buscar motoboy ou aparelho")
+    l.filter { busca.isBlank() || "${it.str("nome")} ${it.str("email")} ${it.obj("aparelho")?.str("modelo")}".contains(busca.trim(), true) }.forEach { a ->
+        val d = a.obj("aparelho")
+        val id = a.str("id") ?: return@forEach
+        val ab = aberto == id
+        fun sim(k: String) = d?.get(k)?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content?.toBooleanStrictOrNull() }
+        val alertas = listOfNotNull("sem localização em segundo plano".takeIf { sim("localizacao_fundo") == false }, "notificações bloqueadas".takeIf { sim("notificacoes") == false },
+            "o Android pode pausar o app (economia de bateria)".takeIf { sim("otimizacao_bateria") == true }, "sem push".takeIf { !a.bool("push") }, "GPS desligado".takeIf { sim("gps_ligado") == false })
+        PwCartao(cor = if (alertas.isNotEmpty()) c.vermelho.copy(alpha = 0.35f) else null) {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { aberto = if (ab) null else id }, verticalAlignment = Alignment.CenterVertically) {
+                Icon(PwIcones.Smartphone, null, tint = c.ouro, modifier = Modifier.size(20.dp)); Spacer(Modifier.width(10.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(a.str("nome") ?: "—", color = c.texto, fontWeight = FontWeight.Bold, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    TextoDica(listOfNotNull(d?.str("fabricante")?.let { "$it ${d.str("modelo").orEmpty()}" }, d?.str("android")?.let { "Android $it" }, a.str("versao_app")?.let { "app $it" }).joinToString(" · ")
+                        .ifEmpty { "O aparelho ainda não mandou os dados (abre o app atualizado)" })
+                }
+                com.pwexpress.core.designsystem.PwSelo(rotuloMotoboy[a.str("status")] ?: "Offline", if (a.str("status") == "offline") c.texto3 else c.verde)
+                Icon(if (ab) PwIcones.ChevronUp else PwIcones.ChevronDown, null, tint = c.texto3, modifier = Modifier.size(18.dp))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 6.dp)) {
+                Detalhe(PwIcones.Timer, haQuanto(com.pwexpress.feature.gestor.data.iso(a.str("posicao_em"))))
+                a.int("bateria")?.let { Detalhe(PwIcones.BatteryMedium, "$it%") }
+                a.dbl("precisao_m")?.let { Detalhe(PwIcones.Crosshair, "± ${it.toInt()} m") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 4.dp)) {
+                Detalhe(PwIcones.Footprints, "${a.long("pings_1h") ?: 0}/h · ${a.long("pings_24h") ?: 0} em 24 h")
+                Detalhe(PwIcones.BellRing, if (a.bool("push")) "push" else "sem push", if (a.bool("push")) c.verde else c.vermelho)
+            }
+            if (alertas.isNotEmpty()) Text("Atenção: " + alertas.joinToString(" · "), color = c.vermelho, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 6.dp))
+            if (ab) {
+                Espaco(8)
+                fun txt(k: String) = d?.get(k)?.let { (it as? kotlinx.serialization.json.JsonPrimitive)?.content } ?: "—"
+                fun sn(k: String) = when (sim(k)) { true -> "sim"; false -> "não"; null -> "—" }
+                val linhas = listOf(
+                    "E-mail" to (a.str("email") ?: "—"), "Cargos" to a.strs("papeis").joinToString(", ").ifEmpty { "—" },
+                    "Corrida agora" to (a.obj("corrida")?.let { "#${it.long("numero")} (${it.str("status")})" } ?: "nenhuma"), "Raio escolhido" to (a.dbl("raio_km")?.let { "${numeroBr(it)} km" } ?: "—"),
+                    "Android" to "${txt("android")} (API ${txt("sdk")})", "Build do app" to txt("build"),
+                    "Localização precisa" to sn("localizacao_precisa"), "Em segundo plano" to sn("localizacao_fundo"), "GPS ligado" to sn("gps_ligado"), "Notificações" to sn("notificacoes"),
+                    "Economia de bateria do Android" to when (sim("otimizacao_bateria")) { true -> "pode pausar o app"; false -> "liberado"; null -> "—" }, "Modo economia do celular" to sn("economia_android"),
+                    "Carregando" to sn("carregando"), "Rede" to txt("rede"), "Tela" to txt("tela"), "Memória livre" to (txt("memoria_livre_mb").takeIf { it != "—" }?.let { "$it MB" } ?: "—"),
+                    "Idioma / fuso" to "${txt("idioma")} · ${txt("fuso")}", "Tokens de push" to "${a.long("push_tokens") ?: 0}",
+                    "Última posição" to (a.obj("ultima_posicao")?.let { u -> haQuanto(com.pwexpress.feature.gestor.data.iso(u.str("quando"))) + (u.dbl("velocidade")?.let { " · ${(it * 3.6).toInt()} km/h" } ?: "") } ?: "—"),
+                    "Dados do aparelho" to haQuanto(com.pwexpress.feature.gestor.data.iso(a.str("aparelho_em"))),
+                )
+                linhas.forEach { (r, v) ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+                        Text(r, color = c.texto3, fontSize = 12.5.sp, modifier = Modifier.weight(1f))
+                        Text(v, color = c.texto, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1.2f))
+                    }
+                }
+            }
         }
     }
 }

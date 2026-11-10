@@ -104,6 +104,10 @@ data class Oferta(
     val prazoMillis: Long, // relógio do celular (evita diferença de horário com o servidor)
     val distanciaM: Int?,
     val corrida: Corrida,
+    /** Extensão: as paradas entram no fim da rota que você já está fazendo. */
+    val extensao: Boolean = false,
+    val rotaAtualNumero: Long? = null,
+    val rotaAtualRestantes: Int? = null,
 )
 
 // ------------------------------------------------------------------ JSON → modelos
@@ -195,6 +199,9 @@ internal fun JsonElement.paraOferta(): Oferta {
         prazoMillis = System.currentTimeMillis() + segundos * 1000L,
         distanciaM = o.inteiro("distancia_m"),
         corrida = o.getValue("corrida").paraCorrida(),
+        extensao = o.logico("extensao"),
+        rotaAtualNumero = (o["rota_atual"] as? JsonObject)?.texto("numero")?.toLongOrNull(),
+        rotaAtualRestantes = (o["rota_atual"] as? JsonObject)?.inteiro("paradas_restantes"),
     )
 }
 

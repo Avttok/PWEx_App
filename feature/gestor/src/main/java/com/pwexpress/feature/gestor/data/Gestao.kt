@@ -427,6 +427,18 @@ object Gestao {
         PwCore.rpc.chamar("definir_regras_pedido", buildJsonObject { put("p_pedido", id); put("p_regras", regras) }).exigirOk(::traduzir); Unit
     }
 
+    /** Junta as paradas da rota [nova] no fim da rota de [motoboy] (que já está em corrida). [perguntar] = manda oferta. */
+    suspend fun estenderRota(nova: String, motoboy: String, perguntar: Boolean) = acao {
+        PwCore.rpc.chamar("estender_rota", buildJsonObject { put("p_nova", nova); put("p_motoboy", motoboy); put("p_perguntar", perguntar) }).exigirOk(::traduzir); Unit
+    }
+
+    /** "Mudar o cálculo" do orçamento de um pedido. */
+    suspend fun editarOrcamento(pedido: String, linhas: kotlinx.serialization.json.JsonArray, percentuais: kotlinx.serialization.json.JsonArray, minimo: Double, motivo: String?) = acao {
+        PwCore.rpc.chamar("editar_orcamento", buildJsonObject {
+            put("p_pedido", pedido); put("p_linhas", linhas); put("p_percentuais", percentuais); put("p_minimo", minimo); put("p_motivo", motivo?.let { JsonPrimitive(it) } ?: JsonNull)
+        }).exigirOk(::traduzir); Unit
+    }
+
     suspend fun moverEntrega(parada: String, destino: String?) = acao {
         PwCore.rpc.chamar("mover_entrega", buildJsonObject { put("p_parada", parada); put("p_destino", destino?.let { JsonPrimitive(it) } ?: JsonNull) }).exigirOk(::traduzir); Unit
     }

@@ -3,6 +3,7 @@ package com.pwexpress.feature.gestor.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.Box
@@ -62,6 +63,7 @@ import com.pwexpress.feature.gestor.data.Gestao
 import com.pwexpress.feature.gestor.data.PedidoG
 import com.pwexpress.feature.gestor.data.StatusPedido
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.put
 
 /**
  * Pedidos (do site do cliente e do gestor). Por padrão todo pedido novo passa por aqui:
@@ -191,7 +193,15 @@ private fun JanelaPedido(p: PedidoG, empresa: String?, onFechar: () -> Unit) {
         DetalhesPedidoG(p) { la, lo -> focoP = com.pwexpress.core.mapa.FocoMapa(la, lo) }
 
         PwCartao(destaque = true) {
-            p.orcamento?.let { OrcamentoG(it) } ?: TextoDica("Sem orçamento.")
+            var editando by remember(p.id) { mutableStateOf(false) }
+            p.orcamento?.let { o ->
+                if (editando) EditarOrcamentoG(p.id, o, onFechar = { editando = false })
+                else {
+                    OrcamentoG(o)
+                    if (p.status !in setOf("concluido", "cancelado", "recusado") && p.faturaId == null)
+                        PwBotaoVidro("Mudar o cálculo", onClick = { editando = true }, icone = PwIcones.Pencil, modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                }
+            } ?: TextoDica("Sem orçamento.")
             Spacer(Modifier.size(8.dp))
             Text("Calculado: ${moedaBr(p.valorCalculado)}" + (if (p.valorAjuste != 0.0) " · ajuste ${if (p.valorAjuste > 0) "+" else "−"}${moedaBr(kotlin.math.abs(p.valorAjuste))}" else "") +
                 (p.ajusteMotivo?.takeIf { p.valorAjuste != 0.0 }?.let { " ($it)" } ?: "") + " · Dev ${moedaBr(p.valorDev)} · " +
@@ -290,6 +300,34 @@ internal fun BlocoRotaG(corrida: com.pwexpress.feature.gestor.data.CorridaG, ocu
         }
     }
 
+    // estender a rota de quem já está em corrida e está perto da coleta desta
+    if (aberta && corrida.entregas > 0) {
+        val coleta = corrida.paradas.firstOrNull { it.coleta }
+        val emCorrida = dados.corridas.filter { it.id != corrida.id && it.teste == corrida.teste && it.motoboyId != null && it.status in setOf("aceita", "em_andamento") }
+            .mapNotNull { r -> r.motoboyId?.let { m -> Triple(r, m, dados.posicao(m)?.let { p -> p.lat?.let { la -> p.lng?.let { lo -> coleta?.let { cl -> com.pwexpress.core.mapa.metros(la to lo, cl.lat to cl.lng) } } } }) } }
+            .sortedBy { it.third ?: Double.MAX_VALUE }
+        if (emCorrida.isNotEmpty()) {
+            var escolhido by remember(corrida.id) { mutableStateOf<String?>(null) }
+            PwCartao {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    com.pwexpress.core.designsystem.PwRotulo("Estender a rota de quem está em corrida")
+                    Spacer(Modifier.width(8.dp))
+                    com.pwexpress.core.designsystem.PwDica("Extensão de rota", "As paradas desta rota vão para o fim da rota de um motoboy que já está rodando (o mais perto da coleta aparece primeiro). O valor das duas soma e o motoboy nunca ganha menos do que já ia ganhar. \"Perguntar\" manda uma oferta; \"Estender direto\" já junta.")
+                }
+                Espaco(6)
+                com.pwexpress.core.designsystem.PwSelecao("Motoboy em corrida", emCorrida.map { (r, m, d) ->
+                    m to "${dados.membro(m)?.nome ?: "Motoboy"} · rota ${r.numeroExibicao}" + (d?.let { " · ${if (it < 1000) "${it.toInt()} m" else "%.1f km".format(java.util.Locale.forLanguageTag("pt-BR"), it / 1000)} da coleta" } ?: "")
+                }, escolhido ?: emCorrida.first().second, { escolhido = it })
+                Espaco(6)
+                val m = escolhido ?: emCorrida.first().second
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PwBotaoVidro("Perguntar", onClick = { acao { Gestao.estenderRota(corrida.id, m, true) } }, icone = PwIcones.Send, modifier = Modifier.weight(1f), habilitado = !ocupado)
+                    PwBotaoVidro("Estender direto", onClick = { acao { Gestao.estenderRota(corrida.id, m, false) } }, icone = PwIcones.Merge, modifier = Modifier.weight(1f), habilitado = !ocupado)
+                }
+            }
+        }
+    }
+
     if (aberta && corrida.entregas > 0) {
         val outras = dados.corridas.filter { it.id != corrida.id && it.teste == corrida.teste && it.motoboyId == null && it.status in setOf("montada", "agendada", "aguardando_motoboy", "sem_motoboy") }
         PwCartao {
@@ -340,6 +378,18 @@ private fun LinhasCalculo(calc: kotlinx.serialization.json.JsonObject) {
         Row(Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
             Text(a, color = if (forte) c.texto else c.texto2, fontSize = 13.sp, modifier = Modifier.weight(1f))
             Text(b, color = c.texto, fontSize = 13.sp, fontWeight = if (forte) FontWeight.Bold else FontWeight.SemiBold)
+        }
+    }
+    (calc["zona"] as? kotlinx.serialization.json.JsonObject)?.let { z ->
+        fun zn(k: String) = (z[k] as? kotlinx.serialization.json.JsonPrimitive)?.content
+        val junta = zn("agrupada") == "true"
+        Row(Modifier.fillMaxWidth().padding(bottom = 6.dp).clip(RoundedCornerShape(12.dp)).background((if (junta) c.verde else c.ouro).copy(alpha = 0.12f)).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(PwIcones.Radar, null, tint = if (junta) c.verde else c.ouro, modifier = Modifier.size(18.dp)); Spacer(Modifier.width(8.dp))
+            Column(Modifier.weight(1f)) {
+                Text(if (junta) "Entregas na mesma zona" else "Entregas em zonas separadas", color = c.texto, fontWeight = FontWeight.Bold, fontSize = 13.5.sp)
+                Text("Raio de ${zn("raio_m") ?: "?"} m por entrega · ${zn("juntas") ?: 0} de ${zn("entregas") ?: 0} se encontram" +
+                    if (junta) " → paga o km da entrega mais perto + valor fixo por entrega a mais." else " → paga o percentual da rota.", color = c.texto2, fontSize = 12.5.sp)
+            }
         }
     }
     val limitado = s("limitado") == "true"
@@ -502,12 +552,16 @@ internal fun OrcamentoG(o: kotlinx.serialization.json.JsonObject) {
     fun num(e: kotlinx.serialization.json.JsonElement?) = (e as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
     fun txt(e: kotlinx.serialization.json.JsonElement?) = (e as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
     com.pwexpress.core.designsystem.PwRotulo("Como chegou no valor")
+    if (txt(o["editado"]) == "true") TextoDica("Mudado à mão" + (txt(o["motivo"])?.let { ": $it" } ?: "") + (num((o["original"] as? kotlinx.serialization.json.JsonObject)?.get("total"))?.let { " · era ${moedaBr(it)}" } ?: ""))
+    if (txt(o["modo_distancia"]) == "soma_entregas") TextoDica("Distância: coleta → cada entrega, somadas.")
     Spacer(Modifier.size(4.dp))
     (o["linhas"] as? kotlinx.serialization.json.JsonArray)?.forEach { l ->
         val x = l as? kotlinx.serialization.json.JsonObject ?: return@forEach
         Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(txt(x["rotulo"]).orEmpty(), color = c.texto, fontSize = 14.sp)
+                val q = num(x["qtd"]); val u = num(x["unit"])
+                if (q != null && u != null) Text("${numeroBr(q)}${txt(x["unidade"])?.let { " $it" } ?: ""} × ${moedaBr(u)}" + if (txt(x["fixo"]) == "true") " · fixo" else "", color = c.texto3, fontSize = 12.sp)
                 txt(x["detalhe"])?.let { Text(it, color = c.texto3, fontSize = 12.sp) }
             }
             Text(moedaBr(num(x["valor"])), color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
@@ -534,4 +588,86 @@ internal fun OrcamentoG(o: kotlinx.serialization.json.JsonObject) {
     val vol = num(o["volumes"])?.toInt() ?: 0
     TextoDica("$vol volume${if (vol == 1) "" else "s"} · peso real ${numeroBr(num(o["peso_real_kg"]) ?: 0.0)} kg · cubado ${numeroBr(num(o["peso_cubado_kg"]) ?: 0.0)} kg" +
         (if (txt(o["perigoso"]) == "true") " · perigoso" else ""))
+}
+
+
+/** "Mudar o cálculo": cada linha (quantidade × valor), os percentuais, o mínimo e o motivo. Igual ao site. */
+@Composable
+private fun EditarOrcamentoG(pedido: String, o: kotlinx.serialization.json.JsonObject, onFechar: () -> Unit) {
+    val c = Pw.cores
+    val escopo = rememberCoroutineScope()
+    fun num(e: kotlinx.serialization.json.JsonElement?) = (e as? kotlinx.serialization.json.JsonPrimitive)?.content?.toDoubleOrNull()
+    fun txt(e: kotlinx.serialization.json.JsonElement?) = (e as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
+    fun br(v: Double?) = v?.let { numeroBr(it) } ?: ""
+    class L(rot: String, val chave: String?, val unidade: String?, qtd: String, unit: String, valor: String, fixo: Boolean) {
+        var rotulo by mutableStateOf(rot); var qtd by mutableStateOf(qtd); var unit by mutableStateOf(unit); var valor by mutableStateOf(valor); var fixo by mutableStateOf(fixo)
+    }
+    class P(rot: String, pct: String) { var rotulo by mutableStateOf(rot); var pct by mutableStateOf(pct) }
+    fun d(s: String) = s.trim().replace(".", "").replace(",", ".").toDoubleOrNull()
+    val linhas = remember(pedido) { androidx.compose.runtime.mutableStateListOf<L>().apply {
+        (o["linhas"] as? kotlinx.serialization.json.JsonArray)?.forEach { e -> val x = e as? kotlinx.serialization.json.JsonObject ?: return@forEach
+            add(L(txt(x["rotulo"]).orEmpty(), txt(x["chave"]), txt(x["unidade"]), br(num(x["qtd"])), br(num(x["unit"])), br(num(x["valor"])), txt(x["fixo"]) == "true")) }
+    } }
+    val pcts = remember(pedido) { androidx.compose.runtime.mutableStateListOf<P>().apply {
+        (o["percentuais"] as? kotlinx.serialization.json.JsonArray)?.forEach { e -> val x = e as? kotlinx.serialization.json.JsonObject ?: return@forEach; add(P(txt(x["rotulo"]).orEmpty(), br(num(x["pct"])))) }
+    } }
+    var minimo by remember(pedido) { mutableStateOf(br(num(o["minimo"]))) }
+    var motivo by remember(pedido) { mutableStateOf(txt(o["motivo"]).orEmpty()) }
+    var salvando by remember { mutableStateOf(false) }
+    var erro by remember { mutableStateOf<String?>(null) }
+    fun valorDe(l: L) = if (d(l.qtd) != null && d(l.unit) != null) d(l.qtd)!! * d(l.unit)!! else d(l.valor) ?: 0.0
+    val sub = linhas.filter { !it.fixo }.sumOf(::valorDe); val fixos = linhas.filter { it.fixo }.sumOf(::valorDe)
+    val pct = pcts.sumOf { d(it.pct) ?: 0.0 }
+    val total = maxOf(sub * (1 + pct / 100) + fixos, d(minimo) ?: 0.0)
+
+    com.pwexpress.core.designsystem.PwRotulo("Mudar o cálculo")
+    TextoDica("Mude a quantidade, o valor de cada um ou o valor da linha. O total é refeito na hora.")
+    linhas.forEachIndexed { i, l ->
+        Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(14.dp)).background(c.vidro).padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PwCampo(l.rotulo, { l.rotulo = it }, "Linha", modifier = Modifier.weight(1f))
+                PwBotaoIcone(PwIcones.Trash2, "Tirar linha", { linhas.removeAt(i) }, tamanho = 36.dp)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                PwCampo(l.qtd, { l.qtd = it }, "Qtd." + (l.unidade?.let { " ($it)" } ?: ""), teclado = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+                PwCampo(l.unit, { l.unit = it }, "Cada", teclado = KeyboardType.Decimal, prefixo = "R$ ", modifier = Modifier.weight(1f))
+                PwCampo(if (d(l.qtd) != null && d(l.unit) != null) numeroBr(valorDe(l)) else l.valor, { l.valor = it; l.qtd = ""; l.unit = "" }, "Valor", teclado = KeyboardType.Decimal, prefixo = "R$ ", modifier = Modifier.weight(1.1f))
+            }
+            com.pwexpress.core.designsystem.PwInterruptor("Taxa fixa (entra depois dos percentuais)", l.fixo, { l.fixo = it })
+        }
+    }
+    PwBotaoVidro("Linha nova", onClick = { linhas.add(L("Outro", null, null, "", "", "0", false)) }, icone = PwIcones.Plus, modifier = Modifier.fillMaxWidth())
+    pcts.forEachIndexed { i, p ->
+        Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            PwCampo(p.rotulo, { p.rotulo = it }, "Percentual", modifier = Modifier.weight(1.6f))
+            PwCampo(p.pct, { p.pct = it }, "%", teclado = KeyboardType.Decimal, modifier = Modifier.weight(1f))
+            PwBotaoIcone(PwIcones.Trash2, "Tirar", { pcts.removeAt(i) }, tamanho = 36.dp)
+        }
+    }
+    PwBotaoVidro("Percentual novo", onClick = { pcts.add(P("Acréscimo", "0")) }, icone = PwIcones.Percent, modifier = Modifier.fillMaxWidth().padding(top = 6.dp))
+    PwCampo(minimo, { minimo = it }, "Mínimo do pedido", teclado = KeyboardType.Decimal, prefixo = "R$ ", modifier = Modifier.padding(top = 6.dp))
+    PwCampo(motivo, { motivo = it }, "Motivo (aparece no pedido)", dica = "Ex.: combinado com o cliente")
+    Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("Novo total", color = c.texto, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        Text(moedaBr(total), color = c.ouro, fontWeight = FontWeight.Black, fontSize = 20.sp)
+    }
+    PwErro(erro)
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        PwBotaoVidro("Cancelar", onClick = onFechar, modifier = Modifier.weight(1f))
+        PwBotaoOuro(if (salvando) "Salvando…" else "Salvar cálculo", onClick = {
+            salvando = true
+            escopo.launch {
+                Gestao.editarOrcamento(pedido, kotlinx.serialization.json.buildJsonArray {
+                    linhas.forEach { l -> add(kotlinx.serialization.json.buildJsonObject {
+                        put("rotulo", l.rotulo.trim()); l.chave?.let { put("chave", it) }; l.unidade?.let { put("unidade", it) }; put("fixo", l.fixo)
+                        if (d(l.qtd) != null && d(l.unit) != null) { put("qtd", d(l.qtd)!!); put("unit", d(l.unit)!!) } else put("valor", d(l.valor) ?: 0.0)
+                    }) }
+                }, kotlinx.serialization.json.buildJsonArray { pcts.forEach { p -> add(kotlinx.serialization.json.buildJsonObject { put("rotulo", p.rotulo.trim()); put("pct", d(p.pct) ?: 0.0) }) } },
+                    d(minimo) ?: 0.0, motivo.trim().ifEmpty { null })
+                    .onSuccess { PwToast.mostrar("Cálculo salvo. Novo total ${moedaBr(total)}.", TipoAviso.OK); Gestao.atualizar(); onFechar() }
+                    .onFailure { erro = it.message }
+                salvando = false
+            }
+        }, icone = PwIcones.Check, habilitado = !salvando, modifier = Modifier.weight(1f))
+    }
 }

@@ -153,7 +153,7 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
                 PwLogo(tamanho = 38, soSelo = true)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(if (agendada != null) "CORRIDA AGENDADA" else if (corrida.entregas > 1) "NOVA ROTA" else "NOVA CORRIDA", maxLines = 1, softWrap = false,
+                    Text(if (oferta.extensao) "AUMENTAR SUA ROTA" else if (agendada != null) "CORRIDA AGENDADA" else if (corrida.entregas > 1) "NOVA ROTA" else "NOVA CORRIDA", maxLines = 1, softWrap = false,
                         style = TextStyle(brush = c.gradOuro, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 15.sp, letterSpacing = 1.sp))
                     Text(corrida.numeroExibicao + (corrida.empresaNome?.let { " · $it" } ?: ""), color = c.texto2, fontFamily = Archivo, fontSize = 12.5.sp, maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
@@ -173,6 +173,24 @@ fun OfertaScreen(oferta: Oferta, onFim: (aceitou: Boolean) -> Unit, modifier: Mo
         ) {
             Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 10.dp, bottom = 12.dp).size(width = 42.dp, height = 4.dp).clip(RoundedCornerShape(99.dp)).background(c.bordaForte))
             Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // extensão: as paradas vão para o fim da rota que ele já está fazendo
+                if (oferta.extensao) {
+                    Row(
+                        Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Brush.linearGradient(listOf(c.ouro.copy(alpha = 0.22f), c.ouro.copy(alpha = 0.06f))))
+                            .border(1.5.dp, c.ouro.copy(alpha = 0.7f), RoundedCornerShape(20.dp)).padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Box(Modifier.size(44.dp).clip(CircleShape).background(c.ouro.copy(alpha = 0.22f)), contentAlignment = Alignment.Center) {
+                            Icon(PwIcones.Route, null, tint = c.ouro, modifier = Modifier.size(22.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text("EXTENSÃO DA SUA ROTA", color = c.ouro, fontWeight = FontWeight.Black, fontSize = 11.sp, letterSpacing = 1.sp, fontFamily = Archivo)
+                            Text("Estas paradas entram no fim da rota${oferta.rotaAtualNumero?.let { " #$it" } ?: ""}", color = c.texto, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 16.sp)
+                            Text("Você termina o que já está fazendo${oferta.rotaAtualRestantes?.let { " ($it parada${if (it == 1) "" else "s"})" } ?: ""} e segue para estas. O que você já ia ganhar não diminui.", color = c.texto2, fontSize = 12.5.sp)
+                        }
+                    }
+                }
                 // agendada: deixa claro que não é para agora
                 if (agendada != null) {
                     Row(

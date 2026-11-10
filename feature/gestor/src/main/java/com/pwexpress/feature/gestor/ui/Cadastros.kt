@@ -967,7 +967,6 @@ private fun PixCarteiraG(onVoltar: (() -> Unit)?, abas: @Composable () -> Unit) 
     }
 }
 
-@Composable
 /**
  * "Para onde vai esse valor": uma barra e três linhas que sempre somam o total.
  * O que fica com o gestor é o total menos motoboys e Dev (o mesmo número do site).
@@ -1001,6 +1000,7 @@ internal fun ParaOndeVai(total: Double, motoboys: Double, dev: Double) {
     }
 }
 
+@Composable
 private fun ResumoCarteiraG(onVoltar: (() -> Unit)?, abas: @Composable () -> Unit) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()

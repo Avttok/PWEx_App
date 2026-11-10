@@ -1,5 +1,7 @@
 package com.pwexpress.core.perfil
 
+import com.pwexpress.core.tentar
+
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
@@ -164,7 +166,7 @@ object Conquistas {
     val minhas: StateFlow<JsonObject?> = _minhas.asStateFlow()
 
     /** Busca as estatísticas (null = as minhas). */
-    suspend fun carregar(motoboyId: String? = null): Result<JsonObject> = runCatching {
+    suspend fun carregar(motoboyId: String? = null): Result<JsonObject> = tentar {
         val r = PwCore.rpc.chamar("conquistas", buildJsonObject { if (motoboyId != null) put("p_motoboy", motoboyId) })
         if (!r.ok) error(if (r.corpo.contains("conquistas")) "Rode a migração das conquistas no banco." else "Erro (${r.codigo}).")
         Json.parseToJsonElement(r.corpo).jsonObject
@@ -177,7 +179,7 @@ object Conquistas {
     fun ganhas(stats: JsonObject?) = catalogo.filter { ganha(stats, it) }
 
     /** Dev: "ganha", "bloqueada" ou "auto" (volta a valer a estatística). */
-    suspend fun definir(perfilId: String, chave: String, estado: String): Result<Unit> = runCatching {
+    suspend fun definir(perfilId: String, chave: String, estado: String): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar("definir_conquista", buildJsonObject { put("p_perfil", perfilId); put("p_chave", chave); put("p_estado", estado) })
         if (!r.ok) error(if (r.corpo.contains("apenas_dev")) "Só o Dev mexe nas conquistas." else if (r.corpo.contains("definir_conquista")) "Rode a migração 20261110000007 no banco." else "Erro (${r.codigo}).")
     }

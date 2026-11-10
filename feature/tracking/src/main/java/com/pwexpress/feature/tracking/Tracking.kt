@@ -75,8 +75,12 @@ object Tracking {
     }
 
     /** Aplica os intervalos vindos do servidor (Configurações do gestor), em segundos/minutos/metros. */
-    fun aplicarConfiguracoes(corridaS: Double?, economiaS: Double?, disponivelMin: Double?, disponivelM: Double?) {
+    fun aplicarConfiguracoes(corridaS: Double?, economiaS: Double?, disponivelMin: Double?, disponivelM: Double?,
+                             distanciaM: Double? = null, precisaoM: Double? = null, envioS: Double? = null) {
         var mudou = false
+        distanciaM?.takeIf { it >= 0 }?.let { val v = it.toFloat(); if (v != Intervalos.corridaDistanciaM) { Intervalos.corridaDistanciaM = v; mudou = true } }
+        precisaoM?.takeIf { it >= 10 }?.let { Intervalos.precisaoMaximaM = it.toFloat() }
+        envioS?.takeIf { it >= 1 }?.let { Intervalos.envioLoteMs = (it * 1000).toLong() }
         corridaS?.takeIf { it >= 5 }?.let { val v = (it * 1000).toLong(); if (v != Intervalos.corridaNormalMs) { Intervalos.corridaNormalMs = v; mudou = true } }
         economiaS?.takeIf { it >= 10 }?.let { val v = (it * 1000).toLong(); if (v != Intervalos.corridaEconomiaMs) { Intervalos.corridaEconomiaMs = v; mudou = true } }
         disponivelMin?.takeIf { it >= 1 }?.let { Intervalos.disponivelEnvioMs = (it * 60_000).toLong() }
@@ -145,8 +149,18 @@ object Tracking {
         _info.update {
             it.copy(ultimaLeitura = p.registradoEm, ultimaPrecisao = p.precisao, naFila = fila.total(), ultimaPosicao = p.lat to p.lng)
         }
+        // em corrida, junta as posições e manda em lote (o tempo do lote vem dos Ajustes)
+        if (p.status == Modo.EM_CORRIDA && System.currentTimeMillis() - ultimaSync < Intervalos.envioLoteMs && fila.total() < Intervalos.LOTE_MAXIMO) {
+            if (loteAgendado?.isActive != true) loteAgendado = escopo.launch {
+                kotlinx.coroutines.delay((Intervalos.envioLoteMs - (System.currentTimeMillis() - ultimaSync)).coerceAtLeast(500))
+                sincronizar()
+            }
+            return
+        }
         sincronizarAgora()
     }
+    @Volatile private var ultimaSync = 0L
+    private var loteAgendado: kotlinx.coroutines.Job? = null
 
     internal fun reportarErro(mensagem: String) {
         _info.update { it.copy(erro = mensagem) }
@@ -159,6 +173,7 @@ object Tracking {
     // ---------------------------------------------------------------- envio
 
     private suspend fun sincronizar() = envioMutex.withLock {
+        ultimaSync = System.currentTimeMillis()
         if (!PwConfig.configurado || PwCore.auth.sessao.value == null) return@withLock
         _info.update { it.copy(enviando = true) }
         try {

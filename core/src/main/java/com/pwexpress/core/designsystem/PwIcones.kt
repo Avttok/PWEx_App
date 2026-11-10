@@ -191,3 +191,27 @@ object PwIcones {
     val HandCoins: ImageVector by lazy { icone("hand-coins", "M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17", "m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9", "m2 16 6 6", "M13.1 9a2.9 2.9 0 1 0 5.8 0a2.9 2.9 0 1 0 -5.8 0", "M3 5a3 3 0 1 0 6 0a3 3 0 1 0 -6 0") }
     val Boxes: ImageVector by lazy { icone("boxes", "M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z", "m7 16.5-4.74-2.85", "m7 16.5 5-3", "M7 16.5v5.17", "M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z", "m17 16.5-5-3", "m17 16.5 4.74-2.85", "M17 16.5v5.17", "M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z", "M12 8 7.26 5.15", "m12 8 4.74-2.85", "M12 13.5V8") }
 }
+
+/** Ícone guardado pelo nome (Lucide) → ícone do app (os que existem aqui; o resto vira pacote). */
+fun iconePorNome(nome: String?): ImageVector = when (nome) {
+    "file-text", "file-box", "newspaper", "mail", "folder" -> PwIcones.FileText
+    "smartphone", "tablet", "laptop", "tv", "cpu", "headphones", "watch", "camera" -> PwIcones.Smartphone
+    "flask-conical", "droplet", "fuel" -> PwIcones.FlaskConical
+    "flame" -> PwIcones.Flame
+    "store", "shopping-bag", "shopping-cart" -> PwIcones.Store
+    "building-2", "building", "warehouse", "factory", "hotel", "school", "hospital" -> PwIcones.Building2
+    "landmark", "banknote", "circle-dollar-sign" -> PwIcones.Landmark
+    "receipt" -> PwIcones.Receipt
+    "heart", "pill", "syringe", "stethoscope", "briefcase-medical" -> PwIcones.Heart
+    "house" -> PwIcones.House
+    "map-pin" -> PwIcones.MapPin
+    "clock" -> PwIcones.Clock
+    "zap" -> PwIcones.Zap
+    "star", "sparkles", "crown" -> PwIcones.Star
+    "bike", "truck", "car", "bus" -> PwIcones.Bike
+    "palette" -> PwIcones.Palette
+    "shield", "shield-check" -> PwIcones.ShieldCheck
+    "user-round", "users" -> PwIcones.UserRound
+    "package-2", "gift", "box" -> PwIcones.Package2
+    else -> PwIcones.Package
+}

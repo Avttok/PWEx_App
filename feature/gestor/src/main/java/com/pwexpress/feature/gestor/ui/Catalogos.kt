@@ -1,5 +1,7 @@
 package com.pwexpress.feature.gestor.ui
 
+import com.pwexpress.core.tentar
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -127,7 +129,7 @@ private fun LinhaCatalogo(cat: Catalogo, l: JsonObject, cliente: String?, onClic
     val forma = RoundedCornerShape(16.dp)
     val ativo = if (cat == Catalogo.TIPOS) l.bool("ativo") else l.bool("ativa")
     Row(Modifier.fillMaxWidth().clip(forma).background(c.vidroSutil).border(1.dp, c.borda, forma).clickable(onClick = onClick).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-        val cor = l.str("cor")?.let { runCatching { Color(android.graphics.Color.parseColor(it)) }.getOrNull() } ?: c.ouro
+        val cor = l.str("cor")?.let { tentar { Color(android.graphics.Color.parseColor(it)) }.getOrNull() } ?: c.ouro
         Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(cor.copy(alpha = 0.16f)), contentAlignment = Alignment.Center) {
             Icon(if (l.bool("perigoso")) PwIcones.FlaskConical else iconeDoNome(l.str("icone")), null, tint = if (l.bool("perigoso")) c.vermelho else cor, modifier = Modifier.size(18.dp))
         }
@@ -229,7 +231,7 @@ private fun EditorCatalogo(cat: Catalogo, l: JsonObject?, clienteId: String?, on
         }
         salvando = true
         escopo.launch {
-            val r = if (cat == Catalogo.TIPOS && l != null) runCatching {
+            val r = if (cat == Catalogo.TIPOS && l != null) tentar {
                 val resp = com.pwexpress.core.PwCore.rpc.rest("PATCH", "/rest/v1/tipos_pedido?chave=eq.${l.str("chave")}", linha.toString(), "return=representation")
                 if (!resp.ok) error(Gestao.traduzir(resp.corpo) ?: "Não deu para salvar (${resp.codigo}).")
                 linha

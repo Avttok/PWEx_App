@@ -45,7 +45,12 @@ data class Exigencias(val foto: Boolean, val nome: Boolean, val assinatura: Bool
 fun Corrida.exigencias(p: Parada): Exigencias = p.exige
     ?: if (p.tipo == TipoParada.ENTREGA) Exigencias(exigeFoto, exigeNome, exigeAssinatura, exigeCodigo) else Exigencias(false, false, false, false)
 
-data class ItemParada(val descricao: String, val quantidade: Int, val categoria: String?, val perigoso: Boolean, val fragil: Boolean)
+data class ItemParada(
+    val descricao: String, val quantidade: Int, val categoria: String?, val perigoso: Boolean, val fragil: Boolean,
+    val icone: String? = null, val pesoKg: Double? = null, val medidas: String? = null, val valorDeclarado: Double? = null, val observacoes: String? = null,
+    /** Não está preso a este ponto: vai para todas as entregas (ou sai de qualquer coleta). */
+    val todas: Boolean = false,
+)
 
 data class Referencia(val nome: String, val distanciaM: Int?, val tipo: String?, val relacao: String? = null)
 
@@ -170,7 +175,11 @@ private fun JsonElement.paraParada(): Parada {
         pedidoNumero = o.texto("pedido_numero")?.toLongOrNull(),
         itens = (o["itens"] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { e ->
             val i = e as? JsonObject ?: return@mapNotNull null
-            ItemParada(i.texto("descricao") ?: return@mapNotNull null, i.inteiro("quantidade") ?: 1, i.texto("categoria"), i.logico("perigoso"), i.logico("fragil"))
+            val c = i.decimal("comprimento_cm")
+            fun n(v: Double?) = v?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString().replace('.', ',') } ?: "?"
+            ItemParada(i.texto("descricao") ?: return@mapNotNull null, i.inteiro("quantidade") ?: 1, i.texto("categoria"), i.logico("perigoso"), i.logico("fragil"),
+                icone = i.texto("icone"), pesoKg = i.decimal("peso_kg"), medidas = c?.let { "${n(it)}×${n(i.decimal("largura_cm"))}×${n(i.decimal("altura_cm"))} cm" },
+                valorDeclarado = i.decimal("valor_declarado"), observacoes = i.texto("observacoes"), todas = i.logico("todas"))
         }.orEmpty(),
         exige = (o["exige"] as? JsonObject)?.let { e -> Exigencias(e.logico("foto"), e.logico("nome"), e.logico("assinatura"), e.logico("codigo")) },
         janelaDe = o.texto("janela_de"),

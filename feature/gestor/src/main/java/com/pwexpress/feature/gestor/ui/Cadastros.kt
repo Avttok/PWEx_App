@@ -1,5 +1,7 @@
 package com.pwexpress.feature.gestor.ui
 
+import com.pwexpress.core.tentar
+
 import com.pwexpress.core.json.str
 
 import android.content.ClipData
@@ -212,7 +214,7 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
                 escopo.launch {
                     Gestao.rpcJson("entrar_como_cliente", kotlinx.serialization.json.buildJsonObject { put("p_empresa", kotlinx.serialization.json.JsonPrimitive(e.id)) })
                         .onSuccess {
-                            runCatching { ctxCli.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(com.pwexpress.core.config.PwConfig.siteUrl + "/cliente"))) }
+                            tentar { ctxCli.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(com.pwexpress.core.config.PwConfig.siteUrl + "/cliente"))) }
                             com.pwexpress.core.designsystem.PwToast.mostrar("No site do cliente você está como ${e.nome}${if (e.modoTeste) " (modo teste)" else ""}.")
                         }.onFailure { erro = it.message }
                 }
@@ -639,7 +641,7 @@ private fun RegistroG(id: String) {
     var dados by remember { mutableStateOf<Pair<JsonObject, List<ItemRegistro>>?>(null) }
     var erro by remember { mutableStateOf<String?>(null) }
     var filtro by remember { mutableIntStateOf(0) }
-    LaunchedEffect(id) { runCatching { Gestao.registro(id) }.onSuccess { dados = it }.onFailure { erro = it.message } }
+    LaunchedEffect(id) { tentar { Gestao.registro(id) }.onSuccess { dados = it }.onFailure { erro = it.message } }
     PwErro(erro)
     val d = dados ?: run { if (erro == null) PwCarregando(); return }
     val r = d.first
@@ -909,7 +911,7 @@ private fun ExtratoCarteiraG(onVoltar: (() -> Unit)?, abas: @Composable () -> Un
                         cor.valor ?: 0.0, cor.valorMotoboy ?: 0.0, cor.valorGestao ?: 0.0, cor.valorDev ?: 0.0).joinToString(";") { it.toString().replace(';', ',') })
                 }
             }
-            runCatching {
+            tentar {
                 ctx.startActivity(android.content.Intent.createChooser(android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/csv")
                     .putExtra(android.content.Intent.EXTRA_SUBJECT, "Extrato PW Express").putExtra(android.content.Intent.EXTRA_TEXT, csv), "Compartilhar extrato"))
             }
@@ -1321,7 +1323,7 @@ private fun VincularClienteG(id: String, nome: String) {
     var atual by remember(id) { mutableStateOf<String?>(null) }
     var carregado by remember(id) { mutableStateOf(false) }
     LaunchedEffect(id) {
-        atual = runCatching { Gestao.tabela("perfis", "id=eq.$id&select=empresa_id").firstOrNull()?.str("empresa_id") }.getOrNull()
+        atual = tentar { Gestao.tabela("perfis", "id=eq.$id&select=empresa_id").firstOrNull()?.str("empresa_id") }.getOrNull()
         carregado = true
     }
     if (!carregado) return

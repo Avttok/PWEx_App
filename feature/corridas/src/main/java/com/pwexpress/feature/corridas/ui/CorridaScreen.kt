@@ -131,6 +131,10 @@ fun CorridaScreen(corrida: Corrida, admin: Boolean = false, modifier: Modifier =
 
     var focoT by remember(corrida.id) { mutableStateOf<com.pwexpress.core.mapa.FocoMapa?>(null) }
     Column(modifier.fillMaxSize()) {
+        // ---------------------------------------------------------- navegação curva a curva (dentro do app)
+        if (parada != null && !comprovanteAberto) {
+            NavegacaoBanner(parada.id, parada.lat to parada.lng, Modifier.padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 4.dp))
+        }
         // ---------------------------------------------------------- mapa
         Box(Modifier.fillMaxWidth().then(if (minimizado) Modifier.weight(1f) else Modifier.height(320.dp))) {
             // feito (pelas ruas, do servidor) + onde estou agora; a fazer: daqui até as paradas que faltam

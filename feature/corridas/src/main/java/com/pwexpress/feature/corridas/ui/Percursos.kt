@@ -1,5 +1,7 @@
 package com.pwexpress.feature.corridas.ui
 
+import com.pwexpress.core.tentar
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -81,14 +83,14 @@ fun MeusPercursos() {
         }
         if (regs != null) return@LaunchedEffect
         // site fora do ar: pings direto do banco (linha reta entre eles)
-        regs = runCatching {
+        regs = tentar {
             val r = PwCore.rpc.rest("GET", "/rest/v1/localizacoes?select=lat,lng,status,corrida_id,registrado_em&motoboy_id=eq.$id&teste=eq.$teste&registrado_em=gte.$ini&registrado_em=lt.$fim&order=registrado_em.asc&limit=8000")
             if (!r.ok) emptyList() else separarRegistros(Json.parseToJsonElement(r.corpo).jsonArray.mapNotNull { e ->
                 val o = e.jsonObject
                 fun t(k: String) = (o[k] as? JsonPrimitive)?.takeIf { it.isString }?.content
                 val la = (o["lat"] as? JsonPrimitive)?.doubleOrNull; val lo = (o["lng"] as? JsonPrimitive)?.doubleOrNull
                 if (la == null || lo == null) null
-                else PingMapa(la, lo, t("status") ?: "", t("corrida_id"), runCatching { java.time.OffsetDateTime.parse(t("registrado_em")).toInstant().toEpochMilli() }.getOrDefault(0))
+                else PingMapa(la, lo, t("status") ?: "", t("corrida_id"), tentar { java.time.OffsetDateTime.parse(t("registrado_em")).toInstant().toEpochMilli() }.getOrDefault(0))
             })
         }.getOrDefault(emptyList())
     }

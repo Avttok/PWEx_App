@@ -74,29 +74,7 @@ import kotlinx.serialization.json.put
 import java.time.Instant
 import java.util.Calendar
 
-/** Ícone guardado pelo nome (Lucide) → ícone do app (os que existem aqui; o resto vira pacote). */
-internal fun iconeDoNome(nome: String?): ImageVector = when (nome) {
-    "file-text", "file-box", "newspaper", "mail", "folder" -> PwIcones.FileText
-    "smartphone", "tablet", "laptop", "tv", "cpu", "headphones", "watch", "camera" -> PwIcones.Smartphone
-    "flask-conical", "droplet", "fuel" -> PwIcones.FlaskConical
-    "flame" -> PwIcones.Flame
-    "store", "shopping-bag", "shopping-cart" -> PwIcones.Store
-    "building-2", "building", "warehouse", "factory", "hotel", "school", "hospital" -> PwIcones.Building2
-    "landmark", "banknote", "circle-dollar-sign" -> PwIcones.Landmark
-    "receipt" -> PwIcones.Receipt
-    "heart", "pill", "syringe", "stethoscope", "briefcase-medical" -> PwIcones.Heart
-    "house" -> PwIcones.House
-    "map-pin" -> PwIcones.MapPin
-    "clock" -> PwIcones.Clock
-    "zap" -> PwIcones.Zap
-    "star", "sparkles", "crown" -> PwIcones.Star
-    "bike", "truck", "car", "bus" -> PwIcones.Bike
-    "palette" -> PwIcones.Palette
-    "shield", "shield-check" -> PwIcones.ShieldCheck
-    "user-round", "users" -> PwIcones.UserRound
-    "package-2", "gift", "box" -> PwIcones.Package2
-    else -> PwIcones.Package
-}
+internal fun iconeDoNome(nome: String?): ImageVector = com.pwexpress.core.designsystem.iconePorNome(nome)
 
 private var seqItem = 0
 private class ItemForm(val categoria: CategoriaG?) {

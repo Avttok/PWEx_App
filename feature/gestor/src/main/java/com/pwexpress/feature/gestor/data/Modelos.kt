@@ -1,5 +1,7 @@
 package com.pwexpress.feature.gestor.data
 
+import com.pwexpress.core.tentar
+
 import com.pwexpress.core.json.arr
 import com.pwexpress.core.json.bool
 import com.pwexpress.core.json.dbl
@@ -12,7 +14,7 @@ import kotlinx.serialization.json.JsonObject
 
 /** Data/hora ISO do servidor → milissegundos. */
 fun iso(s: String?): Long? = s?.let {
-    runCatching { java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli() }
+    tentar { java.time.OffsetDateTime.parse(it).toInstant().toEpochMilli() }
         .recoverCatching { _ -> java.time.OffsetDateTime.parse(it.replace(" ", "T")).toInstant().toEpochMilli() }
         .getOrNull()
 }
@@ -265,6 +267,6 @@ fun JsonObject.paraVeiculoG(): VeiculoG {
         ano = (str("ano") ?: str("veiculo_ano") ?: int("veiculo_ano")?.toString()).orEmpty(),
         cnhNumero = str("cnh_numero").orEmpty(), cnhCategoria = str("cnh_categoria").orEmpty(),
         cnhValidade = validade?.let { "${it.substring(8, 10)}/${it.substring(5, 7)}/${it.substring(0, 4)}" }.orEmpty(),
-        venceEmDias = validade?.let { runCatching { java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), java.time.LocalDate.parse(it.take(10))) }.getOrNull() },
+        venceEmDias = validade?.let { tentar { java.time.temporal.ChronoUnit.DAYS.between(java.time.LocalDate.now(), java.time.LocalDate.parse(it.take(10))) }.getOrNull() },
     )
 }

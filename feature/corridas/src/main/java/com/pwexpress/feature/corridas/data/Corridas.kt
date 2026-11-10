@@ -1,5 +1,7 @@
 package com.pwexpress.feature.corridas.data
 
+import com.pwexpress.core.tentar
+
 import android.content.Context
 import androidx.core.content.edit
 import com.google.firebase.messaging.FirebaseMessaging
@@ -60,7 +62,7 @@ object Corridas {
 
     suspend fun sincronizarAgora(): Unit = mutex.withLock {
         if (PwCore.auth.sessao.value == null) return@withLock
-        runCatching {
+        tentar {
             val a = PwCore.rpc.chamar("minha_corrida_ativa", JsonObject(emptyMap()))
             if (a.ok) {
                 val antes = _ativa.value
@@ -70,7 +72,7 @@ object Corridas {
                 // a corrida sumiu sem você concluir: cancelada ou tirada de você (avisa mesmo se o push não chegou)
                 if (antes != null && agora == null && antes.status != "concluida" && avisadaSumiu != antes.id) {
                     avisadaSumiu = antes.id
-                    runCatching {
+                    tentar {
                         com.pwexpress.feature.corridas.push.Alarme.pararOferta(app)
                         com.pwexpress.feature.corridas.push.Alarme.avisar(app, "Corrida ${antes.numeroExibicao} encerrada", "O gestor cancelou ou tirou a corrida de você.",
                             "A corrida ${antes.numeroExibicao} não está mais com você (cancelada ou passada a outro motoboy). Pode parar; nenhuma etapa a mais é necessária.")
@@ -97,7 +99,7 @@ object Corridas {
     /** Livres para reservar (do meu modo) + as que eu reservei, por horário. */
     val planejadas: StateFlow<List<Corrida>> = _planejadas.asStateFlow()
 
-    suspend fun carregarPlanejadas(): Result<Unit> = runCatching {
+    suspend fun carregarPlanejadas(): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar("corridas_planejadas", JsonObject(emptyMap()))
         if (!r.ok) throw Exception(traduzir(r))
         _planejadas.value = (r.json() as? kotlinx.serialization.json.JsonArray)?.map { it.paraCorrida() }.orEmpty()
@@ -111,7 +113,7 @@ object Corridas {
     /** Rotas que eu posso pegar agora: a sugerida para mim primeiro. */
     val rotas: StateFlow<List<Corrida>> = _rotas.asStateFlow()
 
-    suspend fun carregarRotas(): Result<Unit> = runCatching {
+    suspend fun carregarRotas(): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar("rotas_disponiveis", JsonObject(emptyMap()))
         if (!r.ok) throw Exception(traduzir(r))
         _rotas.value = (r.json() as? kotlinx.serialization.json.JsonArray)?.map { it.paraCorrida() }.orEmpty()
@@ -119,7 +121,7 @@ object Corridas {
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
     /** Pega a rota do quadro: express já vira a corrida ativa; planejada fica reservada para mim. */
-    suspend fun pegarRota(corridaId: String): Result<Boolean> = runCatching {
+    suspend fun pegarRota(corridaId: String): Result<Boolean> = tentar {
         val r = PwCore.rpc.chamar("pegar_rota", buildJsonObject { put("p_corrida", corridaId) })
         if (!r.ok) throw Exception(traduzir(r))
         val c = r.json()?.paraCorrida()
@@ -132,7 +134,7 @@ object Corridas {
 
     // ------------------------------------------------------------------ holerite
 
-    suspend fun meusHolerites(): Result<Pair<List<PeriodoHolerite>, Boolean>> = runCatching {
+    suspend fun meusHolerites(): Result<Pair<List<PeriodoHolerite>, Boolean>> = tentar {
         val r = PwCore.rpc.chamar("meus_holerites", buildJsonObject { put("p_quantos", 12) })
         if (!r.ok) throw Exception(traduzir(r))
         val o = r.json()?.jsonObject ?: throw Exception("Sem dados.")
@@ -140,7 +142,7 @@ object Corridas {
         lista to ((o["valores_visiveis"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true")
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
-    suspend fun meuHolerite(inicio: String, fim: String): Result<Holerite> = runCatching {
+    suspend fun meuHolerite(inicio: String, fim: String): Result<Holerite> = tentar {
         val r = PwCore.rpc.chamar("meu_holerite", buildJsonObject { put("p_inicio", inicio); put("p_fim", fim) })
         if (!r.ok) throw Exception(traduzir(r))
         (r.json()?.jsonObject ?: throw Exception("Sem dados.")).paraHolerite()
@@ -152,7 +154,7 @@ object Corridas {
     /** Corridas que eu fiz (concluídas e canceladas), do modo atual. null = ainda não carregou. */
     val historico: StateFlow<List<CorridaFeita>?> = _historico.asStateFlow()
 
-    suspend fun carregarHistorico(dias: Int = 120): Result<Unit> = runCatching {
+    suspend fun carregarHistorico(dias: Int = 120): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar("minhas_corridas", buildJsonObject { put("p_dias", dias) })
         if (!r.ok) throw Exception(traduzir(r))
         _historico.value = (r.json() as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonObject)?.paraCorridaFeita() }.orEmpty()
@@ -164,7 +166,7 @@ object Corridas {
         acaoPlanejada("cancelar_reserva", buildJsonObject { put("p_corrida", corridaId); motivo?.let { put("p_motivo", it) } })
 
     /** Começa a corrida reservada: vira a corrida ativa. */
-    suspend fun iniciarPlanejada(corridaId: String): Result<Unit> = runCatching {
+    suspend fun iniciarPlanejada(corridaId: String): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar("iniciar_planejada", buildJsonObject { put("p_corrida", corridaId) })
         if (!r.ok) throw Exception(traduzir(r))
         _ativa.value = r.json()?.paraCorrida()
@@ -172,7 +174,7 @@ object Corridas {
         Unit
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
-    private suspend fun acaoPlanejada(funcao: String, args: JsonObject): Result<Unit> = runCatching {
+    private suspend fun acaoPlanejada(funcao: String, args: JsonObject): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar(funcao, args)
         if (!r.ok) throw Exception(traduzir(r))
         carregarPlanejadas()
@@ -180,7 +182,7 @@ object Corridas {
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
     /** Resposta vinda da notificação (o app pode nem estar aberto). */
-    suspend fun responderPorId(ofertaId: String, aceitar: Boolean): Result<Unit> = runCatching {
+    suspend fun responderPorId(ofertaId: String, aceitar: Boolean): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar("responder_oferta", buildJsonObject { put("p_oferta", ofertaId); put("p_aceitar", aceitar) })
         if (_oferta.value?.id == ofertaId) _oferta.value = null
         if (!r.ok) throw Exception(traduzir(r))
@@ -193,7 +195,7 @@ object Corridas {
         if (c?.status == "reservada") {
             com.pwexpress.core.designsystem.PwToast.mostrar("Reservada para ${c.agendadaPara?.let { com.pwexpress.feature.corridas.ui.quandoTexto(it) } ?: "o horário marcado"}. Ela fica em Rotas → Minhas reservas.",
                 com.pwexpress.core.designsystem.TipoAviso.OK, "Corrida reservada")
-            runCatching { carregarPlanejadas() }
+            tentar { carregarPlanejadas() }
         } else _ativa.value = c
     }
 
@@ -201,7 +203,7 @@ object Corridas {
 
     suspend fun responder(aceitar: Boolean): Result<Unit> {
         val oferta = _oferta.value ?: return Result.failure(Exception("Essa corrida não está mais disponível."))
-        return runCatching {
+        return tentar {
             val r = PwCore.rpc.chamar("responder_oferta", buildJsonObject {
                 put("p_oferta", oferta.id)
                 put("p_aceitar", aceitar)
@@ -232,7 +234,7 @@ object Corridas {
         posicao: Posicao? = null,
         ignorarLocal: Boolean = false,
     ): Result<Unit> =
-        runCatching {
+        tentar {
             val completo = buildJsonObject {
                 dados.forEach { (k, v) -> put(k, v) }
                 posicao?.let {
@@ -254,7 +256,7 @@ object Corridas {
 
     /** Envia foto/assinatura e devolve o caminho no Storage. */
     suspend fun enviarComprovante(corridaId: String, paradaId: String, nome: String, bytes: ByteArray, tipo: String): Result<String> =
-        runCatching {
+        tentar {
             val caminho = "$corridaId/$paradaId-$nome-${System.currentTimeMillis()}.${if (tipo == "image/png") "png" else "jpg"}"
             val r = PwCore.rpc.enviarArquivo("comprovantes", caminho, bytes, tipo)
             if (!r.ok) throw Exception("Falha ao enviar $nome (${r.codigo}).")
@@ -264,7 +266,7 @@ object Corridas {
     // ------------------------------------------------------------------ token do Firebase
 
     fun atualizarTokenPush() {
-        runCatching {
+        tentar {
             FirebaseMessaging.getInstance().token.addOnSuccessListener { registrarToken(it) }
         }
     }
@@ -277,7 +279,7 @@ object Corridas {
     private suspend fun enviarTokenPendente() {
         val token = prefs.getString("token_pendente", null) ?: return
         if (PwCore.auth.sessao.value == null) return
-        runCatching {
+        tentar {
             val r = PwCore.rpc.chamar("registrar_fcm_token", buildJsonObject { put("p_token", token) })
             if (r.ok) prefs.edit { remove("token_pendente") }
         }
@@ -318,7 +320,7 @@ object Corridas {
     )
 
     private fun traduzir(r: HttpResposta): String {
-        val msg = runCatching { Json.parseToJsonElement(r.corpo).jsonObject["message"]?.jsonPrimitive?.content }.getOrNull()
+        val msg = tentar { Json.parseToJsonElement(r.corpo).jsonObject["message"]?.jsonPrimitive?.content }.getOrNull()
         if (msg != null && msg.startsWith("longe_do_local")) {
             val partes = msg.split(":")
             val dist = partes.getOrNull(1)

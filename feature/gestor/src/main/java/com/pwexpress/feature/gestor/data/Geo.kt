@@ -1,5 +1,7 @@
 package com.pwexpress.feature.gestor.data
 
+import com.pwexpress.core.tentar
+
 import com.pwexpress.core.PwCore
 import com.pwexpress.core.json.dbl
 import com.pwexpress.core.json.int
@@ -26,7 +28,7 @@ object Geo {
     private const val UA = "PWExpress-app (pwexpress.vercel.app)"
 
     private suspend fun get(url: String): String? = withContext(Dispatchers.IO) {
-        runCatching {
+        tentar {
             PwCore.http.client.newCall(Request.Builder().url(url).header("User-Agent", UA).header("Accept-Language", "pt-BR").build())
                 .execute().use { if (it.isSuccessful) it.body?.string() else null }
         }.getOrNull()
@@ -37,7 +39,7 @@ object Geo {
     suspend fun buscarEnderecos(texto: String): List<EnderecoG> {
         if (texto.trim().length < 4) return emptyList()
         val corpo = get("https://nominatim.openstreetmap.org/search?format=jsonv2&countrycodes=br&limit=6&accept-language=pt-BR&q=${URLEncoder.encode(texto, "UTF-8")}") ?: return emptyList()
-        return runCatching {
+        return tentar {
             (Json.parseToJsonElement(corpo) as JsonArray).mapNotNull { e ->
                 val o = e as? JsonObject ?: return@mapNotNull null
                 EnderecoG(encurtar(o.str("display_name").orEmpty()), o.dbl("lat") ?: return@mapNotNull null, o.dbl("lon") ?: return@mapNotNull null)
@@ -47,7 +49,7 @@ object Geo {
 
     suspend fun enderecoDoPonto(lat: Double, lng: Double): String {
         val corpo = get("https://nominatim.openstreetmap.org/reverse?format=jsonv2&accept-language=pt-BR&lat=$lat&lon=$lng")
-        return corpo?.let { runCatching { encurtar(Json.parseToJsonElement(it).jsonObject.str("display_name").orEmpty()) }.getOrNull() }
+        return corpo?.let { tentar { encurtar(Json.parseToJsonElement(it).jsonObject.str("display_name").orEmpty()) }.getOrNull() }
             ?.ifBlank { null } ?: "%.5f, %.5f".format(lat, lng)
     }
 
@@ -55,7 +57,7 @@ object Geo {
         if (pontos.size < 2) return null
         val coords = pontos.joinToString(";") { "${it.second},${it.first}" }
         val corpo = get("https://router.project-osrm.org/route/v1/driving/$coords?overview=full&geometries=polyline") ?: return null
-        return runCatching {
+        return tentar {
             val o = Json.parseToJsonElement(corpo).jsonObject
             val r = (o["routes"] as JsonArray).first().jsonObject
             RotaG(r.dbl("distance")!!.toInt(), r.dbl("duration")!!.toInt(), r.str("geometry")!!)
@@ -87,11 +89,11 @@ object Geo {
     private suspend fun buscarProximos(lat: Double, lng: Double, raioM: Int): List<RefG> = withContext(Dispatchers.IO) {
         val q = "[out:json][timeout:10];(nwr(around:$raioM,$lat,$lng)[name][~\"^(amenity|shop|leisure|tourism|office|healthcare|craft)$\"~\".\"];);out center 60;way(around:${minOf(raioM, 180)},$lat,$lng)[highway][name];out geom 40;"
         for (url in overpass) {
-            val corpo = runCatching {
+            val corpo = tentar {
                 val req = Request.Builder().url(url).header("User-Agent", UA).post(FormBody.Builder().add("data", q).build()).build()
                 PwCore.http.client.newCall(req).execute().use { r -> if (r.isSuccessful) r.body?.string() else null }
             }.getOrNull() ?: continue
-            val lista = runCatching { montarReferencias(corpo, lat, lng) }.getOrNull() ?: continue
+            val lista = tentar { montarReferencias(corpo, lat, lng) }.getOrNull() ?: continue
             return@withContext lista
         }
         emptyList()
@@ -114,7 +116,7 @@ object Geo {
                 val plng = o.dbl("lon") ?: c?.dbl("lon") ?: return@mapNotNull null
                 val t = tags.str("amenity") ?: tags.str("shop") ?: tags.str("leisure") ?: tags.str("tourism") ?: tags.str("office") ?: tags.str("healthcare") ?: tags.str("craft")
                 if (t in fora || !vistos.add(nome.lowercase())) return@mapNotNull null
-                val rel = runCatching { relacaoNaRua(destino, xy(plat, plng), vias) }.getOrNull()
+                val rel = tentar { relacaoNaRua(destino, xy(plat, plng), vias) }.getOrNull()
                 val frase = when (rel) { null -> null; "frente" -> "Fica do outro lado da rua de $nome"; else -> "Fica à $rel de $nome (olhando da rua)" }
                 RefG(nome, metros(lat, lng, plat, plng), tipos[t], plat, plng, frase)
             }.sortedBy { it.distanciaM ?: 0 }.take(8)

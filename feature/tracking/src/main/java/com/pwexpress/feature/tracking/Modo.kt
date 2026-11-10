@@ -24,8 +24,14 @@ object Intervalos {
     @Volatile var disponivelEnvioMs = 180_000L
     @Volatile var disponivelDistanciaM = 300f
 
-    /** Em corrida, descarta leituras com erro maior que isso (evita "saltos" no mapa). */
+    /** Em corrida, descarta leituras com erro maior que isso (evita "saltos" no mapa). Ajustes → ping_precisao_max_m. */
+    @Volatile var precisaoMaximaM = 60f
+    /** Teto absoluto: sem leitura boa há muito tempo, aceita até isso para não sumir do mapa. */
     const val PRECISAO_MAXIMA_M = 150f
+    /** Em corrida, manda antes do tempo se andou isso (0 = só pelo tempo). Ajustes → ping_distancia_m. */
+    @Volatile var corridaDistanciaM = 20f
+    /** Em corrida, as posições vão em lote a cada X (economiza bateria). Ajustes → ping_envio_s. */
+    @Volatile var envioLoteMs = 12_000L
 
     const val LOTE_MAXIMO = 200
 

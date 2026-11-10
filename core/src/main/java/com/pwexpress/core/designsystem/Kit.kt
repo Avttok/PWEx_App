@@ -373,6 +373,7 @@ fun PwCarregando(modifier: Modifier = Modifier, texto: String? = null) {
 @Composable
 fun PwErro(texto: String?, modifier: Modifier = Modifier) {
     if (texto.isNullOrBlank()) return
+    if (com.pwexpress.core.ehMensagemDeCancelamento(texto)) return // a tela saiu no meio: não é erro
     val c = Pw.cores
     val forma = RoundedCornerShape(14.dp)
     Row(
@@ -639,6 +640,7 @@ object PwToast {
     private val _avisos = kotlinx.coroutines.flow.MutableStateFlow<List<Aviso>>(emptyList())
     val avisos: kotlinx.coroutines.flow.StateFlow<List<Aviso>> = _avisos
     fun mostrar(texto: String, tipo: TipoAviso = TipoAviso.OK, titulo: String? = null) {
+        if (tipo == TipoAviso.ERRO && com.pwexpress.core.ehMensagemDeCancelamento(texto)) return
         // texto longo (explicações, medalhas) fica mais tempo na tela
         val base = if (tipo == TipoAviso.ERRO || tipo == TipoAviso.AVISO) 6000L else 3500L
         val a = Aviso(++seq, texto, tipo, titulo, maxOf(base, minOf(11_000L, (texto.length + (titulo?.length ?: 0)) * 60L)))

@@ -151,4 +151,9 @@ object CorridaEmCurso {
     private val _resumo = MutableStateFlow<ResumoCorrida?>(null)
     val resumo: StateFlow<ResumoCorrida?> = _resumo.asStateFlow()
     fun publicar(r: ResumoCorrida?) { _resumo.value = r }
+
+    /** Próxima curva da navegação no app ("Em 200 m, vire à direita na Rua X"), para a notificação. */
+    private val _instrucao = MutableStateFlow<String?>(null)
+    val instrucao: StateFlow<String?> = _instrucao.asStateFlow()
+    fun instruir(t: String?) { if (_instrucao.value != t) _instrucao.value = t }
 }

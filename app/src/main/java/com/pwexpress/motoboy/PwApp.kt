@@ -84,6 +84,14 @@ class PwApp : Application() {
                     economiaS = p.numero("intervalo_economia_s", 90.0),
                     disponivelMin = p.numero("disponivel_envio_min", 3.0),
                     disponivelM = p.numero("disponivel_distancia_m", 300.0),
+                    distanciaM = p.numero("ping_distancia_m", 20.0),
+                    precisaoM = p.numero("ping_precisao_max_m", 60.0),
+                    envioS = p.numero("ping_envio_s", 12.0),
+                )
+                com.pwexpress.core.mapa.PreferenciaRota.definir(p.texto("rota_provedor", "valhalla"), p.texto("rota_perfil", "motorcycle"))
+                com.pwexpress.core.mapa.PreferenciasNavegacao.definir(
+                    ligada = p.logico("navegacao_ligada", true), voz = p.logico("navegacao_voz", true),
+                    recalcularM = p.numero("navegacao_recalcular_m", 60.0), naNotificacao = p.logico("navegacao_na_notificacao", true),
                 )
             }
         }

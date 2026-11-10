@@ -1,5 +1,7 @@
 package com.pwexpress.core.mapa
 
+import com.pwexpress.core.tentar
+
 import com.pwexpress.core.PwCore
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -28,13 +30,13 @@ object PercursosServidor {
     }
 
     /** null = o site não respondeu (a tela pode cair para os pings direto do banco). */
-    suspend fun buscar(de: Instant? = null, ate: Instant? = null, motoboy: String? = null, teste: Boolean? = null, corrida: String? = null): Resultado? = runCatching {
+    suspend fun buscar(de: Instant? = null, ate: Instant? = null, motoboy: String? = null, teste: Boolean? = null, corrida: String? = null): Resultado? = tentar {
         val corpo = buildJsonObject {
             de?.let { put("de", it.toString()) }; ate?.let { put("ate", it.toString()) }
             motoboy?.let { put("motoboy", it) }; teste?.let { put("teste", it) }; corrida?.let { put("corrida", it) }
         }
         val r = PwCore.rpc.site("/api/percursos", corpo)
-        if (!r.ok) return@runCatching null
+        if (!r.ok) return@tentar null
         val j = Json.parseToJsonElement(r.corpo).jsonObject
         fun par(e: kotlinx.serialization.json.JsonElement): Pair<Double, Double>? {
             val a = e as? JsonArray ?: return null

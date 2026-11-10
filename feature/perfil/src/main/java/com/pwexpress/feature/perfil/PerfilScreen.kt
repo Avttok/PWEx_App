@@ -1,5 +1,7 @@
 package com.pwexpress.feature.perfil
 
+import com.pwexpress.core.tentar
+
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -208,7 +210,7 @@ fun Linha(rotulo: String, valor: String) {
 
 // ------------------------------------------------------------------ foto
 
-private fun prepararFoto(ctx: Context, uri: Uri): ByteArray? = runCatching {
+private fun prepararFoto(ctx: Context, uri: Uri): ByteArray? = tentar {
     val limites = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     ctx.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, limites) }
     var amostra = 1
@@ -234,8 +236,8 @@ private fun CartaoMeuVeiculo() {
     val c = Pw.cores
     var v by remember { mutableStateOf<kotlinx.serialization.json.JsonObject?>(null) }
     androidx.compose.runtime.LaunchedEffect(Unit) {
-        v = runCatching { com.pwexpress.core.PwCore.rpc.chamar("meu_veiculo", kotlinx.serialization.json.JsonObject(emptyMap())) }.getOrNull()
-            ?.takeIf { it.ok }?.let { runCatching { kotlinx.serialization.json.Json.parseToJsonElement(it.corpo) as? kotlinx.serialization.json.JsonObject }.getOrNull() }
+        v = tentar { com.pwexpress.core.PwCore.rpc.chamar("meu_veiculo", kotlinx.serialization.json.JsonObject(emptyMap())) }.getOrNull()
+            ?.takeIf { it.ok }?.let { tentar { kotlinx.serialization.json.Json.parseToJsonElement(it.corpo) as? kotlinx.serialization.json.JsonObject }.getOrNull() }
     }
     fun t(k: String) = (v?.get(k) as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it !is kotlinx.serialization.json.JsonNull }?.content
     PwCartao {

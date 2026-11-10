@@ -20,9 +20,10 @@ object NotificacaoAoVivo {
         PwNotificacoes.modoTeste = r.teste
         if (Build.VERSION.SDK_INT >= 36) return montarProgresso(ctx, r, abrir, extra)
         val total = r.etapas.size.coerceAtLeast(1)
+        val nav = CorridaEmCurso.instrucao.value
         val texto = listOfNotNull(r.endereco, r.distanciaM?.let { distancia(it) }).joinToString(" · ")
         return PwNotificacoes.base(ctx, PwNotificacoes.CANAL_CORRIDA)
-            .setContentTitle("Corrida ${r.numero} · ${r.titulo}")
+            .setContentTitle(nav ?: "Corrida ${r.numero} · ${r.titulo}")
             .setContentText(texto)
             .setStyle(NotificationCompat.BigTextStyle().bigText(listOfNotNull(texto, r.valor?.let { "Você recebe $it" }, extra).joinToString("\n")))
             .setProgress(total, r.etapaAtual.coerceAtMost(total), false)
@@ -51,7 +52,7 @@ object NotificacaoAoVivo {
         val b = Notification.Builder(ctx, PwNotificacoes.CANAL_CORRIDA)
             .setSmallIcon(R.drawable.ic_pwex_notif)
             .setColor(dourado)
-            .setContentTitle("Corrida ${r.numero} · ${r.titulo}")
+            .setContentTitle(CorridaEmCurso.instrucao.value ?: "Corrida ${r.numero} · ${r.titulo}")
             .setContentText(listOfNotNull(texto, extra).joinToString(" · "))
             .setStyle(estilo)
             .setOngoing(true)

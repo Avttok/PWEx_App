@@ -1,5 +1,7 @@
 package com.pwexpress.core.perfil
 
+import com.pwexpress.core.tentar
+
 import com.pwexpress.core.PwCore
 import com.pwexpress.core.config.PwConfig
 import com.pwexpress.core.network.HttpResposta
@@ -56,6 +58,9 @@ data class Perfil(
 
     fun logico(chave: String, padrao: Boolean): Boolean =
         (configuracoes[chave] as? JsonPrimitive)?.booleanOrNull ?: padrao
+
+    fun texto(chave: String, padrao: String): String =
+        (configuracoes[chave] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: padrao
 }
 
 /** Uma chave PIX da pessoa. A [principal] é para onde o dinheiro das corridas é repassado. */
@@ -81,7 +86,7 @@ object Perfis {
     /** Busca perfil e ganhos. Falha silenciosa (sem internet mantém o último). */
     suspend fun carregar() {
         if (PwCore.auth.sessao.value == null) return
-        runCatching {
+        tentar {
             val r = PwCore.rpc.chamar("meu_perfil", JsonObject(emptyMap()))
             if (r.ok) r.json()?.let { _perfil.value = it.paraPerfil() }
             val g = PwCore.rpc.chamar("meus_ganhos", JsonObject(emptyMap()))
@@ -107,7 +112,7 @@ object Perfis {
     }
 
     /** Muda nome e/ou foto. A foto vai para o bucket público "avatares/<id>/". */
-    suspend fun atualizar(nome: String?, foto: ByteArray?): Result<Unit> = runCatching {
+    suspend fun atualizar(nome: String?, foto: ByteArray?): Result<Unit> = tentar {
         val atual = _perfil.value ?: error("Perfil ainda não carregado.")
         var url: String? = null
         if (foto != null) {
@@ -126,7 +131,7 @@ object Perfis {
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
     /** Liga/desliga o modo teste (só contas gestor + motoboy). */
-    suspend fun definirModoTeste(ligado: Boolean): Result<Unit> = runCatching {
+    suspend fun definirModoTeste(ligado: Boolean): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar("definir_modo_teste", buildJsonObject { put("p_ligado", ligado) })
         if (!r.ok) error(
             when {
@@ -140,7 +145,7 @@ object Perfis {
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
     /** Raio de disponibilidade: 0/null = sem limite. Modo "posicao" ou "fixo" (com o ponto). */
-    suspend fun definirRaio(km: Double?, modo: String, lat: Double?, lng: Double?): Result<Unit> = runCatching {
+    suspend fun definirRaio(km: Double?, modo: String, lat: Double?, lng: Double?): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar("definir_meu_raio", buildJsonObject {
             put("p_km", km ?: 0.0); put("p_modo", modo)
             lat?.let { put("p_lat", it) }; lng?.let { put("p_lng", it) }
@@ -156,7 +161,7 @@ object Perfis {
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
     /** Dev: troca entre o tema dourado e o vermelho (vale no site também). */
-    suspend fun definirCorTema(cor: String): Result<Unit> = runCatching {
+    suspend fun definirCorTema(cor: String): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar("definir_cor_tema", buildJsonObject { put("p_cor", cor) })
         if (!r.ok) error(if (r.corpo.contains("apenas_dev")) "Só o Dev pode usar o tema vermelho." else "Erro (${r.codigo}).")
         _perfil.value = _perfil.value?.copy(corTema = cor)
@@ -164,7 +169,7 @@ object Perfis {
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
     /** Todas as chaves PIX da pessoa (a principal primeiro). null = não deu para carregar. */
-    suspend fun minhasChavesPix(): List<ChavePix>? = runCatching {
+    suspend fun minhasChavesPix(): List<ChavePix>? = tentar {
         val id = _perfil.value?.id ?: return null
         val r = PwCore.rpc.rest("GET", "/rest/v1/chaves_pix?usuario_id=eq.$id&select=id,tipo_chave,chave,titular,principal&order=principal.desc,criado_em.asc")
         if (!r.ok) return null
@@ -178,18 +183,18 @@ object Perfis {
     }.getOrNull()
 
     /** Cadastra mais uma chave (a primeira vira a principal sozinha). */
-    suspend fun adicionarChavePix(tipo: String, chave: String, titular: String): Result<Unit> = runCatching {
+    suspend fun adicionarChavePix(tipo: String, chave: String, titular: String): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar("adicionar_chave_pix", buildJsonObject { put("p_tipo", tipo); put("p_chave", chave); put("p_titular", titular) })
         if (!r.ok) error(erroPix(r))
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
-    suspend fun removerChavePix(id: String): Result<Unit> = runCatching {
+    suspend fun removerChavePix(id: String): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar("remover_chave_pix", buildJsonObject { put("p_id", id) })
         if (!r.ok) error(erroPix(r))
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }
 
     /** Escolhe para qual chave os repasses vão. */
-    suspend fun definirChavePixPrincipal(id: String): Result<Unit> = runCatching {
+    suspend fun definirChavePixPrincipal(id: String): Result<Unit> = tentar {
         val r = PwCore.rpc.chamar("definir_chave_pix_principal", buildJsonObject { put("p_id", id) })
         if (!r.ok) error(erroPix(r))
     }.recoverCatching { e -> throw if (e is java.io.IOException) Exception("Sem internet.") else e }

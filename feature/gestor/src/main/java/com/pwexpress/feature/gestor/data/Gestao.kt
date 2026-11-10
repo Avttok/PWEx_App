@@ -1,5 +1,7 @@
 package com.pwexpress.feature.gestor.data
 
+import com.pwexpress.core.tentar
+
 import com.pwexpress.core.PwCore
 import com.pwexpress.core.json.arr
 import com.pwexpress.core.json.bool
@@ -78,7 +80,7 @@ object Gestao {
 
     /** Recarrega tudo (o app chama a cada poucos segundos enquanto o painel está aberto). */
     suspend fun atualizar() = mutex.withLock {
-        runCatching {
+        tentar {
             val desde = Instant.now().minusSeconds(30L * 86400).toString()
             coroutineScope {
                 val rpc = PwCore.rpc
@@ -96,7 +98,7 @@ object Gestao {
                     // pelo site: todos os pings (sem o corte de 1000) e o caminho já casado com as ruas
                     com.pwexpress.core.mapa.PercursosServidor.buscar(Instant.parse(desde12h), Instant.now().plusSeconds(600), teste = teste)?.let { r ->
                         r.pings.groupBy({ it.motoboy }, { PontoTrilha(null, it.ping.status, it.ping.lat, it.ping.lng, it.ping.quando, it.ping.corridaId) }) to r.ajustes
-                    } ?: runCatching {
+                    } ?: tentar {
                         rpc.rest("GET", "/rest/v1/localizacoes?select=motoboy_id,sessao_id,status,lat,lng,registrado_em,corrida_id&teste=eq.$teste&registrado_em=gte.${enc(desde12h)}&order=registrado_em.asc&limit=8000").exigirOk().lista()
                             .mapNotNull { o -> val la = o.dbl("lat"); val lo = o.dbl("lng"); if (la == null || lo == null) null else o.str("motoboy_id")!! to PontoTrilha(o.str("sessao_id"), o.str("status") ?: "", la, lo, iso(o.str("registrado_em")) ?: 0, o.str("corrida_id")) }
                             .groupBy({ it.first }, { it.second }) to emptyMap<String, com.pwexpress.core.mapa.PercursosServidor.Ajuste>()
@@ -105,14 +107,14 @@ object Gestao {
                 val empresas = async { rpc.rest("GET", "/rest/v1/empresas?select=*&order=nome").exigirOk().lista() }
                 val fav = async { rpc.rest("GET", "/rest/v1/empresa_favoritos?select=empresa_id,motoboy_id,ordem&order=ordem").exigirOk().lista() }
                 val cfg = async { rpc.rest("GET", "/rest/v1/configuracoes?select=chave,valor").exigirOk().lista() }
-                val vinculos = async { runCatching { rpc.rest("GET", "/rest/v1/perfis?select=id,empresa_id&empresa_id=not.is.null").exigirOk().lista().associate { it.str("id")!! to it.str("empresa_id")!! } }.getOrDefault(emptyMap()) }
+                val vinculos = async { tentar { rpc.rest("GET", "/rest/v1/perfis?select=id,empresa_id&empresa_id=not.is.null").exigirOk().lista().associate { it.str("id")!! to it.str("empresa_id")!! } }.getOrDefault(emptyMap()) }
                 val pedidos = async {
-                    runCatching {
+                    tentar {
                         rpc.rest("GET", "/rest/v1/pedidos?select=*,pedido_pontos(*),pedido_itens(*)&or=(criado_em.gte.${enc(desde)},status.eq.recebido)&order=criado_em.desc&limit=300")
                             .exigirOk().lista().map { it.paraPedidoG() }
                     }.getOrDefault(_dados.value.pedidos)
                 }
-                val icones = async { runCatching { rpc.rest("GET", "/rest/v1/perfis?select=id,icone&icone=not.is.null").exigirOk().lista().associate { it.str("id")!! to it.str("icone")!! } }.getOrDefault(emptyMap()) }
+                val icones = async { tentar { rpc.rest("GET", "/rest/v1/perfis?select=id,icone&icone=not.is.null").exigirOk().lista().associate { it.str("id")!! to it.str("icone")!! } }.getOrDefault(emptyMap()) }
                 val trilhaR = trilha?.await()
                 val todos = equipe.await().map { it.paraMembroG() }
                 val vinc = vinculos.await()
@@ -164,7 +166,7 @@ object Gestao {
     }
 
     /** Chave PIX principal de cada um (usuário → "chave · titular"): para onde vai o repasse. */
-    suspend fun chavesPix(): Map<String, String> = runCatching {
+    suspend fun chavesPix(): Map<String, String> = tentar {
         PwCore.rpc.rest("GET", "/rest/v1/chaves_pix?principal=is.true&select=usuario_id,tipo_chave,chave,titular").exigirOk().lista()
             .associate { it.str("usuario_id")!! to "${it.str("chave")} · ${it.str("titular")}" }
     }.getOrDefault(emptyMap())
@@ -191,12 +193,12 @@ object Gestao {
             throw ErroServidor(e, if (e == "senha_incorreta" && rest != null) "Senha incorreta. Restam $rest tentativa${if (rest == 1) "" else "s"}." else traduzir(e) ?: e)
         }
         val arquivos = r?.strs("arquivos").orEmpty()
-        if (arquivos.isNotEmpty()) runCatching { PwCore.rpc.removerArquivos("comprovantes", arquivos) }
+        if (arquivos.isNotEmpty()) tentar { PwCore.rpc.removerArquivos("comprovantes", arquivos) }
         Unit
     }
 
     /** Quanto a limpeza de histórico apagaria (corridas finalizadas e pontos de percurso). */
-    suspend fun previaHistorico(teste: Boolean, motoboy: String?, ateMs: Long?): Pair<Int, Int>? = runCatching {
+    suspend fun previaHistorico(teste: Boolean, motoboy: String?, ateMs: Long?): Pair<Int, Int>? = tentar {
         val r = PwCore.rpc.chamar("previa_historico", buildJsonObject {
             put("p_teste", teste)
             put("p_motoboy", motoboy?.let { JsonPrimitive(it) } ?: JsonNull)
@@ -218,22 +220,22 @@ object Gestao {
             throw ErroServidor(e, if (e == "senha_incorreta" && rest != null) "Senha incorreta. Restam $rest tentativa${if (rest == 1) "" else "s"}." else traduzir(e) ?: e)
         }
         val arquivos = r?.strs("arquivos").orEmpty()
-        if (arquivos.isNotEmpty()) runCatching { PwCore.rpc.removerArquivos("comprovantes", arquivos) }
+        if (arquivos.isNotEmpty()) tentar { PwCore.rpc.removerArquivos("comprovantes", arquivos) }
         (r?.int("corridas") ?: 0) to (r?.int("pings") ?: 0)
     }
 
-    suspend fun eventos(corridaId: String): List<EventoG> = runCatching {
+    suspend fun eventos(corridaId: String): List<EventoG> = tentar {
         PwCore.rpc.rest("GET", "/rest/v1/eventos_corrida?select=tipo,dados,criado_em&corrida_id=eq.$corridaId&order=criado_em").exigirOk().lista()
             .map { EventoG(it.str("tipo").orEmpty(), (it["dados"] as? JsonObject) ?: JsonObject(emptyMap()), iso(it.str("criado_em")) ?: 0) }
     }.getOrDefault(emptyList())
 
-    suspend fun linkComprovante(caminho: String): String? = runCatching { PwCore.rpc.linkAssinado("comprovantes", caminho) }.getOrNull()
+    suspend fun linkComprovante(caminho: String): String? = tentar { PwCore.rpc.linkAssinado("comprovantes", caminho) }.getOrNull()
 
-    suspend fun clientesAvulsos(): List<String> = runCatching {
+    suspend fun clientesAvulsos(): List<String> = tentar {
         PwCore.rpc.chamar("clientes_avulsos", JsonObject(emptyMap())).exigirOk().lista().mapNotNull { it.str("nome") }
     }.getOrDefault(emptyList())
 
-    suspend fun concluidas(desdeMs: Long, teste: Boolean): List<CorridaG> = runCatching {
+    suspend fun concluidas(desdeMs: Long, teste: Boolean): List<CorridaG> = tentar {
         PwCore.rpc.rest("GET", "/rest/v1/corridas?select=*&status=eq.concluida&teste=eq.$teste&concluida_em=gte.${enc(Instant.ofEpochMilli(desdeMs).toString())}&order=concluida_em.desc")
             .exigirOk().lista().map { it.paraCorridaG() }
     }.getOrDefault(emptyList())
@@ -351,7 +353,7 @@ object Gestao {
     }
 
     /** Tipos de pedido e categorias de produto ativos (para o formulário). */
-    suspend fun catalogoPedido(): Pair<List<TipoPedidoG>, List<CategoriaG>> = runCatching {
+    suspend fun catalogoPedido(): Pair<List<TipoPedidoG>, List<CategoriaG>> = tentar {
         coroutineScope {
             val t = async { PwCore.rpc.rest("GET", "/rest/v1/tipos_pedido?select=chave,nome,descricao,icone&ativo=eq.true&order=ordem").exigirOk().lista().map { it.paraTipoPedidoG() } }
             val k = async { PwCore.rpc.rest("GET", "/rest/v1/categorias_produto?select=*&ativa=eq.true&order=ordem").exigirOk().lista().map { it.paraCategoriaG() } }
@@ -360,7 +362,7 @@ object Gestao {
     }.getOrDefault(emptyList<TipoPedidoG>() to emptyList())
 
     /** Orçamento na hora (mesmo cálculo que o pedido vai usar). */
-    suspend fun orcarPrevia(dados: JsonObject): JsonObject? = runCatching {
+    suspend fun orcarPrevia(dados: JsonObject): JsonObject? = tentar {
         PwCore.rpc.chamar("orcar_previa", buildJsonObject { put("dados", dados) }).exigirOk(::traduzir).objeto()
     }.getOrNull()
 
@@ -368,7 +370,7 @@ object Gestao {
         PwCore.rpc.chamar("criar_pedido", buildJsonObject { put("dados", dados) }).exigirOk(::traduzir).corpo.trim().trim('"')
     }
 
-    suspend fun veiculo(id: String): VeiculoG? = runCatching {
+    suspend fun veiculo(id: String): VeiculoG? = tentar {
         PwCore.rpc.rest("GET", "/rest/v1/motoboys?select=veiculo_tipo,veiculo_modelo,veiculo_placa,veiculo_cor,veiculo_ano,cnh_numero,cnh_categoria,cnh_validade&id=eq.$id")
             .exigirOk().lista().firstOrNull()?.paraVeiculoG()
     }.getOrNull()
@@ -389,7 +391,7 @@ object Gestao {
     // ------------------------------------------------------------------ genéricos (catálogos, regras, RPCs do site)
 
     /** Linhas de uma tabela (as regras de acesso do banco valem). [consulta] = filtros/ordem do PostgREST. */
-    suspend fun tabela(nome: String, consulta: String = "select=*"): List<JsonObject> = runCatching {
+    suspend fun tabela(nome: String, consulta: String = "select=*"): List<JsonObject> = tentar {
         PwCore.rpc.rest("GET", "/rest/v1/$nome?$consulta").exigirOk().lista()
     }.getOrDefault(emptyList())
 
@@ -461,7 +463,7 @@ object Gestao {
 
     suspend fun recalcularPagamento(id: String) = acao { PwCore.rpc.chamar("recalcular_pagamento_rota", buildJsonObject { put("p_corrida", id) }).exigirOk(::traduzir); Unit }
 
-    private suspend fun <T> acao(bloco: suspend () -> T): Result<T> = runCatching { bloco() }.recoverCatching { throw Exception(mensagem(it)) }
+    private suspend fun <T> acao(bloco: suspend () -> T): Result<T> = tentar { bloco() }.recoverCatching { throw Exception(mensagem(it)) }
 
     private fun mensagem(e: Throwable): String = when (e) {
         is java.io.IOException -> "Sem conexão com o servidor."

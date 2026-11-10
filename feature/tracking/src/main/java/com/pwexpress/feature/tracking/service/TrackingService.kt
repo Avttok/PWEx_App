@@ -64,7 +64,7 @@ class TrackingService : Service() {
         registrarRede()
         // corrida em andamento: a notificação fixa vira a notificação "ao vivo" da corrida
         escopo.launch {
-            CorridaEmCurso.resumo.collect {
+            kotlinx.coroutines.flow.combine(CorridaEmCurso.resumo, CorridaEmCurso.instrucao) { r, i -> r to i }.collect {
                 val modo = Tracking.prefs.modo
                 if (modo != Modo.OFFLINE) runCatching {
                     getSystemService(NotificationManager::class.java)?.notify(NOTIF_ID, notificacao(modo, Tracking.prefs.economia))
@@ -112,7 +112,7 @@ class TrackingService : Service() {
 
     @SuppressLint("MissingPermission") // verificado em onStartCommand
     private fun aplicar(modo: Modo, economia: Boolean) {
-        val nova = Triple(modo, economia, Intervalos.corridaMs(economia))
+        val nova = Triple(modo, economia, Intervalos.corridaMs(economia) * 1000 + Intervalos.corridaDistanciaM.toLong())
         if (nova == configAtual) return
         configAtual = nova
 
@@ -120,9 +120,11 @@ class TrackingService : Service() {
         ultimoEnviado = null
 
         val req = if (modo == Modo.EM_CORRIDA) {
+            // com "a cada X m" ligado, lê mais rápido e decide em processar() (tempo OU distância)
             val intervalo = Intervalos.corridaMs(economia)
-            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, intervalo)
-                .setMinUpdateIntervalMillis(intervalo)
+            val leitura = if (Intervalos.corridaDistanciaM > 0f) minOf(intervalo, if (economia) 5_000L else 2_000L) else intervalo
+            LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, leitura)
+                .setMinUpdateIntervalMillis(minOf(leitura, 1_000L))
                 .setWaitForAccurateLocation(false)
                 .build()
         } else {
@@ -147,7 +149,20 @@ class TrackingService : Service() {
                 if (!deveEnviar) return
             }
             Modo.EM_CORRIDA -> {
-                if (loc.hasAccuracy() && loc.accuracy > Intervalos.PRECISAO_MAXIMA_M) return
+                val ult = ultimoEnviado
+                val passou = if (ult == null) Long.MAX_VALUE else loc.time - ultimoEnviadoEm
+                val intervalo = Intervalos.corridaMs(Tracking.prefs.economia)
+                // leitura ruim: descarta; mas, sem nada bom há 3 intervalos, aceita até o teto para não sumir do mapa
+                val limite = if (passou >= intervalo * 3) Intervalos.PRECISAO_MAXIMA_M else Intervalos.precisaoMaximaM
+                if (loc.hasAccuracy() && loc.accuracy > limite) return
+                if (ult != null) {
+                    val andou = loc.distanceTo(ult)
+                    val porTempo = passou >= intervalo - 300
+                    val porDistancia = Intervalos.corridaDistanciaM > 0f && andou >= Intervalos.corridaDistanciaM
+                    if (!porTempo && !porDistancia) return
+                    // parado no mesmo lugar (sinal oscilando): não enche o percurso de pontos
+                    if (!porDistancia && andou < 3f && passou < intervalo * 2) return
+                }
             }
         }
         ultimoEnviado = loc

@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -966,6 +968,39 @@ private fun PixCarteiraG(onVoltar: (() -> Unit)?, abas: @Composable () -> Unit) 
 }
 
 @Composable
+/**
+ * "Para onde vai esse valor": uma barra e três linhas que sempre somam o total.
+ * O que fica com o gestor é o total menos motoboys e Dev (o mesmo número do site).
+ */
+@Composable
+internal fun ParaOndeVai(total: Double, motoboys: Double, dev: Double) {
+    val c = Pw.cores
+    val gestor = (total - motoboys - dev).coerceAtLeast(0.0)
+    val partes = listOf(Triple("Motoboys", motoboys, c.verde), Triple("Fica com o gestor", gestor, c.ouro), Triple("Dev", dev, c.violeta))
+    PwCartao {
+        PwRotulo("Para onde vai esse valor")
+        Espaco(8)
+        val forma = RoundedCornerShape(99.dp)
+        Row(Modifier.fillMaxWidth().height(14.dp).clip(forma).background(c.vidro)) {
+            partes.forEach { (_, v, cor) -> if (total > 0 && v > 0) Box(Modifier.weight((v / total).toFloat().coerceAtLeast(0.01f)).fillMaxHeight().background(cor)) }
+        }
+        Espaco(10)
+        partes.forEach { (r, v, cor) ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(10.dp).clip(CircleShape).background(cor)); Spacer(Modifier.width(10.dp))
+                Text(r, color = c.texto, modifier = Modifier.weight(1f))
+                Text(if (total > 0) "${Math.round(v / total * 100)}%" else "—", color = c.texto3, fontSize = 12.5.sp); Spacer(Modifier.width(10.dp))
+                Text(moedaBr(v), color = c.texto, fontWeight = FontWeight.Bold)
+            }
+        }
+        androidx.compose.material3.HorizontalDivider(color = c.borda, modifier = Modifier.padding(vertical = 4.dp))
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text("Total", color = c.texto2, modifier = Modifier.weight(1f)); Text(moedaBr(total), color = c.texto, fontWeight = FontWeight.Black)
+        }
+        TextoDica("Motoboys + gestor + Dev = o valor das rotas. O que é \"a repassar\" a cada motoboy está logo abaixo.")
+    }
+}
+
 private fun ResumoCarteiraG(onVoltar: (() -> Unit)?, abas: @Composable () -> Unit) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
@@ -993,12 +1028,9 @@ private fun ResumoCarteiraG(onVoltar: (() -> Unit)?, abas: @Composable () -> Uni
         var chaves by remember { mutableStateOf<Map<String, String>>(emptyMap()) }
         LaunchedEffect(Unit) { chaves = Gestao.chavesPix() }
         val ctxC = LocalContext.current
-        PwNumero("Faturado · ${l.size} corrida${if (l.size == 1) "" else "s"}", moedaBr(total), Modifier.fillMaxWidth(), icone = PwIcones.TrendingUp, destaque = true)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PwNumero("Gestão", moedaBr(gest), Modifier.weight(1f), icone = PwIcones.Landmark)
-            PwNumero("Motoboys", moedaBr(moto), Modifier.weight(1f), icone = PwIcones.Bike)
-        }
-        PwNumero("Dev", moedaBr(dev), Modifier.fillMaxWidth(), icone = PwIcones.CodeXml)
+        PwNumero("Valor das rotas concluídas · ${l.size} rota${if (l.size == 1) "" else "s"}", moedaBr(total), Modifier.fillMaxWidth(), icone = PwIcones.TrendingUp, destaque = true)
+        ParaOndeVai(total, moto, dev)
+        @Suppress("UNUSED_VARIABLE") val semUso = gest
         if (l.isEmpty()) { PwVazio("Nenhuma corrida concluída neste período.", icone = PwIcones.Wallet); return@PwPagina }
         PwCartao {
             PwRotulo("Por motoboy")

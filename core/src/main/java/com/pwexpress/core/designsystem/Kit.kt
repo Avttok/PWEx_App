@@ -43,6 +43,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -733,7 +734,7 @@ private fun PwDestaques(modifier: Modifier) {
                 val forma = RoundedCornerShape(24.dp)
                 // brilho que passa uma vez pelo cartão
                 val brilho = androidx.compose.animation.core.rememberInfiniteTransition(label = "brilho")
-                val x by brilho.animateFloat(-0.4f, 1.4f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(2600), androidx.compose.animation.core.RepeatMode.Restart), label = "x")
+                val x by brilho.animateFloat(-0.4f, 1.4f, androidx.compose.animation.core.infiniteRepeatable<Float>(androidx.compose.animation.core.tween<Float>(2600), androidx.compose.animation.core.RepeatMode.Restart), label = "x")
                 androidx.compose.animation.AnimatedVisibility(visivel, enter = androidx.compose.animation.slideInVertically { -it } + androidx.compose.animation.fadeIn()) {
                     Box(
                         Modifier.fillMaxWidth().shadow(16.dp, forma, ambientColor = cores[1], spotColor = cores[1]).clip(forma)

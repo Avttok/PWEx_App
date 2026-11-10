@@ -150,16 +150,25 @@ fun CarteiraScreen(modifier: Modifier = Modifier) {
                     }
                 }
 
-                // ------------------------------------------------ ajustes do gestor (bônus/descontos)
-                holerite?.takeIf { it.ajustes.isNotEmpty() }?.let { h ->
-                    PwCartao {
-                        PwRotulo("Ajustes")
+                // ------------------------------------------------ como fica o total: rotas + ajustes = a receber
+                holerite?.let { h ->
+                    val rotas = h.itens.mapNotNull { it.valor }.sum()
+                    if (h.valoresVisiveis || h.ajustes.isNotEmpty()) PwCartao {
+                        PwRotulo(if (h.valoresVisiveis) "Como fica o total" else "Ajustes")
                         Spacer(Modifier.height(6.dp))
-                        h.ajustes.forEach { (motivo, v) ->
-                            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-                                Text(motivo.ifBlank { "Ajuste" }, color = c.texto, fontSize = 13.5.sp, modifier = Modifier.weight(1f))
-                                if (h.valoresVisiveis) Text((if (v >= 0) "+ " else "− ") + moedaBr(kotlin.math.abs(v)), color = if (v >= 0) c.verde else c.vermelho, fontWeight = FontWeight.SemiBold, fontSize = 13.5.sp)
+                        @Composable fun linha(r: String, v: String?, cor: androidx.compose.ui.graphics.Color = c.texto, forte: Boolean = false) =
+                            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(r, color = if (forte) c.texto else c.texto2, fontSize = 14.sp, fontWeight = if (forte) FontWeight.Bold else FontWeight.Normal, modifier = Modifier.weight(1f))
+                                if (v != null) Text(v, color = cor, fontWeight = if (forte) FontWeight.Black else FontWeight.SemiBold, fontSize = if (forte) 16.sp else 14.sp)
                             }
+                        if (h.valoresVisiveis) linha("${h.itens.size} rota${if (h.itens.size == 1) "" else "s"} concluída${if (h.itens.size == 1) "" else "s"}", moedaBr(rotas))
+                        h.ajustes.forEach { (motivo, v) ->
+                            linha(motivo.ifBlank { if (v >= 0) "Bônus" else "Desconto" }, if (h.valoresVisiveis) (if (v >= 0) "+ " else "− ") + moedaBr(kotlin.math.abs(v)) else null, if (v >= 0) c.verde else c.vermelho)
+                        }
+                        if (h.valoresVisiveis) {
+                            androidx.compose.material3.HorizontalDivider(color = c.borda, modifier = Modifier.padding(vertical = 4.dp))
+                            linha(if (atual?.status == "pago") "Pago" else "Você recebe", moedaBr(h.total ?: (rotas + h.ajustes.sumOf { it.second })), c.ouro, forte = true)
+                            Text("Cada rota já vem com a sua parte (nunca passa do valor da rota). Os ajustes são bônus ou descontos do gestor.", color = c.texto3, fontSize = 12.sp)
                         }
                     }
                 }

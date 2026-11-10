@@ -1099,6 +1099,10 @@ fun ConfiguracoesG(onVoltar: (() -> Unit)?, onAbrir: (TelaG) -> Unit = {}) {
     fun sem(t: String) = java.text.Normalizer.normalize(t, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase()
     val grupoArea = GRUPOS_CONFIG.associate { it.chave to it.area }
     fun mudado(p: Param): Boolean {
+        if (p.tipo == "multi") {
+            val l = (dados.config[p.chave] as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? kotlinx.serialization.json.JsonPrimitive)?.content }?.sorted() ?: return false
+            return l != p.padraoTxt.orEmpty().split(",").filter { it.isNotBlank() }.sorted()
+        }
         val v = (dados.config[p.chave] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return false
         return when (p.tipo) {
             "booleano" -> v.toBooleanStrictOrNull()?.let { it != p.padraoBool } ?: false
@@ -1109,6 +1113,7 @@ fun ConfiguracoesG(onVoltar: (() -> Unit)?, onAbrir: (TelaG) -> Unit = {}) {
     fun padraoJson(p: Param): kotlinx.serialization.json.JsonElement = when (p.tipo) {
         "booleano" -> kotlinx.serialization.json.JsonPrimitive(p.padraoBool)
         "escolha", "texto" -> kotlinx.serialization.json.JsonPrimitive(p.padraoTxt ?: "")
+        "multi" -> kotlinx.serialization.json.JsonArray(p.padraoTxt.orEmpty().split(",").filter { it.isNotBlank() }.map { kotlinx.serialization.json.JsonPrimitive(it) })
         else -> kotlinx.serialization.json.JsonPrimitive(p.padraoNum)
     }
     fun salvar(p: Param, v: kotlinx.serialization.json.JsonElement) {

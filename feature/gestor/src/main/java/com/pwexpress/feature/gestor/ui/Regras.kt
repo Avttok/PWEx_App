@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -66,6 +67,9 @@ internal fun textoValor(p: Param, v: JsonElement?): String {
         "booleano" -> if ((prim?.content?.toBooleanStrictOrNull() ?: p.padraoBool)) "ligado" else "desligado"
         "escolha" -> (prim?.content ?: p.padraoTxt)?.let { t -> p.opcoesTxt.firstOrNull { it.first == t }?.second ?: t } ?: "—"
         "opcoes" -> (prim?.content?.toDoubleOrNull() ?: p.padraoNum).let { n -> p.opcoes.firstOrNull { it.first == n }?.second ?: numeroBr(n) }
+        "multi" -> ((v as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content } ?: p.padraoTxt.orEmpty().split(",").filter { it.isNotBlank() })
+            .map { k -> p.opcoesTxt.firstOrNull { it.first == k }?.second ?: k }.ifEmpty { listOf("nenhum") }.joinToString(", ")
+        "texto" -> prim?.content ?: p.padraoTxt ?: "—"
         else -> (prim?.content?.toDoubleOrNull() ?: p.padraoNum).let { n ->
             if (p.unidade == "R$") "R$ ${numeroBr(n)}" else numeroBr(n) + (p.unidade?.let { " $it" } ?: "")
         }
@@ -80,6 +84,38 @@ internal fun textoValor(p: Param, v: JsonElement?): String {
 internal fun CampoParametro(p: Param, valor: JsonElement?, onSalvar: (JsonElement) -> Unit, bloqueado: Boolean = false, extra: (@Composable () -> Unit)? = null) {
     val c = Pw.cores
     val prim = valor as? JsonPrimitive
+    if (p.tipo == "multi") {
+        // vários ao mesmo tempo: o valor é uma lista
+        val atuais = (valor as? kotlinx.serialization.json.JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.content }
+            ?: if (valor == null) p.padraoTxt.orEmpty().split(",").filter { it.isNotBlank() } else emptyList()
+        Text(p.rotulo, color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        if (p.descricao.isNotEmpty()) TextoDica(p.descricao)
+        Espaco(8)
+        @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+        androidx.compose.foundation.layout.FlowRow(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp), verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(6.dp)) {
+            p.opcoesTxt.forEach { (k, r) ->
+                val on = k in atuais
+                com.pwexpress.core.designsystem.PwPilula(r, if (on) com.pwexpress.core.designsystem.PwIcones.Check else com.pwexpress.core.designsystem.PwIcones.Plus, {
+                    if (!bloqueado) onSalvar(kotlinx.serialization.json.JsonArray((if (on) atuais - k else atuais + k).map { JsonPrimitive(it) }))
+                }, ligada = on)
+            }
+        }
+        TextoDica(if (atuais.isEmpty()) "Nenhum marcado" else "${atuais.size} marcado${if (atuais.size > 1) "s" else ""}")
+        if (bloqueado) TextoDica("Só o Dev altera.")
+        extra?.invoke()
+        return
+    }
+    if (p.tipo == "numero" && "raio" in p.chave && (p.unidade == "m" || p.unidade == "km")) {
+        Text(p.rotulo, color = c.texto, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+        if (p.descricao.isNotEmpty()) TextoDica(p.descricao)
+        com.pwexpress.core.mapa.CampoRaio(
+            (valor as? JsonPrimitive)?.content?.toDoubleOrNull() ?: p.padraoNum, p.unidade, p.min ?: 0.0, p.max ?: (if (p.unidade == "km") 50.0 else 5000.0), p.passo,
+            { if (!bloqueado) onSalvar(JsonPrimitive(it)) }, habilitado = !bloqueado, dupla = "entrega" in p.chave,
+        )
+        if (bloqueado) TextoDica("Só o Dev altera.")
+        extra?.invoke()
+        return
+    }
     if (p.tipo == "booleano") {
         val lig = prim?.content?.toBooleanStrictOrNull() ?: p.padraoBool
         PwInterruptor(p.rotulo, lig, { if (!bloqueado) onSalvar(JsonPrimitive(it)) }, descricao = (if (lig) p.descricao else p.descricaoDesligado ?: p.descricao).ifEmpty { null })
@@ -124,13 +160,35 @@ internal fun EditorRegrasG(params: List<Param>, valores: Map<String, JsonElement
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
     val souDev = com.pwexpress.core.perfil.Perfis.perfil.collectAsState().value?.dev == true
-    val termo = busca.trim().lowercase()
-    val lista = if (termo.isEmpty()) params else params.filter { "${it.rotulo} ${it.descricao}".lowercase().contains(termo) }
-    if (lista.isEmpty()) { PwVazio("Nenhuma regra encontrada.", icone = PwIcones.Search); return }
+    // organizado como os Ajustes: áreas, seções e "só as exceções"
+    var area by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var secao by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+    var soExc by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    fun sem(t: String) = java.text.Normalizer.normalize(t, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase()
+    val grupoArea = GRUPOS_CONFIG.associate { it.chave to it.area }
+    val termo = sem(busca.trim())
+    val areas = com.pwexpress.feature.gestor.data.AREAS_CONFIG.filter { a -> params.any { grupoArea[it.grupo] == a.chave } }
+    if (termo.isEmpty()) {
+        com.pwexpress.core.designsystem.PwFiltros(listOf("Tudo" to params.count { it.chave in valores }) + areas.map { a -> a.titulo to params.count { grupoArea[it.grupo] == a.chave && it.chave in valores } },
+            areas.indexOfFirst { it.chave == area } + 1, { i -> area = if (i == 0) "" else areas[i - 1].chave; secao = "" })
+        val secoes = GRUPOS_CONFIG.filter { it.area == area && params.any { p -> p.grupo == it.chave } }
+        if (area.isNotEmpty() && secoes.size > 1) Row(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState()), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
+            com.pwexpress.core.designsystem.PwPilula("Todas", PwIcones.Lista, { secao = "" }, ligada = secao.isEmpty())
+            secoes.forEach { g -> com.pwexpress.core.designsystem.PwPilula(g.titulo, PwIcones.SlidersHorizontal, { secao = if (secao == g.chave) "" else g.chave }, ligada = secao == g.chave) }
+        }
+    }
+    com.pwexpress.core.designsystem.PwInterruptor("Só as exceções", soExc, { soExc = it }, descricao = "${params.count { it.chave in valores }} regra(s) diferentes do padrão")
+    var lista = if (termo.isNotEmpty()) params.filter { sem("${it.rotulo} ${it.descricao}").contains(termo) }
+        else params.filter { (area.isEmpty() || grupoArea[it.grupo] == area) && (secao.isEmpty() || it.grupo == secao) }
+    if (soExc) lista = lista.filter { it.chave in valores }
+    if (lista.isEmpty()) { PwVazio(if (soExc) "Nenhuma exceção aqui: tudo usa o padrão." else "Nenhuma regra encontrada.", icone = PwIcones.Search); return }
     GRUPOS_CONFIG.forEach { g ->
         val doGrupo = lista.filter { it.grupo == g.chave }
         if (doGrupo.isEmpty()) return@forEach
-        PwRotulo(g.titulo)
+        Espaco(4)
+        Text((if (area.isEmpty() || termo.isNotEmpty()) "${com.pwexpress.feature.gestor.data.AREAS_CONFIG.find { it.chave == g.area }?.titulo ?: ""} · " else "") + g.titulo,
+            color = c.texto, fontWeight = FontWeight.Bold, fontSize = 16.sp)
+        TextoDica(g.descricao)
         doGrupo.forEach { p ->
             val tem = p.chave in valores
             PwCartao(padding = PaddingValues(14.dp), cor = if (tem) c.ouro.copy(alpha = 0.55f) else null) {
@@ -197,7 +255,7 @@ internal fun ExcecoesG(onVoltar: () -> Unit) {
 }
 
 /** Regras que fazem sentido num pedido só (preço, junção em rotas, despacho, revisão). */
-internal val PARAMS_PEDIDO = PARAMETROS.filter { ("cliente" in it.escopos || "tipo" in it.escopos) && it.grupo !in setOf("pagamento", "pag_zonas", "pag_km", "faturas") && !it.soDev }
+internal val PARAMS_PEDIDO = PARAMETROS.filter { ("cliente" in it.escopos || "tipo" in it.escopos) && it.grupo !in setOf("pagamento", "pag_combinar", "pag_zonas", "pag_km", "pag_entrega", "pag_fixo", "faturas") && !it.soDev }
 
 /** Regras deste pedido (a peça mais alta do lego). Grava na hora e recalcula o orçamento. */
 @Composable

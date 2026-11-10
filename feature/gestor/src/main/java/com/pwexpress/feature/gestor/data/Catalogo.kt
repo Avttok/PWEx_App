@@ -7,7 +7,7 @@ data class Grupo(val chave: String, val titulo: String, val descricao: String, v
 
 data class Param(
     val chave: String, val grupo: String, val rotulo: String, val descricao: String, val descricaoDesligado: String?,
-    /** numero | booleano | opcoes (números) | escolha (textos) | texto */
+    /** numero | booleano | opcoes (números) | escolha (textos) | texto | multi (vários textos; padraoTxt separado por vírgula) */
     val tipo: String, val padraoBool: Boolean, val padraoNum: Double, val unidade: String?,
     val min: Double?, val max: Double?, val passo: Double, val opcoes: List<Pair<Double, String>>,
     val padraoTxt: String? = null, val opcoesTxt: List<Pair<String, String>> = emptyList(),
@@ -17,7 +17,7 @@ data class Param(
     /** O padrão como texto, para comparar com o valor salvo ("só o que mudei"). */
     val padraoComoTexto: String get() = when (tipo) {
         "booleano" -> padraoBool.toString()
-        "escolha", "texto" -> padraoTxt ?: ""
+        "escolha", "texto", "multi" -> padraoTxt ?: ""
         else -> if (padraoNum % 1.0 == 0.0) padraoNum.toLong().toString() else padraoNum.toString()
     }
 }
@@ -35,18 +35,22 @@ val AREAS_CONFIG = listOf(
 val GRUPOS_CONFIG = listOf(
     Grupo("cli_cadastro", "Cadastro pelo site", "Como empresas e pessoas criam conta no site do cliente.", "clientes"),
     Grupo("cli_pode", "O que o cliente pode fazer", "Pedir para agora, agendar, urgente, limites, confirmações, modelos e objetos.", "clientes"),
-    Grupo("cli_ve", "O que o cliente vê", "Preço, motoboy, código e faturas.", "clientes"),
+    Grupo("cli_ve", "O que o cliente vê", "Preço, motoboy, código, faturas e o que aparece da rota no mapa.", "clientes"),
     Grupo("faturas", "Cobrança e faturas", "Crédito com fatura por ciclo ou pagamento antecipado.", "clientes"),
     Grupo("precocliente", "Orçamento do pedido", "Distância, pontos, volumes, peso, perigoso, Express, urgente e zonas.", "preco"),
     Grupo("preco", "Avulsas, mínimo e arredondamento", "Corridas lançadas à mão pelo gestor, valor mínimo e arredondamento.", "preco"),
     Grupo("distancia", "Acréscimo por distância (avulsas)", "Corridas avulsas longas ficam mais caras, por faixas de distância.", "preco"),
     Grupo("pedidos", "Pedidos", "O que acontece quando um pedido chega: revisão e volta à revisão.", "operacao"),
+    Grupo("aprender", "Revisão e aprendizado", "Prévia das rotas na revisão e o sistema repetindo o que você sempre faz.", "operacao"),
     Grupo("rotas", "Montagem das rotas", "Como o sistema junta e separa pedidos em rotas.", "operacao"),
     Grupo("despacho", "Despacho", "Como a rota é oferecida aos motoboys e o que acontece se ninguém pega.", "operacao"),
     Grupo("extensao", "Extensão de rota", "Oferecer rota nova a quem já está em corrida perto da coleta.", "operacao"),
     Grupo("quadro", "Quadro de rotas", "O que o quadro mostra e quem é avisado quando chega rota.", "operacao"),
     Grupo("planejadas", "Rotas planejadas", "Rotas com hora marcada: reserva, lembretes e abertura perto do horário.", "operacao"),
     Grupo("pagamento", "Modelo e divisão da rota", "Por zonas, por km ou percentual; parte do motoboy, do gestor e do Dev.", "motoboys"),
+    Grupo("pag_combinar", "Vários cálculos juntos", "Use mais de um modelo ao mesmo tempo (ex.: zonas + por entrega + fixo) e escolha como combinar.", "motoboys"),
+    Grupo("pag_entrega", "Pagamento por entrega", "Cada entrega paga o km dela (coleta → entrega) mais um fixo.", "motoboys"),
+    Grupo("pag_fixo", "Pagamento fixo", "Um valor por rota, por entrega e por coleta.", "motoboys"),
     Grupo("pag_zonas", "Pagamento por zonas", "Raio das entregas e o que paga quando estão juntas ou espalhadas.", "motoboys"),
     Grupo("pag_km", "Pagamento por km", "Valores do modelo “Por km”.", "motoboys"),
     Grupo("mb_ve", "O que o motoboy vê e holerite", "Valores, aba Holerite e período da folha.", "motoboys"),
@@ -108,7 +112,20 @@ val PARAMETROS = listOf(
     Param("despacho_modo", "despacho", "Como a rota chega aos motoboys", "Planejadas sempre vão ao quadro para reservar (exceto “Direto”).", null, "escolha", false, 0.0, null, null, null, 1.0, listOf(), "cascata", listOf("quadro" to "Quadro", "melhor_primeiro" to "Melhor primeiro", "cascata" to "Cascata", "direto" to "Direto"), listOf("tipo", "cliente"), false, null),
     Param("despacho_melhor_segundos", "despacho", "Vez do melhor motoboy", "No “Melhor primeiro”: quanto tempo só ele vê a rota.", null, "numero", false, 45.0, "s", 10.0, 600.0, 1.0, listOf(), null, listOf(), listOf("tipo", "cliente"), false, null),
     Param("fator_rua", "navegacao", "Fator de rua", "Linha reta × este fator até o mapa calcular a distância por ruas.", null, "numero", false, 1.3, "×", 1.0, 3.0, 0.05, listOf(), null, listOf(), listOf(), false, null),
-    Param("pag_modo", "pagamento", "Modelo de pagamento", "", null, "escolha", false, 0.0, null, null, null, 1.0, listOf(), "zonas", listOf("zonas" to "Por zonas", "rota" to "Por km", "percentual" to "Percentual"), listOf("tipo", "cliente", "motoboy"), false, null),
+    Param("pag_modo", "pagamento", "Modelo de pagamento", "", null, "escolha", false, 0.0, null, null, null, 1.0, listOf(), "zonas", listOf("zonas" to "Por zonas", "rota" to "Por km", "percentual" to "Percentual", "por_entrega" to "Por entrega", "fixo" to "Fixo"), listOf("tipo", "cliente", "motoboy"), false, null),
+    Param("pag_modos", "pag_combinar", "Usar estes cálculos juntos", "Nenhum marcado = só o modelo de pagamento acima. Marcando dois ou mais, todos entram e se combinam como escolhido abaixo.", null, "multi", false, 0.0, null, null, null, 1.0, listOf(), "", listOf("zonas" to "Zonas", "rota" to "Por km", "percentual" to "Percentual", "por_entrega" to "Por entrega", "fixo" to "Fixo"), listOf("tipo", "cliente", "motoboy"), false, null),
+    Param("pag_combinar", "pag_combinar", "Como combinar", "", null, "escolha", false, 0.0, null, null, null, 1.0, listOf(), "soma", listOf("soma" to "Somar", "maior" to "O maior", "menor" to "O menor", "media" to "A média"), listOf("tipo", "cliente", "motoboy"), false, null),
+    Param("pag_acrescimo_pct", "pag_combinar", "Acréscimo sobre o resultado", "Porcentagem somada depois de combinar (ex.: 10 = +10%). Negativo desconta.", null, "numero", false, 0.0, "%", -90.0, 300.0, 1.0, listOf(), null, listOf(), listOf("tipo", "cliente", "motoboy"), false, null),
+    Param("pag_acrescimo_rota", "pag_combinar", "Valor somado no fim", "R\$ somado depois de combinar (vale também com um cálculo só).", null, "numero", false, 0.0, "R\$", -500.0, 500.0, 0.5, listOf(), null, listOf(), listOf("tipo", "cliente", "motoboy"), false, null),
+    Param("pe_valor_km", "pag_entrega", "Valor do km de cada entrega", "Km da coleta até a entrega × este valor, para cada entrega.", null, "numero", false, 2.0, "R\$", 0.0, 50.0, 0.1, listOf(), null, listOf(), listOf("tipo", "cliente", "motoboy"), false, null),
+    Param("pe_fixo_entrega", "pag_entrega", "Fixo por entrega", "Somado em cada entrega.", null, "numero", false, 0.0, "R\$", 0.0, 500.0, 0.5, listOf(), null, listOf(), listOf("tipo", "cliente", "motoboy"), false, null),
+    Param("pe_minimo", "pag_entrega", "Mínimo por rota", "0 = sem mínimo.", null, "numero", false, 0.0, "R\$", 0.0, 500.0, 0.5, listOf(), null, listOf(), listOf("tipo", "cliente", "motoboy"), false, null),
+    Param("fx_valor_rota", "pag_fixo", "Por rota", "Valor fixo de cada rota.", null, "numero", false, 0.0, "R\$", 0.0, 1000.0, 0.5, listOf(), null, listOf(), listOf("tipo", "cliente", "motoboy"), false, null),
+    Param("fx_valor_entrega", "pag_fixo", "Por entrega", "Somado para cada entrega.", null, "numero", false, 0.0, "R\$", 0.0, 500.0, 0.5, listOf(), null, listOf(), listOf("tipo", "cliente", "motoboy"), false, null),
+    Param("fx_valor_coleta", "pag_fixo", "Por coleta", "Somado para cada coleta.", null, "numero", false, 0.0, "R\$", 0.0, 500.0, 0.5, listOf(), null, listOf(), listOf("tipo", "cliente", "motoboy"), false, null),
+    Param("revisao_previa_rotas", "aprender", "Prévia das rotas na revisão", "Ligado: ao abrir um pedido para revisar, as rotas que ele vai formar (e o que cada motoboy recebe) aparecem antes de aprovar.", null, "booleano", true, 0.0, null, null, null, 1.0, listOf(), null, listOf(), listOf(), false, null),
+    Param("aprender_regras_rota", "aprender", "Repetir o que você sempre faz", "Ligado: se você põe as mesmas regras de pagamento nas rotas de um cliente várias vezes, as rotas novas dele já nascem com elas.", "Desligado: só sugere na revisão; nada muda sozinho.", "booleano", false, 0.0, null, null, null, 1.0, listOf(), null, listOf(), listOf("tipo", "cliente"), false, null),
+    Param("aprender_minimo", "aprender", "Quantas vezes iguais para repetir", "Nas últimas rotas do cliente.", null, "numero", false, 3.0, "vezes", 1.0, 20.0, 1.0, listOf(), null, listOf(), listOf("tipo", "cliente"), false, null),
     Param("dev_origem", "pagamento", "De onde sai a parte do Dev", "Como a parte do Dev entra na divisão da rota entre motoboy e gestor.", null, "escolha", false, 0.0, null, null, null, 1.0, listOf(), "gestor", listOf("gestor" to "Da parte do gestor", "total" to "Antes de dividir", "proporcional" to "Das duas partes"), listOf("cliente"), false, null),
     Param("pag_valor_km", "pag_km", "Valor do km", "Multiplica o km da entrega de referência.", null, "numero", false, 2.0, "R\$", 0.0, 50.0, 0.1, listOf(), null, listOf(), listOf("tipo", "motoboy"), false, null),
     Param("pag_entrega_extra", "pag_km", "Por entrega a mais", "Somado para cada entrega além da primeira.", null, "numero", false, 10.0, "R\$", 0.0, 500.0, 0.5, listOf(), null, listOf(), listOf("tipo", "motoboy"), false, null),
@@ -163,7 +180,7 @@ val PARAMETROS = listOf(
     Param("raio_chegada_m", "local", "Raio de chegada", "Distância máxima do endereço para marcar chegada e concluir.", null, "numero", false, 150.0, "m", 20.0, 2000.0, 10.0, listOf(), null, listOf(), listOf(), false, null),
     Param("precisao_max_m", "local", "Tolerância ao erro do GPS", "Quanto da imprecisão informada pelo celular é descontada da distância.", null, "numero", false, 80.0, "m", 0.0, 500.0, 10.0, listOf(), null, listOf(), listOf(), false, null),
     Param("posicao_valida_s", "local", "Validade da posição", "Se o app não mandar a posição na hora, usa a última se for mais recente que isso.", null, "numero", false, 180.0, "s", 30.0, 900.0, 1.0, listOf(), null, listOf(), listOf(), false, null),
-    Param("repasse_motoboy_pct", "pagamento", "Parte do motoboy na rota", "No modelo “Percentual”: ex. 40 = o motoboy leva 40% da rota e o gestor o resto (menos a parte do Dev, como escolhido acima). Ajustável por motoboy (Regras dele), por cliente e por corrida.", null, "numero", false, 67.5, "%", 0.0, 100.0, 1.0, listOf(), null, listOf(), listOf("motoboy"), false, null),
+    Param("repasse_motoboy_pct", "pagamento", "Parte do motoboy na rota", "No modelo “Percentual”: ex. 65 = o motoboy leva 65% da rota e o gestor o resto (menos a parte do Dev, como escolhido acima). Ajustável por motoboy (Regras dele), por cliente e por corrida.", null, "numero", false, 65.0, "%", 0.0, 100.0, 1.0, listOf(), null, listOf(), listOf("motoboy"), false, null),
     Param("dev_pct", "pagamento", "Parte do Dev", "Parte do valor de cada rota que vai para o Dev. De onde ela sai (gestor, antes de dividir ou das duas partes) fica em Pagamento do motoboy. Só o Dev altera.", null, "numero", false, 5.0, "%", 0.0, 100.0, 0.5, listOf(), null, listOf(), listOf("cliente"), true, null),
     Param("valor_km_padrao", "preco", "Valor do km (avulso)", "Usado para clientes avulsos e empresas sem valor próprio.", null, "numero", false, 2.0, "R\$", 0.0, 100.0, 0.1, listOf(), null, listOf(), listOf(), false, null),
     Param("valor_minimo", "preco", "Valor mínimo", "Nenhum pedido ou corrida calculada fica abaixo disso. 0 = sem mínimo.", null, "numero", false, 0.0, "R\$", 0.0, 1000.0, 0.5, listOf(), null, listOf(), listOf("tipo", "cliente"), false, null),
@@ -196,6 +213,7 @@ val PARAMETROS = listOf(
     Param("cliente_coleta_fixa", "cli_pode", "Coleta sempre no endereço do cadastro", "Ligado: a primeira coleta é o endereço do cadastro e o cliente não troca.", "Desligado: o cliente escolhe onde coletar.", "booleano", false, 0.0, null, null, null, 1.0, listOf(), null, listOf(), listOf("cliente"), false, null),
     Param("cliente_pode_observacoes", "cli_pode", "Cliente escreve observações", "Ligado: campo de observações no pedido.", null, "booleano", true, 0.0, null, null, null, 1.0, listOf(), null, listOf(), listOf("cliente"), false, null),
     Param("cliente_pode_chat", "cli_pode", "Cliente fala com você pelo chat", "Ligado: o cliente manda mensagem para os gestores pelo site.", null, "booleano", true, 0.0, null, null, null, 1.0, listOf(), null, listOf(), listOf("cliente"), false, null),
+    Param("cliente_ve_rota", "cli_ve", "O que o cliente vê da rota no mapa", "Marque o que aparece para o cliente acompanhar o pedido.", null, "multi", false, 0.0, null, null, null, 1.0, listOf(), "feito,motoboy", listOf("motoboy" to "Motoboy ao vivo", "feito" to "Caminho feito", "restante" to "O que falta", "planejada" to "Rota planejada inteira", "outras_paradas" to "Paradas de outros clientes"), listOf("cliente"), false, null),
     Param("cliente_ve_faturas", "cli_ve", "Cliente vê a aba Faturas", "Ligado: faturas e pagamentos aparecem no site dele.", null, "booleano", true, 0.0, null, null, null, 1.0, listOf(), null, listOf(), listOf("cliente"), false, null),
     Param("preco_distancia_modo", "precocliente", "Como a distância entra no preço", "", null, "escolha", false, 0.0, null, null, null, 1.0, listOf(), "soma_entregas", listOf("soma_entregas" to "Soma das entregas", "rota" to "Km da rota"), listOf("tipo", "cliente"), false, null),
     Param("soma_inclui_saida", "precocliente", "Soma das entregas: cobrar a Saída", "Ligado: a taxa de saída entra junto com a soma das entregas.", "Desligado: o preço é só a soma das entregas (mais volumes, peso e acréscimos).", "booleano", false, 0.0, null, null, null, 1.0, listOf(), null, listOf(), listOf("tipo", "cliente"), false, null),

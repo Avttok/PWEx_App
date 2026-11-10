@@ -59,7 +59,7 @@ private const val RAIO_MAX = 100f
 @Composable
 fun ConfigMotoApp(onVoltar: () -> Unit, modifier: Modifier = Modifier) {
     PwPagina(modifier, padding = androidx.compose.foundation.layout.PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 32.dp)) {
-        PwCabecalho("Configurações", onVoltar, subtitulo = "Raio, aparelho e GPS")
+        PwCabecalho("Ajustes", onVoltar, subtitulo = "Raio, aparelho e GPS")
         CartaoRaio()
         PainelAparelho()
         CartaoOfertas()
@@ -98,24 +98,8 @@ private fun CartaoRaio() {
             if (km < 1f) "Você recebe corridas de qualquer distância." else "Corridas com coleta mais longe que isso não chegam para você (a não ser as urgentes).",
             color = c.texto2, fontSize = 13.sp, fontFamily = Archivo,
         )
-        // bolinha grande para puxar e trilho grosso (o padrão do Android é fino demais)
-        val fracao = (km / RAIO_MAX).coerceIn(0f, 1f)
-        Slider(
-            value = km, onValueChange = { km = it.toInt().toFloat() }, valueRange = 0f..RAIO_MAX,
-            modifier = Modifier.height(48.dp),
-            thumb = {
-                Box(
-                    Modifier.size(30.dp).shadow(6.dp, androidx.compose.foundation.shape.CircleShape)
-                        .clip(androidx.compose.foundation.shape.CircleShape).background(c.gradOuro)
-                        .border(3.dp, c.fundo2, androidx.compose.foundation.shape.CircleShape),
-                )
-            },
-            track = {
-                Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(99.dp)).background(c.bordaForte)) {
-                    Box(Modifier.fillMaxWidth(fracao).height(10.dp).clip(RoundedCornerShape(99.dp)).background(c.gradOuro))
-                }
-            },
-        )
+        // bolinha grande para puxar e trilho grosso (a mesma barra de todos os raios do app)
+        com.pwexpress.core.mapa.PwBarraBolinha(km, { km = it }, 0f..RAIO_MAX, 1f, Modifier.fillMaxWidth())
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 6.dp)) {
             Text("De onde contar o raio", color = c.texto2, fontSize = 13.sp, modifier = Modifier.weight(1f))
             com.pwexpress.core.designsystem.PwDica("De onde contar o raio", "De onde eu estiver: o raio acompanha você, a partir da sua posição. Ponto fixo: conta a partir de um lugar que você escolhe no mapa, como a sua casa ou a base. Corridas urgentes podem chegar mesmo fora do raio.")

@@ -132,7 +132,7 @@ fun JanelaConta(
                     Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(c.borda))
                 }
 
-                ItemMenu(PwIcones.Settings2, "Configurações", subtitulo = if (painel == Painel.GESTOR) "Do sistema inteiro" else "Raio, aparelho e GPS", onClick = onConfiguracoes)
+                ItemMenu(PwIcones.Settings2, "Ajustes", subtitulo = if (painel == Painel.GESTOR) "Do sistema inteiro" else "Raio, aparelho e GPS", onClick = onConfiguracoes)
                 val escuro = c.escuro
                 val estilo by TemaApp.estilo.collectAsState()
                 val mono = estilo == com.pwexpress.core.designsystem.EstiloTema.PRETO_NO_BRANCO || estilo == com.pwexpress.core.designsystem.EstiloTema.BRANCO_NO_PRETO

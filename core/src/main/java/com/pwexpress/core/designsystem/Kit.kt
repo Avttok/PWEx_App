@@ -52,6 +52,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -649,27 +651,113 @@ object PwToast {
     fun fechar(id: Long) { _avisos.value = _avisos.value.filterNot { it.id == id } }
 }
 
-/** Onde os avisos aparecem (uma vez, por cima de tudo). */
+/** Onde os avisos aparecem (uma vez, por cima de tudo). Cada tipo tem seu degradê. */
 @Composable
 fun PwToasts(modifier: Modifier = Modifier) {
     val c = Pw.cores
     val avisos by PwToast.avisos.collectAsState()
-    Column(modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 14.dp, vertical = 100.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        avisos.forEach { a ->
-            androidx.compose.runtime.key(a.id) {
-                androidx.compose.runtime.LaunchedEffect(a.id) { kotlinx.coroutines.delay(a.duracaoMs); PwToast.fechar(a.id) }
-                val forma = RoundedCornerShape(18.dp)
-                val cor = when (a.tipo) { TipoAviso.OK -> c.verde; TipoAviso.ERRO, TipoAviso.AVISO -> c.vermelho; TipoAviso.INFO -> c.ouro }
-                Row(
-                    Modifier.fillMaxWidth().clip(forma).background(c.fundo2).border(1.dp, if (a.tipo == TipoAviso.ERRO) c.vermelho.copy(alpha = 0.5f) else c.bordaForte, forma)
-                        .clickable { PwToast.fechar(a.id) }.padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Icon(if (a.tipo == TipoAviso.OK) PwIcones.CircleCheck else if (a.tipo == TipoAviso.INFO) PwIcones.Info else PwIcones.Alerta, null, tint = cor, modifier = Modifier.size(20.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f)) {
-                        a.titulo?.let { Text(it, color = c.texto, fontWeight = FontWeight.Bold, fontFamily = Archivo, fontSize = 14.sp) }
-                        Text(a.texto, color = if (a.titulo != null) c.texto2 else c.texto, fontSize = 13.5.sp, lineHeight = 18.sp)
+    Box(Modifier.fillMaxSize()) {
+        PwDestaques(Modifier.align(Alignment.TopCenter))
+        Column(modifier.align(Alignment.BottomCenter).fillMaxWidth().navigationBarsPadding().padding(horizontal = 14.dp, vertical = 100.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            avisos.forEach { a ->
+                androidx.compose.runtime.key(a.id) {
+                    androidx.compose.runtime.LaunchedEffect(a.id) { kotlinx.coroutines.delay(a.duracaoMs); PwToast.fechar(a.id) }
+                    var visivel by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                    androidx.compose.runtime.LaunchedEffect(Unit) { visivel = true }
+                    val forma = RoundedCornerShape(20.dp)
+                    val cor = when (a.tipo) { TipoAviso.OK -> c.verde; TipoAviso.ERRO, TipoAviso.AVISO -> c.vermelho; TipoAviso.INFO -> c.ouro }
+                    androidx.compose.animation.AnimatedVisibility(visivel, enter = androidx.compose.animation.slideInVertically { it / 2 } + androidx.compose.animation.fadeIn()) {
+                        Row(
+                            Modifier.fillMaxWidth()
+                                .shadow(10.dp, forma, ambientColor = cor.copy(alpha = 0.4f), spotColor = cor.copy(alpha = 0.4f))
+                                .clip(forma)
+                                .background(androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(cor.copy(alpha = 0.22f).compositeOver(c.fundo2), c.fundo2, c.fundo2)))
+                                .border(1.dp, androidx.compose.ui.graphics.Brush.horizontalGradient(listOf(cor.copy(alpha = 0.8f), c.bordaForte)), forma)
+                                .clickable { PwToast.fechar(a.id) }.padding(horizontal = 12.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(Modifier.size(34.dp).clip(RoundedCornerShape(11.dp)).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(cor, cor.copy(alpha = 0.55f)))), contentAlignment = Alignment.Center) {
+                                Icon(if (a.tipo == TipoAviso.OK) PwIcones.Check else if (a.tipo == TipoAviso.INFO) PwIcones.Info else PwIcones.Alerta, null, tint = Color(0xFF0A0A0A), modifier = Modifier.size(19.dp))
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                a.titulo?.let { Text(it, color = c.texto, fontWeight = FontWeight.Bold, fontFamily = Archivo, fontSize = 14.sp) }
+                                Text(a.texto, color = if (a.titulo != null) c.texto2 else c.texto, fontSize = 13.5.sp, lineHeight = 18.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Estilo dos destaques grandes (topo da tela). */
+enum class EstiloDestaque { ONLINE, OFFLINE, CANCELADA, EXTENSAO, OFERTA, PLANEJADA, CHAT, OURO }
+data class Destaque(val id: Long, val titulo: String, val texto: String?, val estilo: EstiloDestaque, val icone: ImageVector?, val duracaoMs: Long, val onClick: (() -> Unit)?)
+
+/** Avisos grandes com degradê para os momentos importantes: ficou online, o gestor cancelou, a rota cresceu… */
+object PwDestaque {
+    private var seq = 0L
+    private val _lista = kotlinx.coroutines.flow.MutableStateFlow<List<Destaque>>(emptyList())
+    val lista: kotlinx.coroutines.flow.StateFlow<List<Destaque>> = _lista
+    fun mostrar(titulo: String, texto: String? = null, estilo: EstiloDestaque = EstiloDestaque.OURO, icone: ImageVector? = null, duracaoMs: Long = 4_500, onClick: (() -> Unit)? = null) {
+        _lista.value = (_lista.value + Destaque(++seq, titulo, texto, estilo, icone, duracaoMs, onClick)).takeLast(2)
+    }
+    fun fechar(id: Long) { _lista.value = _lista.value.filterNot { it.id == id } }
+}
+
+private fun coresDestaque(e: EstiloDestaque, c: PwPaleta): List<Color> = when (e) {
+    EstiloDestaque.ONLINE -> listOf(Color(0xFF0E7A4A), Color(0xFF1FB86E), Color(0xFF7BE3A8))
+    EstiloDestaque.OFFLINE -> listOf(Color(0xFF2A2A2E), Color(0xFF4A4A52), Color(0xFF6E6E78))
+    EstiloDestaque.CANCELADA -> listOf(Color(0xFF7A1222), Color(0xFFD23A4E), Color(0xFFFF8A80))
+    EstiloDestaque.EXTENSAO, EstiloDestaque.OURO -> listOf(c.ouroEscuro, c.ouro, c.ouroClaro)
+    EstiloDestaque.OFERTA -> listOf(Color(0xFF8A6A12), c.ouro, Color(0xFFFFE9A8))
+    EstiloDestaque.PLANEJADA -> listOf(Color(0xFF1E3A8A), Color(0xFF3B82F6), Color(0xFF93C5FD))
+    EstiloDestaque.CHAT -> listOf(Color(0xFF4C1D95), Color(0xFF7C3AED), Color(0xFFC4B5FD))
+}
+
+@Composable
+private fun PwDestaques(modifier: Modifier) {
+    val c = Pw.cores
+    val lista by PwDestaque.lista.collectAsState()
+    Column(modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        lista.forEach { d ->
+            androidx.compose.runtime.key(d.id) {
+                androidx.compose.runtime.LaunchedEffect(d.id) { kotlinx.coroutines.delay(d.duracaoMs); PwDestaque.fechar(d.id) }
+                var visivel by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                androidx.compose.runtime.LaunchedEffect(Unit) { visivel = true }
+                val cores = coresDestaque(d.estilo, c)
+                val claro = d.estilo == EstiloDestaque.EXTENSAO || d.estilo == EstiloDestaque.OURO || d.estilo == EstiloDestaque.OFERTA
+                val tinta = if (claro) Color(0xFF0A0A0A) else Color.White
+                val forma = RoundedCornerShape(24.dp)
+                // brilho que passa uma vez pelo cartão
+                val brilho = androidx.compose.animation.core.rememberInfiniteTransition(label = "brilho")
+                val x by brilho.animateFloat(-0.4f, 1.4f, androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(2600), androidx.compose.animation.core.RepeatMode.Restart), label = "x")
+                androidx.compose.animation.AnimatedVisibility(visivel, enter = androidx.compose.animation.slideInVertically { -it } + androidx.compose.animation.fadeIn()) {
+                    Box(
+                        Modifier.fillMaxWidth().shadow(16.dp, forma, ambientColor = cores[1], spotColor = cores[1]).clip(forma)
+                            .background(androidx.compose.ui.graphics.Brush.linearGradient(cores))
+                            .clickable { d.onClick?.invoke(); PwDestaque.fechar(d.id) },
+                    ) {
+                        Box(Modifier.matchParentSize().background(androidx.compose.ui.graphics.Brush.linearGradient(
+                            0f to Color.Transparent, (x - 0.15f).coerceIn(0f, 1f) to Color.Transparent, x.coerceIn(0f, 1f) to Color.White.copy(alpha = 0.22f),
+                            (x + 0.15f).coerceIn(0f, 1f) to Color.Transparent, 1f to Color.Transparent,
+                        )))
+                        Row(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(46.dp).clip(CircleShape).background(tinta.copy(alpha = 0.16f)).border(1.5.dp, tinta.copy(alpha = 0.4f), CircleShape), contentAlignment = Alignment.Center) {
+                                Icon(d.icone ?: when (d.estilo) {
+                                    EstiloDestaque.ONLINE -> PwIcones.Radio; EstiloDestaque.OFFLINE -> PwIcones.Power; EstiloDestaque.CANCELADA -> PwIcones.Ban
+                                    EstiloDestaque.EXTENSAO -> PwIcones.Route; EstiloDestaque.OFERTA -> PwIcones.Zap; EstiloDestaque.PLANEJADA -> PwIcones.CalendarClock
+                                    EstiloDestaque.CHAT -> PwIcones.MessagesSquare; EstiloDestaque.OURO -> PwIcones.Sparkles
+                                }, null, tint = tinta, modifier = Modifier.size(24.dp))
+                            }
+                            Spacer(Modifier.width(14.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(d.titulo, color = tinta, fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 17.sp, maxLines = 2)
+                                d.texto?.let { Text(it, color = tinta.copy(alpha = 0.85f), fontSize = 13.5.sp, lineHeight = 18.sp, maxLines = 3) }
+                            }
+                        }
                     }
                 }
             }

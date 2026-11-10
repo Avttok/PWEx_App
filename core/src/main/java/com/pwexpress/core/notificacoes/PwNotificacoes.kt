@@ -39,6 +39,15 @@ object PwNotificacoes {
     const val CANAL_SILENCIOSO = "pwex_silencioso"
     /** Download da atualização do app. */
     const val CANAL_ATUALIZACAO = "pwex_atualizacao"
+    /** Mensagens do chat da equipe. */
+    const val CANAL_CHAT = "pwex_chat"
+
+    /** Degradês dos cartões (mesmos dos destaques do app). */
+    val GRAD_OURO = intArrayOf(0xFF8A6A12.toInt(), 0xFFD4AF37.toInt(), 0xFFF5DE8C.toInt())
+    val GRAD_VERMELHO = intArrayOf(0xFF5E0E1A.toInt(), 0xFFD23A4E.toInt(), 0xFFFF8A80.toInt())
+    val GRAD_VERDE = intArrayOf(0xFF0A5C38.toInt(), 0xFF1FB86E.toInt(), 0xFF7BE3A8.toInt())
+    val GRAD_AZUL = intArrayOf(0xFF142B6B.toInt(), 0xFF3B82F6.toInt(), 0xFF93C5FD.toInt())
+    val GRAD_VIOLETA = intArrayOf(0xFF3B1577.toInt(), 0xFF7C3AED.toInt(), 0xFFC4B5FD.toInt())
 
     const val DOURADO = 0xFFD4AF37.toInt()
     const val VIOLETA = 0xFFA78BFA.toInt()
@@ -69,6 +78,8 @@ object PwNotificacoes {
                 "Informativos que não tocam nem acendem a tela.", semSom = true),
             canal(CANAL_ATUALIZACAO, "Atualização do app", NotificationManager.IMPORTANCE_LOW, GRUPO_SISTEMA,
                 "Progresso do download de uma versão nova.", semSom = true),
+            canal(CANAL_CHAT, "Conversas", NotificationManager.IMPORTANCE_HIGH, GRUPO_SISTEMA,
+                "Mensagens do chat da equipe (geral, diretas e grupos)."),
         ))
     }
 
@@ -127,6 +138,71 @@ object PwNotificacoes {
             .setContentIntent(abrir)
             .setSilent(silencioso)
         acoes.forEach { b.addAction(it) }
+        ctx.getSystemService(NotificationManager::class.java)?.notify(id, b.build())
+    }
+
+    /**
+     * Faixa com degradê, a logo e o título (a imagem que aparece ao expandir a notificação).
+     * Fica no lugar dos cartões cinza de antes: cada assunto tem sua cor.
+     */
+    fun banner(ctx: Context, titulo: String, texto: String?, cores: IntArray): Bitmap {
+        val w = 1080; val h = 420
+        val b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val tela = Canvas(b)
+        val p = Paint(Paint.ANTI_ALIAS_FLAG)
+        p.shader = android.graphics.LinearGradient(0f, h.toFloat(), w.toFloat(), 0f, cores, null, Shader.TileMode.CLAMP)
+        tela.drawRoundRect(android.graphics.RectF(0f, 0f, w.toFloat(), h.toFloat()), 48f, 48f, p)
+        // brilho e círculos decorativos
+        p.shader = android.graphics.RadialGradient(w * 0.85f, h * 0.1f, h * 0.9f, intArrayOf(0x55FFFFFF, 0x00FFFFFF), null, Shader.TileMode.CLAMP)
+        tela.drawCircle(w * 0.85f, h * 0.1f, h * 0.9f, p)
+        p.shader = null; p.style = Paint.Style.STROKE; p.strokeWidth = 6f; p.color = 0x33FFFFFF
+        tela.drawCircle(w * 0.92f, h * 0.95f, 170f, p); tela.drawCircle(w * 0.92f, h * 0.95f, 250f, p)
+        p.style = Paint.Style.FILL
+        // logo num círculo escuro
+        logoRedonda(ctx)?.let { tela.drawBitmap(it, null, android.graphics.RectF(60f, (h - 180) / 2f, 240f, (h + 180) / 2f), Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)) }
+        val claro = android.graphics.Color.luminance(cores[1]) > 0.45f
+        val tinta = if (claro) 0xFF0A0A0A.toInt() else 0xFFFFFFFF.toInt()
+        val tp = android.text.TextPaint(Paint.ANTI_ALIAS_FLAG).apply { color = tinta; textSize = 62f; typeface = android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD) }
+        val larg = w - 300 - 60
+        val l1 = android.text.StaticLayout.Builder.obtain(titulo, 0, titulo.length, tp, larg).setMaxLines(2).setEllipsize(android.text.TextUtils.TruncateAt.END).build()
+        val sub = texto.orEmpty()
+        val tp2 = android.text.TextPaint(tp).apply { textSize = 40f; typeface = android.graphics.Typeface.DEFAULT; alpha = 215 }
+        val l2 = android.text.StaticLayout.Builder.obtain(sub, 0, sub.length, tp2, larg).setMaxLines(3).setEllipsize(android.text.TextUtils.TruncateAt.END).build()
+        val total = l1.height + (if (sub.isNotEmpty()) 18 + l2.height else 0)
+        tela.save(); tela.translate(290f, (h - total) / 2f); l1.draw(tela)
+        if (sub.isNotEmpty()) { tela.translate(0f, l1.height + 18f); l2.draw(tela) }
+        tela.restore()
+        return b
+    }
+
+    /** Notificação com a faixa em degradê (cancelada, rota estendida, planejada aberta…). */
+    fun cartao(
+        ctx: Context, id: Int, canal: String, titulo: String, texto: String, cores: IntArray,
+        abrir: PendingIntent? = abrirApp(ctx, id), acoes: List<NotificationCompat.Action> = emptyList(), silencioso: Boolean = false,
+    ) {
+        val img = runCatching { banner(ctx, titulo, texto, cores) }.getOrNull()
+        val b = base(ctx, canal)
+            .setContentTitle(titulo)
+            .setContentText(texto)
+            .setColor(cores[1]).setColorized(false)
+            .setAutoCancel(true)
+            .setContentIntent(abrir)
+            .setSilent(silencioso)
+        if (img != null) b.setStyle(NotificationCompat.BigPictureStyle().bigPicture(img).bigLargeIcon(null as Bitmap?).setSummaryText(texto))
+        else b.setStyle(NotificationCompat.BigTextStyle().bigText(texto))
+        acoes.forEach { b.addAction(it) }
+        ctx.getSystemService(NotificationManager::class.java)?.notify(id, b.build())
+    }
+
+    /** Mensagem do chat: estilo de conversa (remetente e prévia), tocando no canal de Conversas. */
+    fun mensagemChat(ctx: Context, conversa: String, titulo: String, texto: String) {
+        val id = 5000 + (conversa.hashCode() and 0x3FF)
+        val abrir = abrirApp(ctx, id, "chat:$conversa")
+        val eu = androidx.core.app.Person.Builder().setName("Você").build()
+        val de = androidx.core.app.Person.Builder().setName(titulo).setIcon(logoRedonda(ctx)?.let { androidx.core.graphics.drawable.IconCompat.createWithBitmap(it) }).build()
+        val estilo = NotificationCompat.MessagingStyle(eu).addMessage(texto, System.currentTimeMillis(), de)
+        val b = base(ctx, CANAL_CHAT).setStyle(estilo).setContentTitle(titulo).setContentText(texto)
+            .setColor(0xFF7C3AED.toInt()).setAutoCancel(true).setContentIntent(abrir).setCategory(NotificationCompat.CATEGORY_MESSAGE)
         ctx.getSystemService(NotificationManager::class.java)?.notify(id, b.build())
     }
 

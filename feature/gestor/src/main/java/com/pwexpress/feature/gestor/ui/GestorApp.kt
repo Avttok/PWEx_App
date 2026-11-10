@@ -48,6 +48,10 @@ object GestorNav {
     internal val pedido = kotlinx.coroutines.flow.MutableStateFlow<TelaG?>(null)
     fun abrirConfiguracoes() { pedido.value = TelaG.Configuracoes }
     fun abrirDev() { pedido.value = TelaG.Dev }
+    fun abrir(t: TelaG) { pedido.value = t }
+    /** Abre a aba de pedidos já no pedido [id] (do chat ou de um aviso). */
+    val pedidoAberto = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    fun abrirPedido(id: String) { pedidoAberto.value = id }
 }
 
 /**
@@ -80,6 +84,8 @@ fun GestorApp(
                      "empresas" -> { aba = "pessoas"; subPessoas = 0 }; "equipe" -> { aba = "pessoas"; subPessoas = 1 } }
     }
     fun abrir(t: TelaG) { if (pilha.lastOrNull() != t) pilha.add(t) }
+    val pedidoAberto by GestorNav.pedidoAberto.collectAsState()
+    LaunchedEffect(pedidoAberto) { if (pedidoAberto != null) { pilha.clear(); aba = "operacao"; subOperacao = 0 } }
     val pedido by GestorNav.pedido.collectAsState()
     LaunchedEffect(pedido) { pedido?.let { abrir(it); GestorNav.pedido.value = null } }
     fun voltar() { if (pilha.isNotEmpty()) pilha.removeAt(pilha.lastIndex) }

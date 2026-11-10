@@ -51,5 +51,6 @@ dependencies {
     api(libs.okhttp)
     api(libs.maplibre.android)
     api(libs.coil.compose)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
 }

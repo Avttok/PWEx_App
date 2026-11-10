@@ -123,7 +123,12 @@ fun TrackingScreen(
             return
         }
         aviso = null
+        val antes = Tracking.info.value.modo
         Tracking.definirModo(m)
+        if (antes != m) {
+            if (m == Modo.DISPONIVEL) com.pwexpress.core.designsystem.PwDestaque.mostrar("Você está online", "As corridas perto de você chegam aqui e no aviso de chamada.", com.pwexpress.core.designsystem.EstiloDestaque.ONLINE)
+            else if (m == Modo.OFFLINE) com.pwexpress.core.designsystem.PwDestaque.mostrar("Você ficou offline", "Nenhuma corrida nova vai chegar até você voltar.", com.pwexpress.core.designsystem.EstiloDestaque.OFFLINE)
+        }
     }
 
     Column(

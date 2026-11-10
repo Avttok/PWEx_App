@@ -251,7 +251,8 @@ private fun CartaoMeuVeiculo() {
         if (placa == null) Text("Ainda sem veículo cadastrado. Peça ao gestor para cadastrar a placa, a cor e a CNH.", color = c.texto2)
         else {
             Text(listOfNotNull(t("modelo"), t("cor"), t("ano")).joinToString(" · ").ifEmpty { "Veículo" }, color = c.texto, fontWeight = FontWeight.SemiBold)
-            Text("Placa ${placa.take(3)}-${placa.drop(3)}", style = TextStyle(fontFamily = ArchivoLargo, fontWeight = FontWeight.Black, fontSize = 22.sp, letterSpacing = 2.sp), color = c.texto)
+            Spacer(Modifier.height(10.dp))
+            com.pwexpress.core.designsystem.PwPlaca(placa, largura = 210.dp)
         }
         t("cnh_categoria")?.let { cat ->
             val dias = t("cnh_vence_em_dias")?.toLongOrNull()

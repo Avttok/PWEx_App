@@ -103,7 +103,18 @@ class MainActivity : ComponentActivity() {
                     var esperouPerfil by remember { mutableStateOf(false) }
                     LaunchedEffect(sessao?.email) { esperouPerfil = false; delay(8_000); esperouPerfil = true }
 
-                    LaunchedEffect(abrirAba.value) { abrirAba.value?.let { if (it == "planejadas" || it == "rotas") { aba = "corridas"; painel = Painel.MOTOBOY; naConfig = false }; abrirAba.value = null } }
+                    LaunchedEffect(abrirAba.value) { abrirAba.value?.let {
+                        if (it == "planejadas" || it == "rotas") { aba = "corridas"; painel = Painel.MOTOBOY; naConfig = false }
+                        if (it.startsWith("chat")) { it.substringAfter("chat:", "").takeIf { c -> c.isNotBlank() }?.let { c -> com.pwexpress.core.chat.Chat.conversaPedida.value = c }; com.pwexpress.core.chat.Chat.abrir.value = true }
+                        abrirAba.value = null } }
+                    val chatAberto by com.pwexpress.core.chat.Chat.abrir.collectAsState()
+                    val chatLigado = perfil?.logico("chat_ligado", true) != false && perfil?.modulo("chat") != false
+                    BackHandler(enabled = chatAberto) { com.pwexpress.core.chat.Chat.abrir.value = false }
+                    // não lidas do chat (o número no topo), com o app aberto
+                    LaunchedEffect(sessao != null, chatLigado) {
+                        if (sessao == null || !chatLigado) return@LaunchedEffect
+                        ciclo.repeatOnLifecycle(Lifecycle.State.RESUMED) { while (true) { com.pwexpress.core.chat.Chat.carregar(); delay(30_000) } }
+                    }
 
                     // se algo for desligado depois, a tela de preparo volta
                     LaunchedEffect(Unit) { ciclo.repeatOnLifecycle(Lifecycle.State.RESUMED) { preparado = lerPreparo(ctx).completo } }
@@ -141,6 +152,7 @@ class MainActivity : ComponentActivity() {
                     }
                     fun sair() {
                         conta = false; noPerfil = false
+                        com.pwexpress.core.chat.Chat.limpar(); com.pwexpress.core.chat.Chat.abrir.value = false
                         Gestao.limpar()
                         scope.launch { Tracking.sairDaConta() }
                     }
@@ -186,6 +198,23 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         o != null -> OfertaScreen(o, onFim = { }, modifier = conteudo)
+                        chatAberto && chatLigado -> com.pwexpress.core.chat.ChatScreen(
+                            meuId = p?.id, gestor = efetivo == Painel.GESTOR, onVoltar = { com.pwexpress.core.chat.Chat.abrir.value = false }, modifier = conteudo,
+                            onAbrirAnexo = { an ->
+                                val id = an.id
+                                if (efetivo == Painel.GESTOR && id != null) {
+                                    when (an.tipo) {
+                                        "rota" -> { com.pwexpress.core.chat.Chat.abrir.value = false; GestorNav.abrir(com.pwexpress.feature.gestor.ui.TelaG.Corrida(id)) }
+                                        "cliente" -> { com.pwexpress.core.chat.Chat.abrir.value = false; GestorNav.abrir(com.pwexpress.feature.gestor.ui.TelaG.Empresa(id)) }
+                                        "pessoa" -> { com.pwexpress.core.chat.Chat.abrir.value = false; GestorNav.abrir(com.pwexpress.feature.gestor.ui.TelaG.Membro(id)) }
+                                        "pedido" -> { com.pwexpress.core.chat.Chat.abrir.value = false; GestorNav.abrirPedido(id) }
+                                    }
+                                }
+                                if (an.tipo == "local" && an.lat != null && an.lng != null) runCatching {
+                                    ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("geo:${an.lat},${an.lng}?q=${an.lat},${an.lng}")))
+                                }
+                            },
+                        )
                         !preparado -> PrimeiraConfiguracao(onPronto = { preparado = true }, modifier = conteudo)
                         a != null -> CorridaScreen(a, admin = p?.admin == true, modifier = conteudo)
                         naConfig && efetivo == Painel.MOTOBOY -> com.pwexpress.motoboy.ui.ConfigMotoApp(onVoltar = { naConfig = false }, modifier = conteudo)

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -75,6 +76,8 @@ fun PedidosG(onNovo: () -> Unit = {}) {
     var aberto by remember { mutableStateOf<String?>(null) }
     var ocupado by remember { mutableStateOf(false) }
     val escopo = rememberCoroutineScope()
+    val pedidoPedido by GestorNav.pedidoAberto.collectAsState()
+    LaunchedEffect(pedidoPedido) { pedidoPedido?.let { aberto = it; GestorNav.pedidoAberto.value = null } }
 
     var busca by rememberSaveable { mutableStateOf("") }
     var tipo by rememberSaveable { mutableIntStateOf(0) }
@@ -176,6 +179,10 @@ private fun JanelaPedido(p: PedidoG, empresa: String?, onFechar: () -> Unit) {
             PwSelo(if (p.planejado) "Planejado" else "Agora", if (p.planejado) c.azul else c.ouro)
             if (p.urgente) PwSelo("URGENTE", c.vermelho, icone = PwIcones.Flame)
             PwSelo(if (p.cobranca == "credito") "Crédito (fatura)" else "Pré-pago", c.texto2)
+            Spacer(Modifier.weight(1f))
+            com.pwexpress.core.designsystem.PwBotaoIcone(PwIcones.Share2, "Mandar no chat", {
+                com.pwexpress.core.chat.Chat.compartilhar(com.pwexpress.core.chat.Anexo("pedido", p.id, "Pedido ${p.numeroExibicao}", nomeCliente(p, empresa))); onFechar()
+            }, tamanho = 34.dp)
         }
         if (p.planejado && p.quando != null) Text("Para ${dataHora(p.quando)}", color = c.azul, fontWeight = FontWeight.SemiBold)
 

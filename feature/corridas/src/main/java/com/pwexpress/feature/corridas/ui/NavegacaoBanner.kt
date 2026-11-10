@@ -81,13 +81,13 @@ fun rememberLeituraContinua(ativa: Boolean): LeituraNav? {
 }
 
 /** Fala as instruções (português do Brasil). */
-private class Voz(ctx: Context) {
+private class Voz(ctx: Context) : TextToSpeech.OnInitListener {
     private var pronta = false
-    private val tts = TextToSpeech(ctx.applicationContext) { st ->
+    private val tts: TextToSpeech = TextToSpeech(ctx.applicationContext, this)
+    override fun onInit(st: Int) {
         pronta = st == TextToSpeech.SUCCESS
-        if (pronta) runCatching { tts().language = java.util.Locale.forLanguageTag("pt-BR") }
+        if (pronta) runCatching { tts.language = java.util.Locale.forLanguageTag("pt-BR") }
     }
-    private fun tts() = tts
     fun falar(t: String) { if (pronta) runCatching { tts.speak(t, TextToSpeech.QUEUE_FLUSH, null, "nav") } }
     fun fechar() = runCatching { tts.stop(); tts.shutdown() }
 }

@@ -81,6 +81,9 @@ fun RowScope.AcoesTopo(painel: Painel, podeTrocar: Boolean, onTrocar: (Painel) -
             }
         }
     }
+    if (perfil?.logico("chat_ligado", true) != false && perfil?.modulo("chat") != false) {
+        com.pwexpress.core.chat.BotaoChatTopo { com.pwexpress.core.chat.Chat.abrir.value = true }
+    }
     PwAvatarConta(perfil?.nome ?: "", perfil?.fotoUrl, teste, modifier = Modifier.alvoTour("conta"), tamanho = 42.dp, onClick = onConta, dev = perfil?.dev == true, gestor = perfil?.gestor == true, motoboy = perfil?.motoboy == true)
 }
 

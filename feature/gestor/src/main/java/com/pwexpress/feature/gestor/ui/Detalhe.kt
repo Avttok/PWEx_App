@@ -100,7 +100,13 @@ fun DetalheCorridaG(id: String, onVoltar: () -> Unit) {
         Cabecalho(
             if (corrida != null) "Corrida ${corrida.numeroExibicao}" else "Corrida", onVoltar,
             subtitulo = corrida?.let { "${dados.cliente(it)} · ${dataHora(it.criadaEm)}" },
-        ) { if (corrida?.teste == true) Icon(PwIcones.FlaskConical, "Corrida de teste", tint = c.violeta, modifier = Modifier.size(20.dp)) }
+        ) {
+            if (corrida?.teste == true) Icon(PwIcones.FlaskConical, "Corrida de teste", tint = c.violeta, modifier = Modifier.size(20.dp))
+            if (corrida != null) com.pwexpress.core.designsystem.PwBotaoIcone(PwIcones.Share2, "Mandar no chat", {
+                com.pwexpress.core.chat.Chat.compartilhar(com.pwexpress.core.chat.Anexo("rota", corrida.id, "Rota ${corrida.numeroExibicao}",
+                    "${dados.cliente(corrida)} · ${corrida.paradas.count { !it.coleta }} entrega(s)"))
+            })
+        }
         if (corrida == null) { if (!dados.carregado) PwCarregando() else PwErro("Essa corrida não existe mais (pode ter sido apagada)."); return@PwPagina }
 
         val trazerMapa = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }

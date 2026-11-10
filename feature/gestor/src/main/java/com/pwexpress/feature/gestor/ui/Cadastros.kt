@@ -207,7 +207,9 @@ fun EmpresaG(id: String?, onVoltar: () -> Unit) {
 
     var aba by remember { mutableIntStateOf(0) }
     PwPagina {
-        Cabecalho(if (e == null) "Novo cliente" else e.nome, onVoltar, subtitulo = "Dados, preço, pagamento e coleta padrão")
+        Cabecalho(if (e == null) "Novo cliente" else e.nome, onVoltar, subtitulo = "Dados, preço, pagamento e coleta padrão") {
+            if (e != null) com.pwexpress.core.designsystem.PwBotaoIcone(PwIcones.Share2, "Mandar no chat", { com.pwexpress.core.chat.Chat.compartilhar(com.pwexpress.core.chat.Anexo("cliente", e.id, e.nome)) })
+        }
         if (e != null) {
             val ctxCli = LocalContext.current
             PwBotaoVidro("Usar o site do cliente como ${e.nome}", onClick = {
@@ -537,7 +539,9 @@ fun MembroG(id: String, meuId: String?, onVoltar: () -> Unit) {
     val m = dados.membro(id)
     var aba by remember { mutableIntStateOf(0) }
     PwPagina {
-        Cabecalho(m?.nome ?: "Conta", onVoltar, subtitulo = m?.email)
+        Cabecalho(m?.nome ?: "Conta", onVoltar, subtitulo = m?.email) {
+            if (m != null) com.pwexpress.core.designsystem.PwBotaoIcone(PwIcones.Share2, "Mandar no chat", { com.pwexpress.core.chat.Chat.compartilhar(com.pwexpress.core.chat.Anexo("pessoa", m.id, m.nome)) })
+        }
         if (m == null) { if (!dados.carregado) PwCarregando() else PwErro("Essa conta não existe mais."); return@PwPagina }
         Row(verticalAlignment = Alignment.CenterVertically) {
             PwAvatar(m.nome, m.foto, tamanho = 60.dp)
@@ -1216,7 +1220,9 @@ internal fun VeiculoG(id: String) {
         PwRotulo("Veículo")
         PwSegmentado(listOf("Moto" to PwIcones.Bike, "Carro" to PwIcones.Route, "Bicicleta" to PwIcones.Bike, "Van" to PwIcones.Package),
             listOf("moto", "carro", "bicicleta", "van").indexOf(x.tipo).coerceAtLeast(0), { i -> mudar { it.copy(tipo = listOf("moto", "carro", "bicicleta", "van")[i]) } })
-        Espaco(8)
+        Espaco(10)
+        com.pwexpress.core.designsystem.PwPlaca(x.placa, largura = 200.dp)
+        Espaco(10)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PwCampo(x.placa, { t -> mudar { it.copy(placa = t.uppercase()) } }, "Placa", dica = "AAA0A00", modifier = Modifier.weight(1f))
             PwCampo(x.cor, { t -> mudar { it.copy(cor = t) } }, "Cor", modifier = Modifier.weight(1f))

@@ -87,6 +87,7 @@ import androidx.compose.ui.graphics.toArgb
 import com.pwexpress.core.mapa.PwMapa
 import com.pwexpress.feature.gestor.data.CorridaG
 import com.pwexpress.feature.gestor.data.GRUPOS_CONFIG
+import com.pwexpress.feature.gestor.data.AREAS_CONFIG
 import com.pwexpress.feature.gestor.data.Geo
 import com.pwexpress.feature.gestor.data.Gestao
 import com.pwexpress.feature.gestor.data.ItemRegistro
@@ -1051,41 +1052,111 @@ private fun ResumoCarteiraG(onVoltar: (() -> Unit)?, abas: @Composable () -> Uni
 fun ConfiguracoesG(onVoltar: (() -> Unit)?, onAbrir: (TelaG) -> Unit = {}) {
     val c = Pw.cores
     val dados by Gestao.dados.collectAsState()
-    var grupo by remember { mutableIntStateOf(0) }
+    var area by androidx.compose.runtime.saveable.rememberSaveable { mutableIntStateOf(0) }
+    var secao by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf<String?>(null) }
+    var soMudados by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var busca by remember { mutableStateOf("") }
     var estado by remember { mutableStateOf<Pair<String, String>?>(null) }
     val escopo = rememberCoroutineScope()
     fun sem(t: String) = java.text.Normalizer.normalize(t, java.text.Normalizer.Form.NFD).replace(Regex("\\p{M}"), "").lowercase()
-
+    val grupoArea = GRUPOS_CONFIG.associate { it.chave to it.area }
+    fun mudado(p: Param): Boolean {
+        val v = (dados.config[p.chave] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: return false
+        return when (p.tipo) {
+            "booleano" -> v.toBooleanStrictOrNull()?.let { it != p.padraoBool } ?: false
+            "escolha", "texto" -> v != (p.padraoTxt ?: "")
+            else -> v.toDoubleOrNull()?.let { kotlin.math.abs(it - p.padraoNum) > 1e-9 } ?: false
+        }
+    }
+    fun padraoJson(p: Param): kotlinx.serialization.json.JsonElement = when (p.tipo) {
+        "booleano" -> kotlinx.serialization.json.JsonPrimitive(p.padraoBool)
+        "escolha", "texto" -> kotlinx.serialization.json.JsonPrimitive(p.padraoTxt ?: "")
+        else -> kotlinx.serialization.json.JsonPrimitive(p.padraoNum)
+    }
     fun salvar(p: Param, v: kotlinx.serialization.json.JsonElement) {
         estado = p.chave to "salvando"
         escopo.launch { Gestao.salvarConfig(p.chave, v).onSuccess { estado = p.chave to "salvo" }.onFailure { estado = p.chave to (it.message ?: "erro") } }
     }
 
     PwPagina {
-        if (onVoltar != null) Cabecalho("Configurações", onVoltar, subtitulo = "Valem para todo o sistema · salvam sozinhas")
-        else TituloTela("Configurações", "Valem para todo o sistema · salvam sozinhas", PwIcones.Settings2)
-        PwCampo(busca, { busca = it }, "Buscar ajuste…")
+        if (onVoltar != null) Cabecalho("Ajustes", onVoltar, subtitulo = "Valem para todo o sistema · salvam sozinhos")
+        else TituloTela("Ajustes", "Valem para todo o sistema · salvam sozinhos", PwIcones.Settings2)
+        PwCampo(busca, { busca = it }, "Buscar em todos os ajustes…")
         val termo = sem(busca.trim())
-        if (termo.isEmpty()) {
+        val nMudados = PARAMETROS.count(::mudado)
+        PwInterruptor("Só o que mudei do padrão", soMudados, { soMudados = it }, descricao = if (nMudados == 0) "Tudo está no padrão." else "$nMudados ajuste${if (nMudados == 1) "" else "s"} diferente${if (nMudados == 1) "" else "s"} do padrão.")
+        if (termo.isEmpty() && !soMudados) {
+            // áreas (como no site): cada uma junta seções parecidas
+            PwFiltros(AREAS_CONFIG.map { a -> a.titulo to PARAMETROS.count { grupoArea[it.grupo] == a.chave && mudado(it) } }, area, { area = it; secao = null })
+            val a = AREAS_CONFIG.getOrNull(area)
+            if (a != null) TextoDica(a.descricao)
+            val secoes = GRUPOS_CONFIG.filter { it.area == a?.chave && PARAMETROS.any { p -> p.grupo == it.chave } }
+            if (secoes.size > 1) Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                com.pwexpress.core.designsystem.PwPilula("Todas", PwIcones.Lista, { secao = null }, ligada = secao == null)
+                secoes.forEach { g -> com.pwexpress.core.designsystem.PwPilula(g.titulo, PwIcones.SlidersHorizontal, { secao = if (secao == g.chave) null else g.chave }, ligada = secao == g.chave) }
+            }
+            // cadastros que ficam perto dos ajustes da área
+            val extras = when (a?.chave) {
+                "preco" -> listOf(Triple("Exceções", PwIcones.Layers, TelaG.Excecoes), Triple("Zonas de preço", PwIcones.MapPin, TelaG.CatalogoT(Catalogo.ZONAS)), Triple("Horários de pico", PwIcones.Clock, TelaG.CatalogoT(Catalogo.HORARIOS)))
+                "clientes" -> listOf(Triple("Exceções", PwIcones.Layers, TelaG.Excecoes), Triple("Categorias", PwIcones.Package2, TelaG.CatalogoT(Catalogo.CATEGORIAS)), Triple("Tipos de pedido", PwIcones.ClipboardList, TelaG.CatalogoT(Catalogo.TIPOS)))
+                "operacao" -> listOf(Triple("Exceções", PwIcones.Layers, TelaG.Excecoes), Triple("Tipos de pedido", PwIcones.ClipboardList, TelaG.CatalogoT(Catalogo.TIPOS)))
+                else -> listOf(Triple("Exceções", PwIcones.Layers, TelaG.Excecoes))
+            }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 PwRotulo("Peças do lego"); Spacer(Modifier.width(8.dp))
                 com.pwexpress.core.designsystem.PwDica("Peças do lego", "Cada regra tem um valor geral e pode ter exceção por tipo de pedido, cliente, motoboy ou num pedido só. Vale a mais específica: pedido, motoboy, cliente, tipo e, por último, a geral.")
             }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(Triple("Exceções", PwIcones.Layers, TelaG.Excecoes), Triple("Zonas de preço", PwIcones.MapPin, TelaG.CatalogoT(Catalogo.ZONAS)),
-                    Triple("Horários de pico", PwIcones.Clock, TelaG.CatalogoT(Catalogo.HORARIOS)), Triple("Categorias", PwIcones.Package2, TelaG.CatalogoT(Catalogo.CATEGORIAS)),
-                    Triple("Tipos de pedido", PwIcones.ClipboardList, TelaG.CatalogoT(Catalogo.TIPOS))).forEach { (t, i, tela) ->
-                    com.pwexpress.core.designsystem.PwPilula(t, i, { onAbrir(tela) })
+                extras.forEach { (t, i, tela) -> com.pwexpress.core.designsystem.PwPilula(t, i, { onAbrir(tela) }) }
+            }
+        }
+        val a = AREAS_CONFIG.getOrNull(area)
+        val lista = when {
+            termo.isNotEmpty() -> PARAMETROS.filter { sem("${it.rotulo} ${it.descricao} ${it.chave}").contains(termo) }.filter { !soMudados || mudado(it) }
+            soMudados -> PARAMETROS.filter(::mudado)
+            else -> PARAMETROS.filter { grupoArea[it.grupo] == a?.chave && (secao == null || it.grupo == secao) }
+        }
+        val souDev = com.pwexpress.core.perfil.Perfis.perfil.collectAsState().value?.dev == true
+        GRUPOS_CONFIG.forEach { g ->
+            val doGrupo = lista.filter { it.grupo == g.chave }
+            if (doGrupo.isEmpty()) return@forEach
+            Espaco(4)
+            Text(g.titulo, color = c.texto, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            TextoDica(if (termo.isNotEmpty() || soMudados) "${AREAS_CONFIG.find { it.chave == g.area }?.titulo ?: ""} · ${g.descricao}" else g.descricao)
+            if (termo.isEmpty() && !soMudados) ExemploConfig(g.chave, dados.config)
+            doGrupo.forEach { p ->
+                val st = estado?.takeIf { it.first == p.chave }?.second
+                val dif = mudado(p)
+                PwCartao(padding = PaddingValues(14.dp), cor = if (dif) c.ouro.copy(alpha = 0.45f) else null) {
+                    CampoParametro(p, dados.config[p.chave], { salvar(p, it) }, bloqueado = p.soDev && !souDev) {
+                        if (p.escopos.isNotEmpty()) TextoDica("Pode ter exceção por " + p.escopos.joinToString(", ") { mapOf("tipo" to "tipo de pedido", "cliente" to "cliente", "motoboy" to "motoboy")[it] ?: it } + ".")
+                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        when (st) {
+                            null, "salvando" -> {}
+                            "salvo" -> Text("✓ salvo", color = c.verde, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                            else -> PwErro(st)
+                        }
+                        Spacer(Modifier.weight(1f))
+                        if (dif && !(p.soDev && !souDev)) Row(Modifier.clip(RoundedCornerShape(99.dp)).clickable { salvar(p, padraoJson(p)) }.padding(horizontal = 10.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(PwIcones.RotateCcw, null, tint = c.ouro, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp))
+                            Text("Voltar ao padrão", color = c.ouro, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
                 }
             }
         }
-        if (termo.isEmpty()) PwFiltros(GRUPOS_CONFIG.map { it.titulo to 0 }, grupo, { grupo = it })
-        val g = GRUPOS_CONFIG.getOrNull(grupo)
-        val lista = if (termo.isNotEmpty()) PARAMETROS.filter { sem("${it.rotulo} ${it.descricao}").contains(termo) } else PARAMETROS.filter { it.grupo == g?.chave }
-        if (termo.isEmpty() && g != null) TextoDica(g.descricao)
-        if (g?.chave == "distancia" && termo.isEmpty()) {
-            val cfg = dados.config
+        if (lista.isEmpty()) PwVazio(if (soMudados) "Tudo no padrão." else "Nenhum ajuste encontrado.", icone = PwIcones.Search)
+    }
+}
+
+/** Contas de exemplo no topo de algumas seções (o mesmo cálculo do banco). */
+@Composable
+private fun ExemploConfig(grupo: String, cfg: Map<String, kotlinx.serialization.json.JsonElement>) {
+    val c = Pw.cores
+    fun r2(v: Double) = Math.round(v * 100) / 100.0
+    when (grupo) {
+        "distancia" -> {
             fun faixa(kmv: Double, cada: Double, f: Double) = if (cada > 0) Math.floor(kmv / cada) * f else 0.0
             val fc = faixa(250.0, cfg.numero("acrescimo_coleta_cada_km", 100.0), cfg.numero("acrescimo_coleta_fator", 0.5))
             val fe = faixa(450.0, cfg.numero("acrescimo_entrega_cada_km", 200.0), cfg.numero("acrescimo_entrega_fator", 0.25))
@@ -1095,37 +1166,33 @@ fun ConfiguracoesG(onVoltar: (() -> Unit)?, onAbrir: (TelaG) -> Unit = {}) {
                 Text(if (cfg.logico("acrescimo_distancia", true)) "100 × (1 + ${com.pwexpress.core.designsystem.numeroBr(fc)} + ${com.pwexpress.core.designsystem.numeroBr(fe)}) = ${moedaBr(100 * (1 + fc + fe))}" else "Acréscimo desligado: fica R$ 100,00.", color = c.texto, fontWeight = FontWeight.Bold)
             }
         }
-        if (g?.chave == "pagamento" && termo.isEmpty()) {
-            // divisão de uma rota de R$ 100 (o mesmo cálculo do banco)
-            val cfg = dados.config
+        "pagamento" -> {
             val pct = cfg.numero("repasse_motoboy_pct", 67.5); val dev = cfg.numero("dev_pct", 5.0)
-            val origem = (cfg["dev_origem"] as? kotlinx.serialization.json.JsonPrimitive)?.content ?: "gestor"
-            fun r2(v: Double) = Math.round(v * 100) / 100.0
+            val origem = cfg.textoCfg("dev_origem", "gestor")
             val pDev = r2(dev); val teto = r2(100 - pDev)
             val pMoto = minOf(teto, r2(when (origem) { "total" -> (100 - pDev) * pct / 100; "proporcional" -> pct * (1 - dev / 100); else -> pct }))
             PwCartao(cor = c.ouro.copy(alpha = 0.5f)) {
                 PwRotulo("Exemplo: rota de R$ 100,00")
-                if (cfg.textoCfg("pag_modo", "rota") == "percentual") {
-                    Text("Motoboy ${moedaBr(pMoto)} · Gestor ${moedaBr(r2(100 - pMoto - pDev))} · Dev ${moedaBr(pDev)}", color = c.texto, fontWeight = FontWeight.Bold)
-                }
-                TextoDica("O motoboy nunca leva mais que a rota paga: no máximo ${moedaBr(teto)} (a rota menos o Dev), por km ou percentual, com ajuste ou sem.")
+                if (cfg.textoCfg("pag_modo", "zonas") == "percentual") Text("Motoboy ${moedaBr(pMoto)} · Gestor ${moedaBr(r2(100 - pMoto - pDev))} · Dev ${moedaBr(pDev)}", color = c.texto, fontWeight = FontWeight.Bold)
+                TextoDica("O motoboy nunca leva mais que a rota paga: no máximo ${moedaBr(teto)} (a rota menos o Dev), por km, zona ou percentual, com ajuste ou sem.")
             }
         }
-        val souDev = com.pwexpress.core.perfil.Perfis.perfil.collectAsState().value?.dev == true
-        lista.forEach { p ->
-            val st = estado?.takeIf { it.first == p.chave }?.second
-            PwCartao(padding = PaddingValues(14.dp)) {
-                CampoParametro(p, dados.config[p.chave], { salvar(p, it) }, bloqueado = p.soDev && !souDev) {
-                    if (p.escopos.isNotEmpty()) TextoDica("Pode ter exceção por " + p.escopos.joinToString(", ") { mapOf("tipo" to "tipo de pedido", "cliente" to "cliente", "motoboy" to "motoboy")[it] ?: it } + ".")
-                }
-                when (st) {
-                    null, "salvando" -> {}
-                    "salvo" -> Text("✓ salvo", color = c.verde, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                    else -> PwErro(st)
-                }
+        "pag_zonas" -> {
+            val raio = cfg.numero("zona_entrega_raio_m", 1500.0); val km = cfg.numero("zona_valor_km", 2.0); val extra = cfg.numero("zona_entrega_extra", 10.0)
+            val fixo = cfg.numero("zona_fixo_rota", 0.0); val fora = cfg.numero("zona_fora_pct", 65.0)
+            PwCartao(cor = c.ouro.copy(alpha = 0.5f)) {
+                PwRotulo("Exemplo: rota de R$ 18,00 com 2 entregas")
+                TextoDica("Cada entrega tem um raio de ${com.pwexpress.core.designsystem.numeroBr(raio)} m. Se os raios se encontram, as entregas estão na mesma zona.")
+                Text("Mesma zona (a mais perto a 1,45 km): 1,45 × ${moedaBr(km)} + ${moedaBr(extra)} por entrega a mais${if (fixo > 0) " + ${moedaBr(fixo)}" else ""} = ${moedaBr(r2(1.45 * km + extra + fixo))}", color = c.texto, fontWeight = FontWeight.Bold)
+                Text("Zonas separadas: ${com.pwexpress.core.designsystem.numeroBr(fora)}% da rota = ${moedaBr(r2(18 * fora / 100))}", color = c.texto, fontWeight = FontWeight.Bold)
             }
         }
-        if (lista.isEmpty()) PwVazio("Nenhum ajuste encontrado.", icone = PwIcones.Search)
+        "precocliente" -> if (cfg.textoCfg("preco_distancia_modo", "soma_entregas") == "soma_entregas") PwCartao(cor = c.ouro.copy(alpha = 0.5f)) {
+            PwRotulo("Exemplo: 1 coleta, 3 entregas")
+            val vkm = cfg.numero("preco_km", 2.5)
+            TextoDica("O cliente paga o valor/km × a distância da coleta até cada entrega, somadas.")
+            Text("(2 + 3,5 + 5) km × ${moedaBr(vkm)} = ${moedaBr(r2(10.5 * vkm))} + taxas e extras", color = c.texto, fontWeight = FontWeight.Bold)
+        }
     }
 }
 

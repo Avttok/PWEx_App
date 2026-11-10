@@ -94,6 +94,12 @@ internal fun CampoParametro(p: Param, valor: JsonElement?, onSalvar: (JsonElemen
                     { i -> if (!bloqueado) onSalvar(JsonPrimitive(p.opcoesTxt[i].first)) })
                 else PwSelecao("", p.opcoesTxt.map { it.first to it.second }, atual, { v -> if (!bloqueado) onSalvar(JsonPrimitive(v)) })
             }
+            "texto" -> {
+                val salvo = prim?.content ?: p.padraoTxt ?: ""
+                var txt by androidx.compose.runtime.remember(salvo) { androidx.compose.runtime.mutableStateOf(salvo) }
+                com.pwexpress.core.designsystem.PwCampo(txt, { txt = it }, "", dica = p.exemplo, habilitado = !bloqueado)
+                if (txt != salvo && !bloqueado) com.pwexpress.core.designsystem.PwBotaoVidro("Salvar", { onSalvar(JsonPrimitive(txt.trim())) }, icone = com.pwexpress.core.designsystem.PwIcones.Check)
+            }
             "opcoes" -> {
                 val atual = prim?.content?.toDoubleOrNull() ?: p.padraoNum
                 if (p.opcoes.size <= 4) PwSegmentado(p.opcoes.map { it.second to null }, p.opcoes.indexOfFirst { it.first == atual }.coerceAtLeast(0), { i -> if (!bloqueado) onSalvar(JsonPrimitive(p.opcoes[i].first)) })
@@ -191,7 +197,7 @@ internal fun ExcecoesG(onVoltar: () -> Unit) {
 }
 
 /** Regras que fazem sentido num pedido só (preço, junção em rotas, despacho, revisão). */
-internal val PARAMS_PEDIDO = PARAMETROS.filter { ("cliente" in it.escopos || "tipo" in it.escopos) && it.grupo !in setOf("pagamento", "faturas") && !it.soDev }
+internal val PARAMS_PEDIDO = PARAMETROS.filter { ("cliente" in it.escopos || "tipo" in it.escopos) && it.grupo !in setOf("pagamento", "pag_zonas", "pag_km", "faturas") && !it.soDev }
 
 /** Regras deste pedido (a peça mais alta do lego). Grava na hora e recalcula o orçamento. */
 @Composable

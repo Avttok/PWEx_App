@@ -33,7 +33,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.pwexpress.core.designsystem.Pw
+import com.pwexpress.core.designsystem.PwBotaoVidro
 import com.pwexpress.core.designsystem.PwCarregando
+import com.pwexpress.core.designsystem.moedaBr
+import com.pwexpress.core.designsystem.numeroBr
 import com.pwexpress.core.designsystem.PwCartao
 import com.pwexpress.core.designsystem.PwErro
 import com.pwexpress.core.designsystem.PwFiltros
@@ -56,12 +59,17 @@ import com.pwexpress.core.json.str
 import com.pwexpress.core.perfil.Perfis
 import com.pwexpress.feature.gestor.data.Gestao
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.JsonObject
 
-private val CONTAGENS = listOf(
-    "contas" to "Contas", "motoboys_online" to "Online", "corridas_ativas" to "Ativas", "corridas_reais" to "Corridas reais",
-    "corridas_teste" to "De teste", "pings_24h" to "Pings 24 h", "pings_total" to "Pings no banco", "corridas_apagadas" to "Apagadas",
-    "contas_excluidas" to "Contas excluídas",
+private val CONTAGENS_GRUPOS = listOf(
+    "Pessoas" to listOf("contas" to "Contas", "motoboys" to "Motoboys", "gestores" to "Gestores", "clientes" to "Clientes", "motoboys_online" to "Online agora", "em_corrida" to "Em corrida"),
+    "Pedidos e rotas" to listOf("pedidos" to "Pedidos", "pedidos_abertos" to "Abertos", "corridas_reais" to "Rotas reais", "corridas_teste" to "De teste",
+        "corridas_ativas" to "Ativas", "no_quadro" to "No quadro", "ofertas_pendentes" to "Ofertas pendentes"),
+    "GPS e mapa" to listOf("pings_24h" to "Pings 24 h", "pings_total" to "Pings no banco", "trechos_ruas" to "Trechos pelas ruas"),
+    "Dinheiro (30 dias)" to listOf("faturado_30d" to "Faturado", "motoboys_30d" to "Motoboys", "dev_30d" to "Dev", "faturas" to "Faturas", "holerites" to "Holerites"),
+    "Sistema" to listOf("mensagens_chat" to "Mensagens no chat", "excecoes" to "Exceções", "configuracoes_mudadas" to "Ajustes mudados", "corridas_apagadas" to "Rotas apagadas",
+        "contas_excluidas" to "Contas excluídas", "tamanho_banco_mb" to "Banco (MB)"),
 )
 private val PAPEIS = listOf(Triple("gestor", "Gestores", PwIcones.ShieldCheck), Triple("motoboy", "Motoboys", PwIcones.Bike), Triple("cliente", "Clientes", PwIcones.UserRound))
 
@@ -93,9 +101,25 @@ fun DevG(onVoltar: () -> Unit) {
 
     PwPagina {
         Cabecalho("Console Dev", onVoltar, subtitulo = "O sistema inteiro, sem filtro")
-        PwFiltros(listOf("Módulos" to 0, "Sistema" to 0, "Aparelhos" to 0, "Registro" to 0, "Versão do app" to 0), aba, { aba = it })
+        PwFiltros(listOf("Módulos" to 0, "Sistema" to 0, "Aparelhos" to 0, "Registro" to 0, "Versão do app" to 0, "Tarefas" to 0, "Apagar" to 0), aba, { aba = it })
         PwErro(erro)
         if (aba == 4) { VersaoAppG(); return@PwPagina }
+        if (aba == 6) { ApagarTudoG(); return@PwPagina }
+        if (aba == 5) {
+            val tf = painel?.arr("tarefas") ?: run { PwCarregando(); return@PwPagina }
+            TextoDica("Tarefas automáticas do banco (pg_cron): despacho, planejadas, faturas…")
+            if (tf.isEmpty()) PwVazio("Nenhuma tarefa automática encontrada (ou o pg_cron não está ligado).", icone = PwIcones.Clock)
+            tf.forEach { x ->
+                PwCartao {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(x.str("nome") ?: "—", color = c.texto, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        com.pwexpress.core.designsystem.PwSelo(if (x.bool("ativa")) "Ligada" else "Parada", if (x.bool("ativa")) c.verde else c.texto3)
+                    }
+                    TextoDica("Quando: ${x.str("quando") ?: "—"}")
+                }
+            }
+            return@PwPagina
+        }
         when (aba) {
             0 -> {
                 val l = modulos ?: run { PwCarregando(); return@PwPagina }
@@ -120,10 +144,17 @@ fun DevG(onVoltar: () -> Unit) {
             }
             1 -> {
                 val cont = painel?.obj("contagens") ?: run { PwCarregando(); return@PwPagina }
-                CONTAGENS.chunked(2).forEach { par ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        par.forEach { (k, r) -> PwNumero(r, "%,d".format(BR, cont.long(k) ?: 0L), Modifier.weight(1f)) }
-                        if (par.size == 1) Spacer(Modifier.weight(1f))
+                PwBotaoVidro("Atualizar números", onClick = { escopo.launch { carregar() } }, icone = PwIcones.RefreshCw, modifier = Modifier.fillMaxWidth())
+                CONTAGENS_GRUPOS.forEach { (g, lista) ->
+                    PwRotulo(g)
+                    lista.chunked(2).forEach { par ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            par.forEach { (k, r) ->
+                                val v = cont.dbl(k)
+                                PwNumero(r, if (k.endsWith("_30d")) moedaBr(v ?: 0.0) else if (v != null && v % 1.0 != 0.0) numeroBr(v) else "%,d".format(BR, v?.toLong() ?: 0L), Modifier.weight(1f))
+                            }
+                            if (par.size == 1) Spacer(Modifier.weight(1f))
+                        }
                     }
                 }
                 ZerarPedidosG(onFeito = { escopo.launch { carregar() } })
@@ -142,6 +173,10 @@ fun DevG(onVoltar: () -> Unit) {
                             Detalhe(PwIcones.Timer, haQuanto(com.pwexpress.feature.gestor.data.iso(a.str("posicao_em"))))
                             a.int("bateria")?.let { Detalhe(PwIcones.BatteryMedium, "$it%") }
                             a.dbl("precisao_m")?.let { Detalhe(PwIcones.Crosshair, "± ${it.toInt()} m") }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 4.dp)) {
+                            a.long("pings_24h")?.let { Detalhe(PwIcones.Footprints, "$it pings em 24 h") }
+                            Detalhe(PwIcones.BellRing, if (a.bool("push")) "recebe push" else "sem push", if (a.bool("push")) c.verde else c.vermelho)
                         }
                         if (a.bool("modo_teste") || a.bool("modo_economia")) Row(Modifier.padding(top = 4.dp)) {
                             if (a.bool("modo_teste")) Detalhe(PwIcones.FlaskConical, "teste", c.violeta)
@@ -277,5 +312,120 @@ private fun ZerarPedidosG(onFeito: () -> Unit) {
                 rodando = false
             }
         }, cheio = true, modifier = Modifier.fillMaxWidth())
+    }
+}
+
+
+/**
+ * Apagar do jeito que quiser: um registro, os marcados, uma categoria inteira, a operação toda ou absolutamente tudo.
+ * Sempre com a senha do Dev (igual ao site).
+ */
+@Composable
+private fun ApagarTudoG() {
+    val c = Pw.cores
+    val escopo = rememberCoroutineScope()
+    var cats by remember { mutableStateOf<List<JsonObject>?>(null) }
+    var cat by remember { mutableStateOf<JsonObject?>(null) }
+    var itens by remember { mutableStateOf<List<JsonObject>?>(null) }
+    var busca by remember { mutableStateOf("") }
+    val marcados = remember { androidx.compose.runtime.mutableStateListOf<String>() }
+    var pedir by remember { mutableStateOf<Pair<String, List<String>?>?>(null) } // categoria + ids (null = toda)
+    var senha by remember { mutableStateOf("") }
+    var erro by remember { mutableStateOf<String?>(null) }
+    var apagando by remember { mutableStateOf(false) }
+    suspend fun contar() { Gestao.rpcJson("dev_contagem").onSuccess { cats = (it as? kotlinx.serialization.json.JsonArray)?.mapNotNull { e -> e as? JsonObject }.orEmpty() }.onFailure { erro = it.message } }
+    suspend fun listar() {
+        val k = cat?.str("chave") ?: return
+        itens = null
+        Gestao.rpcJson("dev_listar", kotlinx.serialization.json.buildJsonObject { put("p_categoria", k); put("p_busca", busca); put("p_limite", 200) })
+            .onSuccess { itens = (it as? kotlinx.serialization.json.JsonArray)?.mapNotNull { e -> e as? JsonObject }.orEmpty() }.onFailure { erro = it.message; itens = emptyList() }
+    }
+    LaunchedEffect(Unit) { contar() }
+    LaunchedEffect(cat?.str("chave"), busca) { marcados.clear(); if (cat != null) { kotlinx.coroutines.delay(300); listar() } }
+
+    TextoDica("Apague um por um, os marcados, uma categoria inteira ou tudo. Não tem volta: sempre pede a senha do Dev.")
+    val cs = cats ?: run { PwCarregando(); return }
+    if (cat == null) {
+        cs.chunked(2).forEach { par ->
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                par.forEach { k ->
+                    Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(c.vidro).clickable { cat = k }.padding(12.dp)) {
+                        Text(k.str("nome") ?: "", color = c.texto, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text("%,d".format(BR, k.long("total") ?: 0L), color = c.ouro, fontWeight = FontWeight.Black, fontSize = 20.sp)
+                        Text(k.str("descricao") ?: "", color = c.texto3, fontSize = 11.5.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                if (par.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+        Espaco(6)
+        com.pwexpress.core.designsystem.PwBotaoPerigo("Apagar a operação (pedidos, rotas, pings, faturas, folha, chat)", { pedir = "tudo" to null })
+        com.pwexpress.core.designsystem.PwBotaoPerigo("Apagar absolutamente tudo", { pedir = "tudo_mesmo" to null }, cheio = true)
+        TextoDica("\"Tudo\" também apaga clientes, exceções, zonas, horários, PIX, conquistas e volta os ajustes ao padrão. Contas de acesso e módulos ficam.")
+    } else {
+        val k = cat!!
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            com.pwexpress.core.designsystem.PwBotaoIcone(PwIcones.ArrowLeft, "Categorias", { cat = null; itens = null })
+            Spacer(Modifier.width(10.dp))
+            Column(Modifier.weight(1f)) {
+                Text(k.str("nome") ?: "", color = c.texto, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                TextoDica("${"%,d".format(BR, k.long("total") ?: 0L)} no total")
+            }
+        }
+        com.pwexpress.core.designsystem.PwCampo(busca, { busca = it }, "Buscar…")
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            com.pwexpress.core.designsystem.PwBotaoPerigo("Apagar marcados (${marcados.size})", { pedir = k.str("chave")!! to marcados.toList() }, Modifier.weight(1f), habilitado = marcados.isNotEmpty())
+            com.pwexpress.core.designsystem.PwBotaoPerigo("Apagar a categoria", { pedir = k.str("chave")!! to null }, Modifier.weight(1f))
+        }
+        val l = itens
+        when {
+            l == null -> PwCarregando()
+            l.isEmpty() -> PwVazio("Nada aqui.", icone = PwIcones.Search)
+            else -> l.forEach { x ->
+                val id = x.str("id") ?: return@forEach
+                val marc = id in marcados
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(if (marc) c.vermelho.copy(alpha = 0.1f) else androidx.compose.ui.graphics.Color.Transparent)
+                    .clickable { if (marc) marcados.remove(id) else marcados.add(id) }.padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(if (marc) PwIcones.CircleCheck else PwIcones.Plus, null, tint = if (marc) c.vermelho else c.texto3, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(x.str("titulo") ?: id, color = c.texto, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(listOfNotNull(x.str("sub"), com.pwexpress.feature.gestor.data.iso(x.str("quando"))?.let { dataHora(it) }).joinToString(" · "), color = c.texto3, fontSize = 12.sp, maxLines = 1)
+                    }
+                    com.pwexpress.core.designsystem.PwBotaoIcone(PwIcones.Trash2, "Apagar este", { pedir = k.str("chave")!! to listOf(id) }, tamanho = 34.dp)
+                }
+            }
+        }
+    }
+    pedir?.let { (categoria, ids) ->
+        com.pwexpress.core.designsystem.PwJanela("Confirmar com a senha", { pedir = null; senha = ""; erro = null }) {
+            Text(when {
+                categoria == "tudo_mesmo" -> "Apagar ABSOLUTAMENTE TUDO do sistema."
+                categoria == "tudo" -> "Apagar toda a operação."
+                ids == null -> "Apagar toda a categoria ${cats?.find { it.str("chave") == categoria }?.str("nome") ?: categoria}."
+                else -> "Apagar ${ids.size} registro${if (ids.size == 1) "" else "s"}."
+            }, color = c.texto, fontWeight = FontWeight.Bold)
+            TextoDica("Não dá para desfazer.")
+            com.pwexpress.core.designsystem.PwCampo(senha, { senha = it }, "Sua senha", senha = true)
+            PwErro(erro)
+            com.pwexpress.core.designsystem.PwBotaoPerigo(if (apagando) "Apagando…" else "Apagar", {
+                apagando = true
+                escopo.launch {
+                    Gestao.rpcJson("dev_apagar", kotlinx.serialization.json.buildJsonObject {
+                        put("p_senha", senha); put("p_categoria", categoria)
+                        if (ids != null) put("p_ids", kotlinx.serialization.json.buildJsonArray { ids.forEach { add(kotlinx.serialization.json.JsonPrimitive(it)) } })
+                    }).onSuccess { r ->
+                        val o = r as? JsonObject
+                        when (o?.str("erro")) {
+                            null -> { PwToast.mostrar("Apagado: ${o?.long("apagados") ?: 0} registro(s).", TipoAviso.OK); pedir = null; senha = ""; erro = null; marcados.clear(); contar(); listar() }
+                            "senha_incorreta" -> erro = "Senha incorreta." + (o.long("restantes")?.let { " Restam $it tentativas." } ?: "")
+                            "muitas_tentativas" -> erro = "Muitas tentativas. Espere alguns minutos."
+                            else -> erro = o.str("erro")
+                        }
+                    }.onFailure { erro = it.message }
+                    apagando = false
+                }
+            }, cheio = true, habilitado = senha.isNotBlank() && !apagando)
+        }
     }
 }

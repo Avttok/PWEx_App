@@ -107,6 +107,15 @@ object Chat {
         l
     }
 
+    /** Quem escreveu na conversa, com os cargos (selos ao lado do nome). */
+    suspend fun autores(conversa: String): List<Contato> = tentar {
+        (rpc("chat_autores", buildJsonObject { put("p_conversa", conversa) }) as? JsonArray).orEmpty().mapNotNull { e ->
+            val o = e as? JsonObject ?: return@mapNotNull null
+            Contato(o.t("id") ?: return@mapNotNull null, o.t("nome") ?: "Sem nome", o.t("foto"),
+                (o["papeis"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.content }, null, o.t("empresa"))
+        }
+    }.getOrDefault(emptyList())
+
     suspend fun mensagens(conversa: String, limite: Int = 120): Result<List<Mensagem>> = tentar {
         val r = PwCore.rpc.rest("GET", "/rest/v1/chat_mensagens?select=id,autor_id,texto,anexo,criada_em,apagada_em&conversa_id=eq.$conversa&order=criada_em.desc&limit=$limite")
         if (!r.ok) error(traduzir(r.corpo))

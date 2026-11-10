@@ -232,7 +232,9 @@ private fun ConversaAberta(id: String, conv: Conversa?, meuId: String?, gestor: 
     var fotoAberta by remember { mutableStateOf<String?>(null) }
     val pendente by Chat.anexoPendente.collectAsState()
     val estado = rememberLazyListState()
-    val nomes = remember(contatos) { contatos.associate { it.id to it } }
+    var autores by remember(id) { mutableStateOf<Map<String, Contato>>(emptyMap()) }
+    LaunchedEffect(id) { autores = Chat.autores(id).associateBy { it.id } }
+    val nomes = remember(contatos, autores) { contatos.associateBy { it.id } + autores }
 
     suspend fun recarregar() { Chat.mensagens(id).onSuccess { novo -> val antes = msgs?.size; msgs = novo; if (antes != novo.size && novo.isNotEmpty()) estado.animateScrollToItem(novo.lastIndex) } }
     LaunchedEffect(id) { while (true) { recarregar(); Chat.marcarLida(id); delay(4_000) } }
@@ -261,6 +263,7 @@ private fun ConversaAberta(id: String, conv: Conversa?, meuId: String?, gestor: 
     Column(Modifier.fillMaxSize().imePadding()) {
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             PwCabecalho(conv?.nome ?: "Conversa", onVoltar, subtitulo = when (conv?.tipo) { "geral" -> "Toda a equipe"; "grupo" -> "${conv.membros} pessoas"; else -> nomes[conv?.outro]?.papel }) {
+                if (conv?.tipo == "direta") SelosCargo(nomes[conv.outro]?.papeis.orEmpty())
                 if (conv != null) PwBotaoIcone(if (conv.silenciada) PwIcones.BellRing else PwIcones.BellOff, if (conv.silenciada) "Voltar a avisar" else "Silenciar",
                     { escopo.launch { Chat.silenciar(id, !conv.silenciada) } })
             }
@@ -282,7 +285,10 @@ private fun ConversaAberta(id: String, conv: Conversa?, meuId: String?, gestor: 
                                 .border(1.dp, if (minha) c.ouro.copy(alpha = 0.5f) else c.borda, forma)
                                 .padding(horizontal = 12.dp, vertical = 8.dp),
                         ) {
-                            if (!minha && conv?.tipo != "direta") Text(autor?.nome ?: "Alguém", color = c.ouro, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                            if (!minha && conv?.tipo != "direta") Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(autor?.nome ?: "Alguém", color = c.ouro, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                SelosCargo(autor?.papeis.orEmpty())
+                            }
                             if (m.apagada) Text("Mensagem apagada", color = c.texto3, fontSize = 13.sp)
                             else {
                                 m.anexo?.let { a ->
@@ -369,3 +375,18 @@ private fun comprimir(ctx: android.content.Context, uri: Uri): ByteArray? = runC
     val b = if (esc < 1f) Bitmap.createScaledBitmap(bmp, (bmp.width * esc).toInt(), (bmp.height * esc).toInt(), true) else bmp
     java.io.ByteArrayOutputStream().also { b.compress(Bitmap.CompressFormat.JPEG, 82, it) }.toByteArray()
 }.getOrNull()
+
+
+/** Selos de cargo (Dev, Gestor, Motoboy, Cliente) ao lado do nome. */
+@Composable
+fun SelosCargo(papeis: List<String>) {
+    if (papeis.isEmpty()) return
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(start = 6.dp)) {
+        listOf("dev" to ("Dev" to Color(0xFFEF4444)), "gestor" to ("Gestor" to Pw.cores.ouro), "motoboy" to ("Motoboy" to Color(0xFF22C55E)), "cliente" to ("Cliente" to Color(0xFF38BDF8)))
+            .filter { it.first in papeis }.forEach { (_, rc) ->
+                val (r, cor) = rc
+                Text(r, color = cor, fontSize = 9.5.sp, fontWeight = FontWeight.ExtraBold,
+                    modifier = Modifier.clip(RoundedCornerShape(99.dp)).border(1.dp, cor, RoundedCornerShape(99.dp)).padding(horizontal = 6.dp, vertical = 1.dp))
+            }
+    }
+}
